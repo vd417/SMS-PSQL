@@ -1,0 +1,35 @@
+-- SQL Server user-defined types found in "Sms": all 6 are TABLE TYPES (TVPs), used only as
+-- Dapper `SqlDbType.Structured` bulk-parameter shapes, not as stored column/domain types.
+--   dbo.AttendanceTvp, dbo.TripPingTvp, dbo.UsersTvp, dbo.StaffAttendanceTvp,
+--   dbo.ExamAttendanceTvp, dbo.PeriodAttendanceTvp
+--
+-- PostgreSQL has no direct equivalent to a SQL Server TVP as a "pass a table shape as one
+-- parameter" mechanism used the same way. There are three viable per-call-site strategies,
+-- and NONE of them is a mechanical 1:1 CREATE TYPE translation, so none is auto-generated here
+-- (see docs/database audit section D and the backend-impact section for per-DAO detail):
+--
+--   1. Postgres composite TYPE + `unnest()` / `UNNEST(ARRAY[...]::my_composite[])`
+--      -- closest structural analogue; requires Npgsql `NpgsqlParameter` with a composite
+--      -- array type registered, and the target function signature to accept the array.
+--   2. A single `jsonb` parameter + `jsonb_to_recordset(...)`  inside the function body
+--      -- simplest to wire up from Dapper/Npgsql (just serialize the rows to JSON), and is
+--      -- the recommended default for this codebase given Dapper is already JSON-friendly.
+--   3. A real temp table created by the app per-call + a function reading from it
+--      -- avoids both of the above but adds a round trip; only worth it for very large batches.
+--
+-- Recommended mapping per source TVP (final call is a backend implementation decision, not
+-- a schema-only one -- tracked as BLOCKED/REQUIRES DESIGN in the audit's risk register):
+--
+--   dbo.AttendanceTvp          -> jsonb parameter + jsonb_to_recordset() in fn_attendance_bulk_upsert
+--   dbo.ExamAttendanceTvp      -> jsonb parameter + jsonb_to_recordset()
+--   dbo.PeriodAttendanceTvp    -> jsonb parameter + jsonb_to_recordset()
+--   dbo.StaffAttendanceTvp     -> jsonb parameter + jsonb_to_recordset()
+--   dbo.TripPingTvp            -> jsonb parameter + jsonb_to_recordset() (high write volume --
+--                                 revisit for a composite-array or COPY-based path if this
+--                                 becomes a hot path bottleneck)
+--   dbo.UsersTvp                -> jsonb parameter + jsonb_to_recordset()
+--
+-- No CREATE TYPE statements are emitted for these 6 -- they are parameter-passing shapes, not
+-- stored structures, and a fabricated 1:1 CREATE TYPE would misrepresent the conversion as
+-- solved when the actual work is in the function signatures and the C# call sites (see
+-- 08_sample_procedure_conversions.sql for one worked example: dbo.Attendance_BulkUpsert).
