@@ -11,14 +11,18 @@ using Sms.Shared.Kernel.Tenancy;
 var builder = WebApplication.CreateBuilder(args);
 builder.ConfigureSmsServices();
 
-var conn = builder.Configuration.GetConnectionString("Sql");
 var app = builder.Build();
 
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
-    MigrationRunner.Run(conn!);
+    // The old FluentMigrator SQL Server history (db/Sms.Migrations/M0001..M0210) no longer runs:
+    // its embedded T-SQL has no direct Postgres equivalent. Schema provisioning is now
+    // db/postgres/01_schemas.sql..08_sample_procedure_conversions.sql, applied once per database
+    // (docker-compose's db service applies them automatically via /docker-entrypoint-initdb.d; for
+    // a bare local Postgres, run them with psql in order). A Postgres-native forward-migration
+    // mechanism to replace this runner for future schema changes is a separate, pending decision.
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {

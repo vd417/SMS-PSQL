@@ -1,9 +1,13 @@
 using System.Data;
+using System.Reflection;
 using Dapper;
 
 namespace Sms.Shared.Kernel.Data;
 
-/// Base for all repositories. Stored procedures for writes/complex reads;
+/// Base for all repositories. Postgres functions for writes/complex reads (call sites pass the
+/// same schema-qualified name and args object used for the old SQL Server procs — the SQL Server
+/// EXEC call is now a "SELECT * FROM fn(...)" using named notation, so it round-trips through
+/// Postgres identifier case-folding without every call site needing to change);
 /// QueryInlineAsync for simple single-table reads (parameterised only — never string-concat).
 public abstract class BaseRepository(IDbConnectionFactory factory)
 {
@@ -14,7 +18,7 @@ public abstract class BaseRepository(IDbConnectionFactory factory)
     {
         await using var conn = await Factory.OpenAsync(ct);
         var rows = await conn.QueryAsync<T>(
-            new CommandDefinition(proc, args, commandType: CommandType.StoredProcedure, cancellationToken: ct));
+            new CommandDefinition(FunctionCallSql(proc, args), args, commandType: CommandType.Text, cancellationToken: ct));
         return rows.AsList();
     }
 
@@ -23,15 +27,31 @@ public abstract class BaseRepository(IDbConnectionFactory factory)
     {
         await using var conn = await Factory.OpenAsync(ct);
         return await conn.QuerySingleOrDefaultAsync<T>(
-            new CommandDefinition(proc, args, commandType: CommandType.StoredProcedure, cancellationToken: ct));
+            new CommandDefinition(FunctionCallSql(proc, args), args, commandType: CommandType.Text, cancellationToken: ct));
     }
 
+    /// Returns the row count the function reports via `GET DIAGNOSTICS ... = ROW_COUNT; RETURN`
+    /// (the Postgres equivalent of the old EXEC's @@ROWCOUNT-based return value) — every converted
+    /// void/side-effect function must declare `RETURNS int` and return that count, never RETURNS void.
     protected async Task<int> ExecuteProcAsync(
         string proc, object? args = null, CancellationToken ct = default)
     {
         await using var conn = await Factory.OpenAsync(ct);
-        return await conn.ExecuteAsync(
-            new CommandDefinition(proc, args, commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        return await conn.ExecuteScalarAsync<int>(
+            new CommandDefinition(FunctionCallSql(proc, args), args, commandType: CommandType.Text, cancellationToken: ct));
+    }
+
+    // Named notation (arg => @Arg) so Postgres resolves parameters by name, not position — the
+    // converted function's parameter names only need to match (case-insensitively, both unquoted)
+    // the anonymous object's property names, exactly like the old proc's @Param names did.
+    private static string FunctionCallSql(string proc, object? args)
+    {
+        if (args is null)
+            return $"SELECT * FROM {proc}()";
+        var argList = string.Join(", ",
+            args.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Select(p => $"{p.Name} => @{p.Name}"));
+        return $"SELECT * FROM {proc}({argList})";
     }
 
     protected async Task<IReadOnlyList<T>> QueryInlineAsync<T>(

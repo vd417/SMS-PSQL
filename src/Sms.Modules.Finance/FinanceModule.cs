@@ -2,7 +2,7 @@ using System.Data;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dapper;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Shared.Kernel.Audit;
 using Sms.Shared.Kernel.Data;
@@ -406,8 +406,8 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
                         req.IdempotencyKey,
                     }, tx, cancellationToken: ct));
             }
-            catch (SqlException sqlEx) when (
-                req.IdempotencyKey is not null && (sqlEx.Number == 2601 || sqlEx.Number == 2627))
+            catch (PostgresException sqlEx) when (
+                req.IdempotencyKey is not null && sqlEx.SqlState == PostgresErrorCodes.UniqueViolation)
             {
                 /* Concurrent request with the same IdempotencyKey won the race and inserted first —
                    fall back to returning that row instead of surfacing the unique-index violation. */

@@ -1,15 +1,20 @@
 services:
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: postgres:18-alpine
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "Local_Dev_Pass123!"
-    ports: ["1433:1433"]
+      POSTGRES_DB: sms_dev
+      POSTGRES_USER: sms
+      POSTGRES_PASSWORD: "Local_Dev_Pass123!"
+    ports: ["5432:5432"]
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Files here run once, in name order, only against a brand-new (empty) data volume.
+      - ./db/postgres:/docker-entrypoint-initdb.d:ro
   api:
     build: { context: ., dockerfile: src/Sms.Api/Dockerfile }
     depends_on: [db]
     environment:
-      ConnectionStrings__Sql: "Server=db;Database=Sms;User Id=sa;Password=Local_Dev_Pass123!;TrustServerCertificate=True;Encrypt=False"
+      ConnectionStrings__Sql: "Host=db;Port=5432;Database=sms_dev;Username=sms;Password=Local_Dev_Pass123!"
       Jwt__SigningKey: "compose-dev-signing-key-at-least-32-bytes!!"
       ASPNETCORE_ENVIRONMENT: "Development"
       # DataProtection keys must survive `docker compose restart`/recreate or every school's
@@ -21,3 +26,4 @@ services:
 
 volumes:
   dp-keys: {}
+  db-data: {}

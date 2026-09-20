@@ -189,7 +189,7 @@ public static class ServiceCollectionExtensions
         builder.Services.AddScoped<TenantPlanRepository>();
         builder.Services.AddScoped<ITenantFeatureSet, TierFeatureSet>();
         builder.Services.AddScoped<IDbConnectionFactory>(sp =>
-            new SqlConnectionFactory(conn!, sp.GetRequiredService<ITenantContext>()));
+            new NpgsqlConnectionFactory(conn!, sp.GetRequiredService<ITenantContext>()));
         builder.Services.AddScoped<AuthRepository>();
         builder.Services.AddScoped<UserProvisioningRepository>();
         builder.Services.AddScoped<IRefreshTokenStore, RefreshTokenStore>();

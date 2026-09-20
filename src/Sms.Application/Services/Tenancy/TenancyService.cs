@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Application.Common;
 using Sms.Application.DTOs.Auth;
 using Sms.Application.Interfaces.DAO;
@@ -111,7 +111,7 @@ public sealed class TenancyService(
         {
             row = await clients.CreateAsync(create, ct);
         }
-        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
             return ApiResult<ClientResponse>.Fail(
                 new Error("slug_taken", "A school with this name/slug already exists. Try a different school name."),
@@ -184,7 +184,7 @@ public sealed class TenancyService(
                 ? ApiResult<ClientResponse>.Fail(new Error("not_found", "resource not found"), 404)
                 : ApiResult<ClientResponse>.Ok(row.ToResponse());
         }
-        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
             return ApiResult<ClientResponse>.Fail(
                 new Error("slug_taken", "That school id is already in use. Choose another."), 409);

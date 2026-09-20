@@ -1,7 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using Dapper;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Modules.Sis.Contracts;
 using Sms.Shared.Kernel.Data;
 
@@ -37,7 +37,7 @@ public sealed class BulkImportRepository(IDbConnectionFactory factory) : BaseRep
                 commandType: CommandType.Text, cancellationToken: ct));
             return true;
         }
-        catch (SqlException sqlEx) when (sqlEx.Number is 2601 or 2627)
+        catch (PostgresException sqlEx) when (sqlEx.SqlState == PostgresErrorCodes.UniqueViolation)
         {
             return false;
         }
