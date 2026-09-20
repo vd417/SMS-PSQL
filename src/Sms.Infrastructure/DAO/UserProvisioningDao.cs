@@ -1,6 +1,4 @@
-using System.Data;
 using System.Text.Json;
-using Dapper;
 using Sms.Application.DTOs.Users;
 using Sms.Application.Interfaces.DAO;
 using Sms.Shared.Kernel.Auth;
@@ -27,19 +25,9 @@ public sealed class UserProvisioningDao(IDbConnectionFactory factory) : BaseRepo
     public async Task<ImportResult> BulkCreateAsync(Guid tenantId, IReadOnlyList<ImportRow> rows,
         CancellationToken ct = default)
     {
-        var table = new DataTable();
-        table.Columns.Add("Email", typeof(string));
-        table.Columns.Add("Phone", typeof(string));
-        table.Columns.Add("Role", typeof(string));
-        foreach (var r in rows)
-            table.Rows.Add((object?)r.Email ?? DBNull.Value, (object?)r.Phone ?? DBNull.Value,
-                (object?)r.Role ?? DBNull.Value);
-
-        var p = new DynamicParameters();
-        p.Add("@TenantId", tenantId);
-        p.Add("@Rows", table.AsTableValuedParameter("dbo.UsersTvp"));
-
-        var result = await QuerySingleProcAsync<ImportResult>("dbo.Users_BulkCreate", p, ct);
+        var rowsJson = JsonSerializer.Serialize(rows.Select(r => new { r.Email, r.Phone, r.Role }));
+        var result = await QuerySingleProcAsync<ImportResult>(
+            "dbo.Users_BulkCreate", new { TenantId = tenantId, Rows = rowsJson }, ct);
         return result ?? new ImportResult(0, rows.Count);
     }
 
@@ -49,7 +37,7 @@ public sealed class UserProvisioningDao(IDbConnectionFactory factory) : BaseRepo
     public async Task<bool> UserInTenantAsync(Guid userId, Guid tenantId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<int>(
-            "SELECT COUNT(1) FROM dbo.Users WHERE Id = @UserId AND TenantId = @TenantId",
+            """SELECT COUNT(1) FROM "dbo"."Users" WHERE "Id" = @UserId AND "TenantId" = @TenantId""",
             new { UserId = userId, TenantId = tenantId }, ct);
         return rows.FirstOrDefault() > 0;
     }

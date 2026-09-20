@@ -5,6 +5,16 @@
 -- in sqlserver-object-inventory.csv by which of these patterns it matches, with status
 -- "PENDING PER-PROCEDURE CONVERSION". Converting all 200 by hand is a multi-week follow-on
 -- effort, not something to fake here.
+--
+-- NAMING NOTE (added when the Auth/User module was actually wired up in 09_auth_procs.sql):
+-- dbo.user_create's parameters were renamed from p_tenant_id/p_email/... to TenantId/Email/...
+-- because BaseRepository.FunctionCallSql calls functions with named notation built from the C#
+-- call sites' anonymous-object property names -- see 09_auth_procs.sql's header comment for the
+-- full convention. dbo.trip_ping_bulk_insert, dbo.attendance_bulk_upsert and dbo.client_delete
+-- below still use their original p_-prefixed names and are NOT yet wired to a real call site (the
+-- TVP/DataTable call sites they'd replace haven't been converted); rename them to match this same
+-- convention when that conversion happens, or the named-argument call will fail exactly like
+-- user_create did here.
 
 -- =====================================================================================
 -- 1) dbo.User_Create -- simplest pattern: single INSERT + ISNULL defaults + scalar return.
@@ -24,13 +34,17 @@
 --       SELECT @Id AS Id;
 --   END
 
+-- Parameter names match the C# call sites' anonymous-object property names exactly (see
+-- BaseRepository.FunctionCallSql / 09_auth_procs.sql's header note on the naming convention) --
+-- this supersedes this function's original p_-prefixed parameter names, which predate that
+-- convention and would not resolve against the real call sites' named-argument call.
 CREATE OR REPLACE FUNCTION dbo.user_create(
-    p_tenant_id uuid,
-    p_email varchar(256),
-    p_phone varchar(32),
-    p_is_platform boolean,
-    p_student_id varchar(64) DEFAULT NULL,
-    p_must_set_password boolean DEFAULT false
+    TenantId uuid,
+    Email varchar(256),
+    Phone varchar(32),
+    IsPlatform boolean,
+    StudentId varchar(64) DEFAULT NULL,
+    MustSetPassword boolean DEFAULT false
 ) RETURNS uuid
 LANGUAGE plpgsql
 AS $$
@@ -38,7 +52,9 @@ DECLARE
     v_id uuid;
 BEGIN
     INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "Phone", "IsPlatform", "Status", "StudentId", "MustSetPassword")
-    VALUES (gen_random_uuid(), p_tenant_id, p_email, p_phone, COALESCE(p_is_platform, false), 'active', p_student_id, COALESCE(p_must_set_password, false))
+    VALUES (gen_random_uuid(), user_create.TenantId, user_create.Email, user_create.Phone,
+            COALESCE(user_create.IsPlatform, false), 'active', user_create.StudentId,
+            COALESCE(user_create.MustSetPassword, false))
     RETURNING "Id" INTO v_id;
     RETURN v_id;
 END;

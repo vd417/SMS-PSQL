@@ -20,8 +20,10 @@ public sealed class LastSeenTouchMiddleware(RequestDelegate next)
         {
             await using var conn = await factory.OpenAsync(http.RequestAborted);
             await conn.ExecuteAsync(
-                "UPDATE dbo.Users SET LastSeenAt = SYSUTCDATETIME() " +
-                "WHERE Id = @userId AND (LastSeenAt IS NULL OR LastSeenAt < DATEADD(SECOND, -60, SYSUTCDATETIME()))",
+                """
+                UPDATE "dbo"."Users" SET "LastSeenAt" = now()
+                WHERE "Id" = @userId AND ("LastSeenAt" IS NULL OR "LastSeenAt" < now() - interval '60 seconds')
+                """,
                 new { userId });
         }
         await next(http);

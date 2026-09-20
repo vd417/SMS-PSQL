@@ -20,17 +20,21 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
 
     public Task<IReadOnlyList<UserRecord>> ListByEmailAsync(string email, CancellationToken ct = default) =>
         QueryInlineAsync<UserRecord>(
-            "SELECT Id, TenantId, Email, StudentId, Phone, PasswordHash, IsPlatform, Status, Name, MustSetPassword, CreatedAt, PhotoUrl " +
-            "FROM dbo.Users WHERE Email IS NOT NULL " +
-            "AND LOWER(LTRIM(RTRIM(Email))) = LOWER(LTRIM(RTRIM(@Email))) " +
-            "ORDER BY CASE WHEN IsPlatform = 1 THEN 0 ELSE 1 END, CreatedAt",
+            """
+            SELECT "Id", "TenantId", "Email", "StudentId", "Phone", "PasswordHash", "IsPlatform", "Status", "Name", "MustSetPassword", "CreatedAt", "PhotoUrl"
+            FROM "dbo"."Users" WHERE "Email" IS NOT NULL
+            AND lower(trim("Email")) = lower(trim(@Email))
+            ORDER BY CASE WHEN "IsPlatform" THEN 0 ELSE 1 END, "CreatedAt"
+            """,
             new { Email = email }, ct);
 
     public Task<IReadOnlyList<UserRecord>> ListByPhoneAsync(string phone, CancellationToken ct = default) =>
         QueryInlineAsync<UserRecord>(
-            "SELECT Id, TenantId, Email, StudentId, Phone, PasswordHash, IsPlatform, Status, Name, MustSetPassword, CreatedAt, PhotoUrl " +
-            "FROM dbo.Users WHERE Phone = @Phone " +
-            "ORDER BY CASE WHEN IsPlatform = 1 THEN 0 ELSE 1 END, CreatedAt",
+            """
+            SELECT "Id", "TenantId", "Email", "StudentId", "Phone", "PasswordHash", "IsPlatform", "Status", "Name", "MustSetPassword", "CreatedAt", "PhotoUrl"
+            FROM "dbo"."Users" WHERE "Phone" = @Phone
+            ORDER BY CASE WHEN "IsPlatform" THEN 0 ELSE 1 END, "CreatedAt"
+            """,
             new { Phone = phone }, ct);
 
     public Task<IReadOnlyList<UserRecord>> ListByAdmissionIdAsync(string admissionId, CancellationToken ct = default) =>
@@ -48,12 +52,15 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
     public async Task<RosterStudentRecord?> GetRosterByEmailAsync(string email, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<RosterStudentRecord>(
-            "SELECT TOP 1 s.Id, s.TenantId, s.AdmissionNo, s.Name, s.Email, s.GuardianPhone, s.Status, s.GuardianEmail " +
-            "FROM dbo.Students s " +
-            "WHERE s.Email IS NOT NULL " +
-            "AND LOWER(LTRIM(RTRIM(s.Email))) = LOWER(LTRIM(RTRIM(@Email))) " +
-            "AND LOWER(ISNULL(s.Status, N'active')) NOT IN (N'removed', N'inactive', N'left', N'withdrawn') " +
-            "ORDER BY s.CreatedAt",
+            """
+            SELECT s."Id", s."TenantId", s."AdmissionNo", s."Name", s."Email", s."GuardianPhone", s."Status", s."GuardianEmail"
+            FROM "dbo"."Students" s
+            WHERE s."Email" IS NOT NULL
+            AND lower(trim(s."Email")) = lower(trim(@Email))
+            AND lower(COALESCE(s."Status", 'active')) NOT IN ('removed', 'inactive', 'left', 'withdrawn')
+            ORDER BY s."CreatedAt"
+            LIMIT 1
+            """,
             new { Email = email }, ct);
         return rows.FirstOrDefault();
     }
@@ -61,12 +68,15 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
     public async Task<RosterStudentRecord?> GetRosterByGuardianEmailAsync(string email, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<RosterStudentRecord>(
-            "SELECT TOP 1 s.Id, s.TenantId, s.AdmissionNo, s.Name, s.Email, s.GuardianPhone, s.Status, s.GuardianEmail " +
-            "FROM dbo.Students s " +
-            "WHERE s.GuardianEmail IS NOT NULL " +
-            "AND LOWER(LTRIM(RTRIM(s.GuardianEmail))) = LOWER(LTRIM(RTRIM(@Email))) " +
-            "AND LOWER(ISNULL(s.Status, N'active')) NOT IN (N'removed', N'inactive', N'left', N'withdrawn') " +
-            "ORDER BY s.CreatedAt",
+            """
+            SELECT s."Id", s."TenantId", s."AdmissionNo", s."Name", s."Email", s."GuardianPhone", s."Status", s."GuardianEmail"
+            FROM "dbo"."Students" s
+            WHERE s."GuardianEmail" IS NOT NULL
+            AND lower(trim(s."GuardianEmail")) = lower(trim(@Email))
+            AND lower(COALESCE(s."Status", 'active')) NOT IN ('removed', 'inactive', 'left', 'withdrawn')
+            ORDER BY s."CreatedAt"
+            LIMIT 1
+            """,
             new { Email = email }, ct);
         return rows.FirstOrDefault();
     }
@@ -82,8 +92,10 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
 
     public async Task<UserRecord?> GetByEmailAndTenantAsync(string email, Guid tenantId, CancellationToken ct = default) =>
         (await QueryInlineAsync<UserRecord>(
-            "SELECT Id, TenantId, Email, StudentId, Phone, PasswordHash, IsPlatform, Status, Name, MustSetPassword, CreatedAt, PhotoUrl " +
-            "FROM dbo.Users WHERE Email = @Email AND TenantId = @TenantId",
+            """
+            SELECT "Id", "TenantId", "Email", "StudentId", "Phone", "PasswordHash", "IsPlatform", "Status", "Name", "MustSetPassword", "CreatedAt", "PhotoUrl"
+            FROM "dbo"."Users" WHERE "Email" = @Email AND "TenantId" = @TenantId
+            """,
             new { Email = email, TenantId = tenantId }, ct)).FirstOrDefault();
 
     public Task<IReadOnlyList<string>> GetRolesAsync(Guid userId, CancellationToken ct = default) =>
@@ -110,7 +122,7 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
 
     private Task UpdatePhoneAsync(Guid userId, string? phone, CancellationToken ct) =>
         ExecuteInlineUpdateAsync(
-            "UPDATE dbo.Users SET Phone = @Phone WHERE Id = @UserId",
+            """UPDATE "dbo"."Users" SET "Phone" = @Phone WHERE "Id" = @UserId""",
             new { UserId = userId, Phone = phone }, ct);
 
     /// Multi-school identities share an email — RLS requires platform context to see all peers.

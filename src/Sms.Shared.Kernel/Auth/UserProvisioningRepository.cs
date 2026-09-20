@@ -1,4 +1,4 @@
-using System.Data;
+using System.Text.Json;
 using Dapper;
 using Sms.Shared.Kernel.Data;
 
@@ -24,7 +24,7 @@ public sealed class UserProvisioningRepository(IDbConnectionFactory factory) : B
     public async Task<Guid?> FindPlatformUserIdByEmailAsync(string email, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<Guid>(
-            "SELECT TOP 1 Id FROM dbo.Users WHERE LOWER(Email) = LOWER(@email) AND IsPlatform = 1",
+            """SELECT "Id" FROM "dbo"."Users" WHERE lower("Email") = lower(@email) AND "IsPlatform" = true LIMIT 1""",
             new { email }, ct);
         var id = rows.FirstOrDefault();
         return id == Guid.Empty ? null : id;
@@ -35,7 +35,7 @@ public sealed class UserProvisioningRepository(IDbConnectionFactory factory) : B
     {
         await using var conn = await Factory.OpenAsync(ct);
         await conn.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM dbo.UserRoles WHERE UserId = @userId",
+            """DELETE FROM "dbo"."UserRoles" WHERE "UserId" = @userId""",
             new { userId }, cancellationToken: ct));
         foreach (var role in roles)
             await ExecuteProcAsync("dbo.UserRole_Add", new { UserId = userId, Role = role }, ct);
@@ -45,7 +45,7 @@ public sealed class UserProvisioningRepository(IDbConnectionFactory factory) : B
     {
         await using var conn = await Factory.OpenAsync(ct);
         await conn.ExecuteAsync(new CommandDefinition(
-            "UPDATE dbo.Users SET Status = @status WHERE Id = @userId",
+            """UPDATE "dbo"."Users" SET "Status" = @status WHERE "Id" = @userId""",
             new { userId, status }, cancellationToken: ct));
     }
 
@@ -57,19 +57,9 @@ public sealed class UserProvisioningRepository(IDbConnectionFactory factory) : B
     public async Task<ImportResult> BulkCreateAsync(Guid tenantId, IReadOnlyList<ImportRow> rows,
         CancellationToken ct = default)
     {
-        var table = new DataTable();
-        table.Columns.Add("Email", typeof(string));
-        table.Columns.Add("Phone", typeof(string));
-        table.Columns.Add("Role", typeof(string));
-        foreach (var r in rows)
-            table.Rows.Add((object?)r.Email ?? DBNull.Value, (object?)r.Phone ?? DBNull.Value,
-                (object?)r.Role ?? DBNull.Value);
-
-        var p = new DynamicParameters();
-        p.Add("@TenantId", tenantId);
-        p.Add("@Rows", table.AsTableValuedParameter("dbo.UsersTvp"));
-
-        var result = await QuerySingleProcAsync<ImportResult>("dbo.Users_BulkCreate", p, ct);
+        var rowsJson = JsonSerializer.Serialize(rows.Select(r => new { r.Email, r.Phone, r.Role }));
+        var result = await QuerySingleProcAsync<ImportResult>(
+            "dbo.Users_BulkCreate", new { TenantId = tenantId, Rows = rowsJson }, ct);
         return result ?? new ImportResult(0, rows.Count);
     }
 }

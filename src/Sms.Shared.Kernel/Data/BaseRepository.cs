@@ -41,16 +41,20 @@ public abstract class BaseRepository(IDbConnectionFactory factory)
             new CommandDefinition(FunctionCallSql(proc, args), args, commandType: CommandType.Text, cancellationToken: ct));
     }
 
-    // Named notation (arg => @Arg) so Postgres resolves parameters by name, not position — the
-    // converted function's parameter names only need to match (case-insensitively, both unquoted)
-    // the anonymous object's property names, exactly like the old proc's @Param names did.
+    // Named notation (arg => @Arg) so Postgres resolves parameters by name, not position. The
+    // argument label is quoted+lowercased rather than left bare: bare-unquoted would fold to the
+    // same lowercase text for an ordinary name, but several SQL/JSON-standard words (e.g. "json",
+    // "role") are reserved and can't appear unquoted in this position at all — quoting sidesteps
+    // that unconditionally, and is a no-op for every non-keyword name. The converted function's
+    // parameter must be declared with the matching quoted-lowercase name (or plain, if not a
+    // keyword) to match.
     private static string FunctionCallSql(string proc, object? args)
     {
         if (args is null)
             return $"SELECT * FROM {proc}()";
         var argList = string.Join(", ",
             args.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Select(p => $"{p.Name} => @{p.Name}"));
+                .Select(p => $"\"{p.Name.ToLowerInvariant()}\" => @{p.Name}"));
         return $"SELECT * FROM {proc}({argList})";
     }
 
