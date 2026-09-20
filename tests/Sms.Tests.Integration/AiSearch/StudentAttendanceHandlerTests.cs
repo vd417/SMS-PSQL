@@ -16,7 +16,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// the caller's own identity/links, never from the raw LLM-extracted filter — a null here means "not
 /// narrowed to one student" and must degrade to Unsupported rather than querying anything.
 [Collection("sql")]
-public class StudentAttendanceHandlerTests(SqlServerFixture fx)
+public class StudentAttendanceHandlerTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

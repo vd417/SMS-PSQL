@@ -12,11 +12,11 @@ using Xunit;
 namespace Sms.Tests.Integration.Tasks;
 
 [Collection("sql")]
-public class TaskEndpointTests(SqlServerFixture fx)
+public class TaskEndpointTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
-    private static WebApplicationFactory<Program> App(SqlServerFixture fx) =>
+    private static WebApplicationFactory<Program> App(PostgresFixture fx) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("environment", "Production");
@@ -35,7 +35,7 @@ public class TaskEndpointTests(SqlServerFixture fx)
         return client;
     }
 
-    private static async Task SeedUserAsync(SqlServerFixture fx, Guid tenantId, Guid userId, string name)
+    private static async Task SeedUserAsync(PostgresFixture fx, Guid tenantId, Guid userId, string name)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
@@ -45,7 +45,7 @@ public class TaskEndpointTests(SqlServerFixture fx)
             new { userId, tenantId, name });
     }
 
-    private static async Task SeedManagerRoleAsync(SqlServerFixture fx, Guid userId, string role)
+    private static async Task SeedManagerRoleAsync(PostgresFixture fx, Guid userId, string role)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
@@ -55,7 +55,7 @@ public class TaskEndpointTests(SqlServerFixture fx)
     /// Links a user to a dbo.Staff row with the given free-text designation (e.g. "Driver"),
     /// which is how TaskRepository.GetCallerRoleKeyAsync resolves the caller's role_key —
     /// exactly the same lookup /auth/me uses (see StaffRoleMapper.ToRoleKey).
-    private static async Task SeedStaffLinkAsync(SqlServerFixture fx, Guid tenantId, Guid userId, string designation)
+    private static async Task SeedStaffLinkAsync(PostgresFixture fx, Guid tenantId, Guid userId, string designation)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();

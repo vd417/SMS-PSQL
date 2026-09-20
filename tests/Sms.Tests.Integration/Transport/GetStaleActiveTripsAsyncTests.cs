@@ -10,7 +10,7 @@ using FluentAssertions;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class GetStaleActiveTripsAsyncTests(SqlServerFixture fx)
+public class GetStaleActiveTripsAsyncTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

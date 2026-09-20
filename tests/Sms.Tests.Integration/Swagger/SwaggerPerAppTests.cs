@@ -8,7 +8,7 @@ using Swashbuckle.AspNetCore.Swagger;
 namespace Sms.Tests.Integration.Swagger;
 
 [Collection("sql")]
-public class SwaggerPerAppTests(SqlServerFixture fx)
+public class SwaggerPerAppTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

@@ -7,7 +7,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class AuditLogsTests(SqlServerFixture fx)
+public class AuditLogsTests(PostgresFixture fx)
 {
     [Fact]
     public async Task AuditLogs_table_exists_with_expected_columns()
@@ -22,8 +22,8 @@ public class AuditLogsTests(SqlServerFixture fx)
         ]);
     }
 
-    /// <summary>Stamps SESSION_CONTEXT the same way SqlConnectionFactory does in production
-    /// (see src/Sms.Shared.Kernel/Data/SqlConnectionFactory.cs:19-29), so the AuditLogs RLS
+    /// <summary>Stamps SESSION_CONTEXT the same way NpgsqlConnectionFactory does in production
+    /// (see src/Sms.Shared.Kernel/Data/NpgsqlConnectionFactory.cs:19-29), so the AuditLogs RLS
     /// filter/block predicate (rls.fn_tenant_predicate) matches this tenant.</summary>
     private static async Task StampTenantAsync(SqlConnection conn, Guid tenantId)
     {

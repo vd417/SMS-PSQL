@@ -12,7 +12,7 @@ using Sms.Shared.Kernel.Tenancy;
 namespace Sms.Tests.Integration.Catre;
 
 [Collection("sql")]
-public class CatreDashboardTests(SqlServerFixture fx)
+public class CatreDashboardTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

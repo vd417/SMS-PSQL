@@ -12,7 +12,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Hostel;
 
 [Collection("sql")]
-public class HostelTests(SqlServerFixture fx)
+public class HostelTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

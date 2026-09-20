@@ -11,7 +11,7 @@ using Sms.Tests.Integration;
 namespace Sms.Tests.Integration.Attendance;
 
 [Collection("sql")]
-public class GeofenceCheckinTests(SqlServerFixture fx)
+public class GeofenceCheckinTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const double SchoolLat = 12.9716;

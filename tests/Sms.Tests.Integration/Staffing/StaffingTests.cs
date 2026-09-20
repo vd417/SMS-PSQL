@@ -11,7 +11,7 @@ using Sms.Tests.Integration;
 namespace Sms.Tests.Integration.Staffing;
 
 [Collection("sql")]
-public class StaffingTests(SqlServerFixture fx)
+public class StaffingTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

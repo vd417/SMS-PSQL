@@ -12,7 +12,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class OwnerFeeSummaryTests(SqlServerFixture fx)
+public class OwnerFeeSummaryTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -24,11 +24,11 @@ public class OwnerFeeSummaryTests(SqlServerFixture fx)
             b.UseSetting("Jwt:SigningKey", Key);
         });
 
-    private SqlConnectionFactory PlatformFactory()
+    private NpgsqlConnectionFactory PlatformFactory()
     {
         var ctx = new TenantContext();
         ctx.Set(null, Guid.NewGuid(), true);
-        return new SqlConnectionFactory(fx.ConnectionString, ctx);
+        return new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
     }
 
     [Fact]

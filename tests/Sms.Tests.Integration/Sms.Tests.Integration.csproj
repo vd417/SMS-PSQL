@@ -13,7 +13,6 @@
     <PackageReference Include="FluentAssertions" Version="8.10.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.11" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.1" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
@@ -32,6 +31,11 @@
     <ProjectReference Include="..\..\src\Sms.Shared.Kernel\Sms.Shared.Kernel.csproj" />
     <ProjectReference Include="..\..\db\Sms.Migrations\Sms.Migrations.csproj" />
     <ProjectReference Include="..\..\src\Sms.Api\Sms.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PostgresFixture applies these, in name order, to each fresh per-test-run database. -->
+    <None Include="..\..\db\postgres\*.sql" CopyToOutputDirectory="PreserveNewest" LinkBase="postgres-schema" />
   </ItemGroup>
 
 </Project>

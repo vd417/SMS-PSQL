@@ -11,7 +11,7 @@ using Sms.Shared.Kernel.Time;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class BusRosterTests(SqlServerFixture fx)
+public class BusRosterTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

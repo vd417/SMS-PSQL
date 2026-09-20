@@ -13,7 +13,7 @@ namespace Sms.Tests.Integration.Auth;
 /// authenticated user's own dbo.Staff row, never from client input.
 /// </summary>
 [Collection("sql")]
-public class StaffRoleKeyLoginTests(SqlServerFixture fx)
+public class StaffRoleKeyLoginTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> AppWithDb() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

@@ -17,7 +17,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class RazorpayOrderCreationTests(SqlServerFixture fx)
+public class RazorpayOrderCreationTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -30,7 +30,7 @@ public class RazorpayOrderCreationTests(SqlServerFixture fx)
         public bool VerifyWebhookSignature(string webhookSecret, string body, string signatureHeader) => true;
     }
 
-    private static WebApplicationFactory<Program> App(SqlServerFixture fx) =>
+    private static WebApplicationFactory<Program> App(PostgresFixture fx) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("environment", "Production");
@@ -51,7 +51,7 @@ public class RazorpayOrderCreationTests(SqlServerFixture fx)
     }
 
     private static async Task<(Guid tenantId, Guid principalUserId, Guid studentId, Guid invoiceId)> SeedAsync(
-        WebApplicationFactory<Program> app, SqlServerFixture fx, decimal invoiceAmount = 5000m)
+        WebApplicationFactory<Program> app, PostgresFixture fx, decimal invoiceAmount = 5000m)
     {
         var tenantId = Guid.NewGuid();
         var principalUserId = Guid.NewGuid();

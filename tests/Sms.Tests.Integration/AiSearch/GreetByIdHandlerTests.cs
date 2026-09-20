@@ -25,7 +25,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// authorized to see, even when the exact code they scanned genuinely exists in the tenant (or in
 /// another tenant entirely).
 [Collection("sql")]
-public class GreetByIdHandlerTests(SqlServerFixture fx)
+public class GreetByIdHandlerTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

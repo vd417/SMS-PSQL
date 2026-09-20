@@ -10,16 +10,16 @@ using Xunit;
 namespace Sms.Tests.Integration.Saas;
 
 [Collection("sql")]
-public class RoleTemplateDaoTests(SqlServerFixture fx)
+public class RoleTemplateDaoTests(PostgresFixture fx)
 {
     private async Task<Guid> SeedTenantAsync()
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var tenantId = Guid.NewGuid();
         await using var c = await factory.OpenAsync();
         await c.ExecuteAsync(
-            "INSERT dbo.Tenants (Id, Name, Slug, Status, Tier) VALUES (@id,'T',@s,'active','gold')",
+            """INSERT INTO "dbo"."Tenants" ("Id", "Name", "Slug", "Status", "Tier") VALUES (@id,'T',@s,'active','gold')""",
             new { id = tenantId, s = $"t{tenantId:N}" });
         return tenantId;
     }
@@ -27,7 +27,7 @@ public class RoleTemplateDaoTests(SqlServerFixture fx)
     private IRoleTemplateDao Dao()
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        return new RoleTemplateDao(new SqlConnectionFactory(fx.ConnectionString, ctx));
+        return new RoleTemplateDao(new NpgsqlConnectionFactory(fx.ConnectionString, ctx));
     }
 
     [Fact]

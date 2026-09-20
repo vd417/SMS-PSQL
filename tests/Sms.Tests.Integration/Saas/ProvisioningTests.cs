@@ -12,7 +12,7 @@ using Sms.Shared.Kernel.Tenancy;
 namespace Sms.Tests.Integration.Saas;
 
 [Collection("sql")]
-public class ProvisioningTests(SqlServerFixture fx)
+public class ProvisioningTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -38,10 +38,11 @@ public class ProvisioningTests(SqlServerFixture fx)
     private async Task<Guid> SeedActiveTenant()
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var id = Guid.NewGuid();
         await using var c = await factory.OpenAsync();
-        await c.ExecuteAsync("INSERT dbo.Tenants (Id, Name, Slug, Status, Tier) VALUES (@id,'T',@s,'active','gold')",
+        await c.ExecuteAsync(
+            """INSERT INTO "dbo"."Tenants" ("Id", "Name", "Slug", "Status", "Tier") VALUES (@id,'T',@s,'active','gold')""",
             new { id, s = $"t{id:N}" });
         return id;
     }
@@ -63,7 +64,7 @@ public class ProvisioningTests(SqlServerFixture fx)
             .StatusCode.Should().Be(HttpStatusCode.OK);
 
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync("UPDATE dbo.OtpCodes SET CodeHash=@h WHERE Identifier=@id",
                 new { id = email, h = Sha256Hex("123456") });

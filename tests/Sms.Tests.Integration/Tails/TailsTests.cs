@@ -9,7 +9,7 @@ using Sms.Shared.Kernel.Time;
 namespace Sms.Tests.Integration.Tails;
 
 [Collection("sql")]
-public class TailsTests(SqlServerFixture fx)
+public class TailsTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

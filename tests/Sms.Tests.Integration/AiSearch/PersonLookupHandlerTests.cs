@@ -20,7 +20,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// pipeline, mirroring the seeding/DI conventions established in GreetByIdHandlerTests.cs and
 /// PersonResolverTests.cs.
 [Collection("sql")]
-public class PersonLookupHandlerTests(SqlServerFixture fx)
+public class PersonLookupHandlerTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const string Intent = "PersonLookup";

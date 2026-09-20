@@ -36,7 +36,7 @@ public sealed class ScriptedClassificationClient(AiClassificationResult result) 
 /// The ONLY substituted component is the classifier, which would otherwise be a live LLM call.
 /// </summary>
 [Collection("sql")]
-public class AiSearchSecurityTests(SqlServerFixture fx)
+public class AiSearchSecurityTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

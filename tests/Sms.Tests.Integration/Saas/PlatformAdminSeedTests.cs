@@ -6,7 +6,7 @@ using Microsoft.Data.SqlClient;
 namespace Sms.Tests.Integration.Saas;
 
 [Collection("sql")]
-public class PlatformAdminSeedTests(SqlServerFixture fx)
+public class PlatformAdminSeedTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

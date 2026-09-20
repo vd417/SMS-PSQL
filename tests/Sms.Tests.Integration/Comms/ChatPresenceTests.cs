@@ -12,7 +12,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Comms;
 
 [Collection("sql")]
-public class ChatPresenceTests(SqlServerFixture fx)
+public class ChatPresenceTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

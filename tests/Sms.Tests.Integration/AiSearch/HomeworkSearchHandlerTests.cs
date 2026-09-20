@@ -17,7 +17,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// AiSearchAuthorizationService (self-referential or single-name-matched-parent queries only) — and
 /// the "no resolved student" Unsupported fallback for e.g. a teacher's generic "homework" ask.
 [Collection("sql")]
-public class HomeworkSearchHandlerTests(SqlServerFixture fx)
+public class HomeworkSearchHandlerTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

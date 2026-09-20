@@ -5,7 +5,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Migrations;
 
 [Collection("sql")]
-public class M0085_BackfillTests(SqlServerFixture fx)
+public class M0085_BackfillTests(PostgresFixture fx)
 {
     [Fact]
     public async Task Clean_single_match_links_teacher_and_copies_name()

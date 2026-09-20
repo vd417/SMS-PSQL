@@ -17,7 +17,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// already scoped to the caller's own linked children via Users.StudentId, so the handler itself has
 /// no student-id filtering logic of its own to test beyond the empty/non-empty response shape.
 [Collection("sql")]
-public class BusLocationSearchHandlerTests(SqlServerFixture fx)
+public class BusLocationSearchHandlerTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

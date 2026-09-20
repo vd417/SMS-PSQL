@@ -14,7 +14,7 @@ namespace Sms.Tests.Integration.Staffing;
 /// GET /v1/staff/dashboard — hoursThisWeek (real, from CheckIns) + roleCard (real for
 /// driver/conductor only, omitted for every other category — see the 2026-09-02 design).
 [Collection("sql")]
-public class DashboardTests(SqlServerFixture fx)
+public class DashboardTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

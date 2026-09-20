@@ -12,11 +12,11 @@ using Xunit;
 namespace Sms.Tests.Integration.VehicleChecks;
 
 [Collection("sql")]
-public class VehicleCheckEndpointTests(SqlServerFixture fx)
+public class VehicleCheckEndpointTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
-    private static WebApplicationFactory<Program> App(SqlServerFixture fx) =>
+    private static WebApplicationFactory<Program> App(PostgresFixture fx) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("environment", "Production");
@@ -35,7 +35,7 @@ public class VehicleCheckEndpointTests(SqlServerFixture fx)
         return client;
     }
 
-    private static async Task SeedUserAsync(SqlServerFixture fx, Guid tenantId, Guid userId, string name)
+    private static async Task SeedUserAsync(PostgresFixture fx, Guid tenantId, Guid userId, string name)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
@@ -45,14 +45,14 @@ public class VehicleCheckEndpointTests(SqlServerFixture fx)
             new { userId, tenantId, name });
     }
 
-    private static async Task SeedManagerRoleAsync(SqlServerFixture fx, Guid userId, string role)
+    private static async Task SeedManagerRoleAsync(PostgresFixture fx, Guid userId, string role)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, @role)", new { userId, role });
     }
 
-    private static async Task<Guid> SeedBusAsync(SqlServerFixture fx, Guid tenantId, string busNo)
+    private static async Task<Guid> SeedBusAsync(PostgresFixture fx, Guid tenantId, string busNo)
     {
         var busId = Guid.NewGuid();
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
@@ -68,7 +68,7 @@ public class VehicleCheckEndpointTests(SqlServerFixture fx)
     /// ConductorStaffId (through a dbo.Staff row), the exact assignment concept
     /// TripRepository.IsDriverOrConductorAssignedToBusAsync (and GetAssignmentAsync) resolve.
     private static async Task SeedBusAssignmentAsync(
-        SqlServerFixture fx, Guid tenantId, Guid busId, Guid userId, string dutyRole)
+        PostgresFixture fx, Guid tenantId, Guid busId, Guid userId, string dutyRole)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();

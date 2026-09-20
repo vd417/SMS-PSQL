@@ -18,7 +18,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// AiSearchAuthorizationService (self-referential or single-name-matched-parent queries only) — and
 /// verifies subjects are scoped to the resolved student's own class, not leaked from another class.
 [Collection("sql")]
-public class SubjectSearchHandlerTests(SqlServerFixture fx)
+public class SubjectSearchHandlerTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

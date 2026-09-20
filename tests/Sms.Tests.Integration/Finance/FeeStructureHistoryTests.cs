@@ -13,7 +13,7 @@ namespace Sms.Tests.Integration.Finance;
 /// instead of overwriting the previous one, GET /fees/structure keeps resolving "the current
 /// one" to edit as the most recent row, and GET /fees/structures lists every saved version.
 [Collection("sql")]
-public class FeeStructureHistoryTests(SqlServerFixture fx)
+public class FeeStructureHistoryTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

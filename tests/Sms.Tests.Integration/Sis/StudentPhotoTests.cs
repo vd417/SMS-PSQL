@@ -12,11 +12,11 @@ using Xunit;
 namespace Sms.Tests.Integration.Sis;
 
 [Collection("sql")]
-public class StudentPhotoTests(SqlServerFixture fx)
+public class StudentPhotoTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
-    private static WebApplicationFactory<Program> AppWithDb(SqlServerFixture fx) =>
+    private static WebApplicationFactory<Program> AppWithDb(PostgresFixture fx) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("environment", "Production");
@@ -24,7 +24,7 @@ public class StudentPhotoTests(SqlServerFixture fx)
             b.UseSetting("Jwt:SigningKey", Key);
         });
 
-    private static async Task SeedStudentAsync(SqlServerFixture fx, Guid tenantId, Guid studentId)
+    private static async Task SeedStudentAsync(PostgresFixture fx, Guid tenantId, Guid studentId)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();

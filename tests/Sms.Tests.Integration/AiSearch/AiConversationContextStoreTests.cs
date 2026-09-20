@@ -10,7 +10,7 @@ using Xunit;
 namespace Sms.Tests.Integration.AiSearch;
 
 [Collection("sql")]
-public class AiConversationContextStoreTests(SqlServerFixture fx)
+public class AiConversationContextStoreTests(PostgresFixture fx)
 {
     // The repository's queries filter by TenantId/UserId explicitly, so the ambient tenant
     // context only needs to bypass RLS (IsPlatform: true) -- matches the pattern already used by
@@ -19,7 +19,7 @@ public class AiConversationContextStoreTests(SqlServerFixture fx)
     {
         var ctx = new TenantContext();
         ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(connectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(connectionString, ctx);
         var repo = new AiSearchConversationRepository(factory);
         var options = Options.Create(new AiSearchOptions
         {

@@ -11,7 +11,7 @@ using Sms.Shared.Kernel.Tenancy;
 namespace Sms.Tests.Integration.Saas;
 
 [Collection("sql")]
-public class BillingGateTests(SqlServerFixture fx)
+public class BillingGateTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -26,7 +26,7 @@ public class BillingGateTests(SqlServerFixture fx)
     private async Task<Guid> SeedTenant(string status)
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var id = Guid.NewGuid();
         await using var c = await factory.OpenAsync();
         await c.ExecuteAsync(

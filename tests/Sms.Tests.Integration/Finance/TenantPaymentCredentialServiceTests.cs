@@ -12,13 +12,13 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class TenantPaymentCredentialServiceTests(SqlServerFixture fx)
+public class TenantPaymentCredentialServiceTests(PostgresFixture fx)
 {
-    private static ITenantPaymentCredentialService BuildService(SqlServerFixture fx)
+    private static ITenantPaymentCredentialService BuildService(PostgresFixture fx)
     {
         var ctx = new TenantContext();
         ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var repo = new TenantPaymentCredentialRepository(factory);
         var provider = new ServiceCollection().AddDataProtection().Services.BuildServiceProvider();
         var protector = provider.GetRequiredService<IDataProtectionProvider>();
@@ -175,7 +175,7 @@ public class TenantPaymentCredentialServiceTests(SqlServerFixture fx)
             {
                 var ctx = new TenantContext();
                 ctx.Set(null, Guid.NewGuid(), true);
-                var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+                var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
                 var repo = new TenantPaymentCredentialRepository(factory);
                 var provider = new ServiceCollection()
                     .AddDataProtection()
@@ -233,7 +233,7 @@ public class TenantPaymentCredentialServiceTests(SqlServerFixture fx)
         }
 
         var svc = new TenantPaymentCredentialService(
-            new TenantPaymentCredentialRepository(new SqlConnectionFactory(fx.ConnectionString, PlatformCtx())), provider);
+            new TenantPaymentCredentialRepository(new NpgsqlConnectionFactory(fx.ConnectionString, PlatformCtx())), provider);
         var active = await svc.GetActiveAsync(tenantId, CancellationToken.None);
 
         active.Should().BeNull("an undecryptable secret must present as 'not configured', not throw");

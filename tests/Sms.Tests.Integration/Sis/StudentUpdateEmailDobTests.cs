@@ -16,11 +16,11 @@ namespace Sms.Tests.Integration.Sis;
 /// (etc.) could never be changed after creation. Regression coverage for
 /// that fix.
 [Collection("sql")]
-public class StudentUpdateEmailDobTests(SqlServerFixture fx)
+public class StudentUpdateEmailDobTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
-    private static WebApplicationFactory<Program> AppWithDb(SqlServerFixture fx) =>
+    private static WebApplicationFactory<Program> AppWithDb(PostgresFixture fx) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("environment", "Production");
@@ -28,7 +28,7 @@ public class StudentUpdateEmailDobTests(SqlServerFixture fx)
             b.UseSetting("Jwt:SigningKey", Key);
         });
 
-    private static async Task SeedStudentAsync(SqlServerFixture fx, Guid tenantId, Guid studentId)
+    private static async Task SeedStudentAsync(PostgresFixture fx, Guid tenantId, Guid studentId)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();

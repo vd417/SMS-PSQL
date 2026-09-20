@@ -12,7 +12,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Academics;
 
 [Collection("sql")]
-public class AttendanceRollCallHttpTests(SqlServerFixture fx)
+public class AttendanceRollCallHttpTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

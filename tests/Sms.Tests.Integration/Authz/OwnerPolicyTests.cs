@@ -10,7 +10,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Authz;
 
 [Collection("sql")]
-public class OwnerPolicyTests(SqlServerFixture fx)
+public class OwnerPolicyTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

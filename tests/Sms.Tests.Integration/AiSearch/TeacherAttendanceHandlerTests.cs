@@ -17,7 +17,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// session sidesteps the plan-feature gate without needing to seed any CheckIns rows, since an
 /// unseeded user simply yields a zero-valued (but successful) summary.
 [Collection("sql")]
-public class TeacherAttendanceHandlerTests(SqlServerFixture fx)
+public class TeacherAttendanceHandlerTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

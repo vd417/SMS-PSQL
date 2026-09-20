@@ -9,7 +9,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Auth;
 
 [Collection("sql")]
-public class SetPasswordClearsMustSetPasswordTests(SqlServerFixture fx)
+public class SetPasswordClearsMustSetPasswordTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> AppWithDb() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

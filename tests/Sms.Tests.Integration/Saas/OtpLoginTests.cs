@@ -10,7 +10,7 @@ using Sms.Shared.Kernel.Tenancy;
 namespace Sms.Tests.Integration.Saas;
 
 [Collection("sql")]
-public class OtpLoginTests(SqlServerFixture fx)
+public class OtpLoginTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
@@ -27,10 +27,11 @@ public class OtpLoginTests(SqlServerFixture fx)
     public async Task Otp_request_then_verify_issues_tokens_for_known_email()
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var email = $"otp{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
-            await c.ExecuteAsync("INSERT dbo.Users (Id, Email, IsPlatform) VALUES (NEWID(),@e,0)",
+            await c.ExecuteAsync(
+                """INSERT INTO "dbo"."Users" ("Id", "Email", "IsPlatform") VALUES (gen_random_uuid(),@e,false)""",
                 new { e = email });
 
         await using var app = App();

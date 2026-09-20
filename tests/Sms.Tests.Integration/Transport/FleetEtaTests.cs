@@ -10,7 +10,7 @@ using FluentAssertions;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class FleetEtaTests(SqlServerFixture fx)
+public class FleetEtaTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

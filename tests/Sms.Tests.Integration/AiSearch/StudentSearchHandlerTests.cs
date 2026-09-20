@@ -19,7 +19,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// which (per AiAuthorizationResult's docs) can legitimately be non-null/empty for a real
 /// zero-or-scoped-record caller, not "no filter".
 [Collection("sql")]
-public class StudentSearchHandlerTests(SqlServerFixture fx)
+public class StudentSearchHandlerTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
@@ -204,7 +204,7 @@ public class StudentSearchHandlerTests(SqlServerFixture fx)
 /// AiAuthorizationResult.ResolvedStudentId — never throw, never leak — when that id is null, and
 /// otherwise must return the real student resolved via ISisService.GetStudentAsync.
 [Collection("sql")]
-public class StudentDetailsHandlerTests(SqlServerFixture fx)
+public class StudentDetailsHandlerTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

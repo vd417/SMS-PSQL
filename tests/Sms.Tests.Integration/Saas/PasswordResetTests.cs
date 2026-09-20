@@ -10,7 +10,7 @@ using Sms.Shared.Kernel.Tenancy;
 namespace Sms.Tests.Integration.Saas;
 
 [Collection("sql")]
-public class PasswordResetTests(SqlServerFixture fx)
+public class PasswordResetTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
@@ -20,18 +20,19 @@ public class PasswordResetTests(SqlServerFixture fx)
             b.UseSetting("Jwt:SigningKey", "integration-test-signing-key-32-bytes-min!!");
         });
 
-    private async Task<string> InsertUserAsync(SqlConnectionFactory factory, string email)
+    private async Task<string> InsertUserAsync(NpgsqlConnectionFactory factory, string email)
     {
         await using var c = await factory.OpenAsync();
-        await c.ExecuteAsync("INSERT dbo.Users (Id, Email, IsPlatform) VALUES (NEWID(),@e,0)",
+        await c.ExecuteAsync(
+            """INSERT INTO "dbo"."Users" ("Id", "Email", "IsPlatform") VALUES (gen_random_uuid(),@e,false)""",
             new { e = email });
         return email;
     }
 
-    private static SqlConnectionFactory Factory(SqlServerFixture fx)
+    private static NpgsqlConnectionFactory Factory(PostgresFixture fx)
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        return new SqlConnectionFactory(fx.ConnectionString, ctx);
+        return new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
     }
 
     private static string Sha256Hex(string s)

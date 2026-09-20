@@ -31,7 +31,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// </para>
 /// </summary>
 [Collection("sql")]
-public class PersonLookupConversationWorkedExampleTests(SqlServerFixture fx)
+public class PersonLookupConversationWorkedExampleTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

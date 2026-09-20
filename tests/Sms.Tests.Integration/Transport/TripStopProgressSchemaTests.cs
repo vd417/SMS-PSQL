@@ -7,7 +7,7 @@ using FluentAssertions;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class TripStopProgressSchemaTests(SqlServerFixture fx)
+public class TripStopProgressSchemaTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -22,7 +22,7 @@ public class TripStopProgressSchemaTests(SqlServerFixture fx)
     [Fact]
     public async Task Migration_creates_TripStopProgress_and_new_columns()
     {
-        await using var app = App(); // forces migrations to have run via SqlServerFixture.InitializeAsync
+        await using var app = App(); // forces migrations to have run via PostgresFixture.InitializeAsync
         await using var conn = new SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
 

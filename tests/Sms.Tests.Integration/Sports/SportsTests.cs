@@ -12,7 +12,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Sports;
 
 [Collection("sql")]
-public class SportsTests(SqlServerFixture fx)
+public class SportsTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

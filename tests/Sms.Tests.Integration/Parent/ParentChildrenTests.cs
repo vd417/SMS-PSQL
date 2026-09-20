@@ -15,7 +15,7 @@ namespace Sms.Tests.Integration.Parent;
 /// Parent home in sms-student calls GET /v1/parents/me/children and unwraps
 /// { data: StudentResponse[] } (id, name, admission_no, grade, section, …).
 [Collection("sql")]
-public class ParentChildrenTests(SqlServerFixture fx)
+public class ParentChildrenTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

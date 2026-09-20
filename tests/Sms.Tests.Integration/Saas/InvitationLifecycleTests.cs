@@ -13,7 +13,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Saas;
 
 [Collection("sql")]
-public class InvitationLifecycleTests(SqlServerFixture fx)
+public class InvitationLifecycleTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -39,7 +39,7 @@ public class InvitationLifecycleTests(SqlServerFixture fx)
     private async Task<Guid> SeedActiveTenant()
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var id = Guid.NewGuid();
         await using var c = await factory.OpenAsync();
         await c.ExecuteAsync("INSERT dbo.Tenants (Id, Name, Slug, Status, Tier) VALUES (@id,'T',@s,'active','gold')",
@@ -50,7 +50,7 @@ public class InvitationLifecycleTests(SqlServerFixture fx)
     private async Task<(Guid Id, string Status)> GetUserStatusAsync(string email)
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         return await c.QuerySingleAsync<(Guid, string)>(
             "SELECT Id, Status FROM dbo.Users WHERE Email = @email", new { email });
@@ -59,7 +59,7 @@ public class InvitationLifecycleTests(SqlServerFixture fx)
     private async Task<(DateTime ExpiresAt, DateTime? AcceptedAt, string RoleLabel)> GetInvitationByEmailAsync(string email)
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         return await c.QuerySingleAsync<(DateTime, DateTime?, string)>(
             "SELECT ExpiresAt, AcceptedAt, RoleLabel FROM dbo.Invitations WHERE Email = @email", new { email });
@@ -99,7 +99,7 @@ public class InvitationLifecycleTests(SqlServerFixture fx)
         await admin.PostAsJsonAsync("/v1/users", new { email, roles = new[] { "school.teacher" } });
 
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync("UPDATE dbo.OtpCodes SET CodeHash=@h WHERE Identifier=@id",
                 new { id = email, h = Sha256Hex("123456") });

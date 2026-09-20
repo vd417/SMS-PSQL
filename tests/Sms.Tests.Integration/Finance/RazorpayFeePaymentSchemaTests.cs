@@ -6,7 +6,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class RazorpayFeePaymentSchemaTests(SqlServerFixture fx)
+public class RazorpayFeePaymentSchemaTests(PostgresFixture fx)
 {
     [Fact]
     public async Task TenantPaymentCredentials_and_FeePaymentOrders_tables_exist_with_expected_columns()

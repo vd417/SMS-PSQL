@@ -14,7 +14,7 @@ namespace Sms.Tests.Integration.Auth;
 /// mail on the student — without a parent Users row, forgot-password/OTP
 /// always returns 404 "Email is not registered."
 [Collection("sql")]
-public class ParentGuardianLoginTests(SqlServerFixture fx)
+public class ParentGuardianLoginTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

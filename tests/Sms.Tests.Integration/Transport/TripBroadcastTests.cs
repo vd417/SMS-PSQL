@@ -19,7 +19,7 @@ namespace Sms.Tests.Integration.Transport;
 /// bus-duty lifecycle already does, so a fleet view or live map actually updates in real time
 /// instead of relying on polling.
 [Collection("sql")]
-public class TripBroadcastTests(SqlServerFixture fx)
+public class TripBroadcastTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

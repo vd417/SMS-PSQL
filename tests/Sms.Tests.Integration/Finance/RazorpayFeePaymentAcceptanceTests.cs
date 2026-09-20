@@ -28,7 +28,7 @@ namespace Sms.Tests.Integration.Finance;
 /// See docs/superpowers/specs/2026-09-09-razorpay-fee-payment-design.md §8.
 /// </summary>
 [Collection("sql")]
-public class RazorpayFeePaymentAcceptanceTests(SqlServerFixture fx)
+public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -57,7 +57,7 @@ public class RazorpayFeePaymentAcceptanceTests(SqlServerFixture fx)
         }
     }
 
-    private static (WebApplicationFactory<Program> app, CapturingAnnouncementService announcements) App(SqlServerFixture fx)
+    private static (WebApplicationFactory<Program> app, CapturingAnnouncementService announcements) App(PostgresFixture fx)
     {
         var fake = new CapturingAnnouncementService();
         var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

@@ -7,13 +7,13 @@ using Xunit;
 namespace Sms.Tests.Integration.AiSearch;
 
 [Collection("sql")]
-public class AiSearchLogRepositoryTests(SqlServerFixture fx)
+public class AiSearchLogRepositoryTests(PostgresFixture fx)
 {
     [Fact]
     public async Task InsertAsync_persists_a_row()
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var repo = new AiSearchLogRepository(factory);
         var entry = new AiSearchLogEntry(
             Guid.NewGuid(), Guid.NewGuid(), "school.admin", "Aaj kitne bachche aaye?",

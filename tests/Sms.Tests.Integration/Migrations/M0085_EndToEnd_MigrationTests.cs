@@ -11,7 +11,7 @@ namespace Sms.Tests.Integration.Migrations;
 /// pre-existing cross-tenant data, and that its own elevated SESSION_CONTEXT is genuinely in
 /// effect for every one of its RLS-touching statements.
 ///
-/// SqlServerFixture applies every migration (including M0085) once at fixture InitializeAsync,
+/// PostgresFixture applies every migration (including M0085) once at fixture InitializeAsync,
 /// before any test gets a chance to insert data -- so there is no "before" state left for a test
 /// running against that shared fixture to seed. This test manages its own throwaway database
 /// instead: migrate up to M0084 (schema only, no backfill yet), insert data the way a real,

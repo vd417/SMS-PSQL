@@ -17,7 +17,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// class-scoping discipline for non-Unrestricted callers (teacher/parent), mirroring
 /// ClassAttendanceHandlerTests / DailyAttendanceSummaryHandlerTests.
 [Collection("sql")]
-public class UpcomingExamSearchHandlerTests(SqlServerFixture fx)
+public class UpcomingExamSearchHandlerTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

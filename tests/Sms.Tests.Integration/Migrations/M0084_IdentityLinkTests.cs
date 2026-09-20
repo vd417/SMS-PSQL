@@ -6,7 +6,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Migrations;
 
 [Collection("sql")]
-public class M0084_IdentityLinkTests(SqlServerFixture fx)
+public class M0084_IdentityLinkTests(PostgresFixture fx)
 {
     [Fact]
     public async Task Users_Teachers_Staff_have_new_columns()

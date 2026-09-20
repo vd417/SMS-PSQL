@@ -15,7 +15,7 @@ using Sms.Shared.Kernel.Time;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class BusCapacityTests(SqlServerFixture fx)
+public class BusCapacityTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -211,7 +211,7 @@ public class BusCapacityTests(SqlServerFixture fx)
         using var scope = App().Services.CreateScope();
         // Resolved directly (not over HTTP) since this is a repository-level query, not an endpoint.
         // ITenantContext must be stamped manually here, as it would be by TenantResolutionMiddleware
-        // for a real request, so SqlConnectionFactory sets the session context RLS relies on.
+        // for a real request, so NpgsqlConnectionFactory sets the session context RLS relies on.
         scope.ServiceProvider.GetRequiredService<Sms.Shared.Kernel.Tenancy.ITenantContext>()
             .Set(tenantId, Guid.NewGuid(), isPlatform: false);
         var repo = scope.ServiceProvider.GetRequiredService<Sms.Modules.Transport.BusRepository>();

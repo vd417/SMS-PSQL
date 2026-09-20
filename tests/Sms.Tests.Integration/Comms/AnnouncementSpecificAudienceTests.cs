@@ -14,7 +14,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Comms;
 
 [Collection("sql")]
-public class AnnouncementSpecificAudienceTests(SqlServerFixture fx)
+public class AnnouncementSpecificAudienceTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

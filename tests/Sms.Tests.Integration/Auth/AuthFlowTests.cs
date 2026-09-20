@@ -11,7 +11,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Auth;
 
 [Collection("sql")]
-public class AuthFlowTests(SqlServerFixture fx)
+public class AuthFlowTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> AppWithDb() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
@@ -26,7 +26,7 @@ public class AuthFlowTests(SqlServerFixture fx)
     {
         var hasher = new PasswordHasher();
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var email = $"admin{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
@@ -54,7 +54,7 @@ public class AuthFlowTests(SqlServerFixture fx)
     {
         var hasher = new PasswordHasher();
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var phone = $"+9198{Random.Shared.Next(10_000_000, 99_999_999)}";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
@@ -79,7 +79,7 @@ public class AuthFlowTests(SqlServerFixture fx)
     {
         var hasher = new PasswordHasher();
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var email = $"plat{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
@@ -104,7 +104,7 @@ public class AuthFlowTests(SqlServerFixture fx)
     {
         var hasher = new PasswordHasher();
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var email = $"photo{Guid.NewGuid():N}@x.com";
         const string photoUrl = "https://cdn.example.com/avatars/a.png";
         await using (var c = await factory.OpenAsync())
@@ -130,7 +130,7 @@ public class AuthFlowTests(SqlServerFixture fx)
     {
         var hasher = new PasswordHasher();
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var email = $"nophoto{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
@@ -155,7 +155,7 @@ public class AuthFlowTests(SqlServerFixture fx)
     {
         var hasher = new PasswordHasher();
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var email = $"setphoto{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
@@ -191,7 +191,7 @@ public class AuthFlowTests(SqlServerFixture fx)
     {
         var hasher = new PasswordHasher();
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var email = $"badphoto{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
@@ -214,7 +214,7 @@ public class AuthFlowTests(SqlServerFixture fx)
     {
         var hasher = new PasswordHasher();
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var email = $"bigphoto{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(

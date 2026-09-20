@@ -15,7 +15,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Staffing;
 
 [Collection("sql")]
-public class StaffingPhotoTests(SqlServerFixture fx)
+public class StaffingPhotoTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -45,7 +45,7 @@ public class StaffingPhotoTests(SqlServerFixture fx)
         return doc.RootElement.GetProperty("data").Clone();
     }
 
-    private static async Task<Guid> SeedLinkedTeacherAsync(SqlServerFixture fx, Guid tenantId)
+    private static async Task<Guid> SeedLinkedTeacherAsync(PostgresFixture fx, Guid tenantId)
     {
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
         var userId = Guid.NewGuid();
@@ -63,10 +63,10 @@ public class StaffingPhotoTests(SqlServerFixture fx)
         return teacherId;
     }
 
-    private static async Task<string?> GetUserPhotoAsync(SqlServerFixture fx, Guid tenantId, Guid teacherId)
+    private static async Task<string?> GetUserPhotoAsync(PostgresFixture fx, Guid tenantId, Guid teacherId)
     {
         var ctx = new TenantContext(); ctx.Set(tenantId, Guid.NewGuid(), false);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         return await c.QuerySingleAsync<string?>(
             "SELECT u.PhotoUrl FROM dbo.Users u JOIN dbo.Teachers t ON t.UserId = u.Id WHERE t.Id = @teacherId",
@@ -144,7 +144,7 @@ public class StaffingPhotoTests(SqlServerFixture fx)
         const string photoUrl = "https://cdn.example.com/teachers/list.png";
 
         var ctx = new TenantContext(); ctx.Set(tenantId, Guid.NewGuid(), false);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         await c.ExecuteAsync(
             "UPDATE u SET PhotoUrl = @photoUrl FROM dbo.Users u JOIN dbo.Teachers t ON t.UserId = u.Id WHERE t.Id = @teacherId",

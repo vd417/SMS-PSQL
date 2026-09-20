@@ -14,7 +14,7 @@ namespace Sms.Tests.Integration.Staffing;
 /// Admin/principal CRUD for a staff member's documents (staff/{id}/documents), and its effect
 /// on the staff self-service read (GET /v1/staff/profile) added in the previous task.
 [Collection("sql")]
-public class ProfileAdminTests(SqlServerFixture fx)
+public class ProfileAdminTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

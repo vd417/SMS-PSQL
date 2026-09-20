@@ -18,7 +18,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// controller lands in Task 12) and asserts SchoolWideAsync only counts the authenticated
 /// tenant's active students marked today, never another tenant's rows.
 [Collection("sql")]
-public class DailyAttendanceSummaryHandlerTests(SqlServerFixture fx)
+public class DailyAttendanceSummaryHandlerTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

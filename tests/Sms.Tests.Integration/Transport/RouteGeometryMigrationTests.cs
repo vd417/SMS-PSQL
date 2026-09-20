@@ -10,7 +10,7 @@ using FluentAssertions;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class RouteGeometryMigrationTests(SqlServerFixture fx)
+public class RouteGeometryMigrationTests(PostgresFixture fx)
 {
     [Fact]
     public async Task RouteGeometries_table_exists_with_expected_columns()
@@ -63,7 +63,7 @@ public class RouteGeometryMigrationTests(SqlServerFixture fx)
     {
         var ctx = new TenantContext();
         ctx.Set(tenantId, Guid.NewGuid(), false);
-        var factory = new SqlConnectionFactory(connectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(connectionString, ctx);
         return new RouteGeometryRepository(factory);
     }
 

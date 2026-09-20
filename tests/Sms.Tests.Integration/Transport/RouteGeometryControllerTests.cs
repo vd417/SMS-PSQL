@@ -22,7 +22,7 @@ namespace Sms.Tests.Integration.Transport;
 /// for IRouteGeometryService/IGoogleRoutesClient/ITransportAuthorizationResolver actually resolves
 /// at runtime through the real ASP.NET Core host, not just via a manual trace.
 [Collection("sql")]
-public class RouteGeometryControllerTests(SqlServerFixture fx)
+public class RouteGeometryControllerTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

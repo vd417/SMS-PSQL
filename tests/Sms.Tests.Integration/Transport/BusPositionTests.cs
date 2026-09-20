@@ -12,7 +12,7 @@ using Sms.Tests.Integration;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class BusPositionTests(SqlServerFixture fx)
+public class BusPositionTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

@@ -11,7 +11,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Reporting;
 
 [Collection("sql")]
-public class DashboardStatsTests(SqlServerFixture fx)
+public class DashboardStatsTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

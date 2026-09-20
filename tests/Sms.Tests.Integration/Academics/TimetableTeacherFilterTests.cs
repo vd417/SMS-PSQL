@@ -12,7 +12,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Academics;
 
 [Collection("sql")]
-public class TimetableTeacherFilterTests(SqlServerFixture fx)
+public class TimetableTeacherFilterTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

@@ -15,7 +15,7 @@ namespace Sms.Tests.Integration.Staffing;
 /// login identity (Staff.UserId), never from a client-supplied id. See task-5 spec: no fake/
 /// seeded documents ship with this endpoint, so every case here seeds its own rows (or none).
 [Collection("sql")]
-public class ProfileTests(SqlServerFixture fx)
+public class ProfileTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

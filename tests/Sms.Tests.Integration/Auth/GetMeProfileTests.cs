@@ -9,7 +9,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Auth;
 
 [Collection("sql")]
-public class GetMeProfileTests(SqlServerFixture fx)
+public class GetMeProfileTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> AppWithDb() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

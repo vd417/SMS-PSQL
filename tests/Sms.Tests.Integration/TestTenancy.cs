@@ -12,14 +12,14 @@ public static class TestTenancy
     {
         var ctx = new TenantContext();
         ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(connectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(connectionString, ctx);
         await using var conn = await factory.OpenAsync();
-        await conn.ExecuteAsync(@"
-IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WHERE Id = @tenantId)
-    INSERT dbo.Tenants (Id, Name, Slug, Status, Tier)
-    VALUES (@tenantId, @name, @slug, @status, @tier)
-ELSE
-    UPDATE dbo.Tenants SET Tier = @tier, Status = @status WHERE Id = @tenantId",
+        await conn.ExecuteAsync(
+            """
+            INSERT INTO "dbo"."Tenants" ("Id", "Name", "Slug", "Status", "Tier")
+            VALUES (@tenantId, @name, @slug, @status, @tier)
+            ON CONFLICT ("Id") DO UPDATE SET "Tier" = @tier, "Status" = @status
+            """,
             new
             {
                 tenantId,

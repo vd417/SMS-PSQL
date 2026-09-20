@@ -18,7 +18,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// each AiSearchError.Code, JSON casing) -- the orchestrator's own behaviour (classification,
 /// authorization clamping, per-intent handlers) is covered by AiSearchService/-handler tests.
 [Collection("sql")]
-public class AiSearchControllerTests(SqlServerFixture fx)
+public class AiSearchControllerTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

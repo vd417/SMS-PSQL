@@ -15,7 +15,7 @@ namespace Sms.Tests.Integration.Attendance;
 /// PunchAsync) — no new data model. Check-in/out are server-verified from lat/lng, matching the
 /// 2026-09-02 design decision (never a client-supplied in_zone flag).
 [Collection("sql")]
-public class StaffSelfAttendanceTests(SqlServerFixture fx)
+public class StaffSelfAttendanceTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const double SchoolLat = 12.9716;

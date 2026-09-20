@@ -11,7 +11,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class PayrollFeatureTests(SqlServerFixture fx)
+public class PayrollFeatureTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

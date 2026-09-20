@@ -12,7 +12,7 @@ using Sms.Shared.Kernel.Time;
 namespace Sms.Tests.Integration.Phase5;
 
 [Collection("sql")]
-public class StudentParentTests(SqlServerFixture fx)
+public class StudentParentTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

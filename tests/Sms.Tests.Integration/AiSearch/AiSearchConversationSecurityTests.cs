@@ -39,7 +39,7 @@ public sealed class MutableScriptedClassificationClient : IAiClassificationClien
 /// conversation ids are silently (and safely) treated as absent.
 /// </summary>
 [Collection("sql")]
-public class AiSearchConversationSecurityTests(SqlServerFixture fx)
+public class AiSearchConversationSecurityTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

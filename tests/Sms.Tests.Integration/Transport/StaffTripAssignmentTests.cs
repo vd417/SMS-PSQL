@@ -15,7 +15,7 @@ namespace Sms.Tests.Integration.Transport;
 /// own identity via Staff.UserId -> Buses.DriverStaffId, so the Trip screen's very first load
 /// can resolve "what am I driving today" without the client supplying any id.
 [Collection("sql")]
-public class StaffTripAssignmentTests(SqlServerFixture fx)
+public class StaffTripAssignmentTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

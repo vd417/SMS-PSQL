@@ -14,7 +14,7 @@ using Sms.Tests.Integration;
 namespace Sms.Tests.Integration.Sis;
 
 [Collection("sql")]
-public class StudentBulkImportServiceTests(SqlServerFixture fx)
+public class StudentBulkImportServiceTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

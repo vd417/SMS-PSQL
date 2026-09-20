@@ -7,7 +7,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Data;
 
 [Collection("sql")]
-public class RlsIsolationTests(SqlServerFixture fx)
+public class RlsIsolationTests(PostgresFixture fx)
 {
     [Fact]
     public async Task Tenant_session_sees_only_its_own_users()
@@ -17,7 +17,7 @@ public class RlsIsolationTests(SqlServerFixture fx)
 
         var platform = new TenantContext();
         platform.Set(null, Guid.NewGuid(), isPlatform: true);
-        var platformFactory = new SqlConnectionFactory(fx.ConnectionString, platform);
+        var platformFactory = new NpgsqlConnectionFactory(fx.ConnectionString, platform);
         await using (var seed = await platformFactory.OpenAsync())
         {
             await seed.ExecuteAsync(
@@ -30,7 +30,7 @@ public class RlsIsolationTests(SqlServerFixture fx)
 
         var aCtx = new TenantContext();
         aCtx.Set(tenantA, Guid.NewGuid(), isPlatform: false);
-        var aFactory = new SqlConnectionFactory(fx.ConnectionString, aCtx);
+        var aFactory = new NpgsqlConnectionFactory(fx.ConnectionString, aCtx);
         await using var connA = await aFactory.OpenAsync();
         var emails = await connA.QueryAsync<string>("SELECT Email FROM dbo.Users");
         emails.Should().ContainSingle().Which.Should().Be("a@x.com");

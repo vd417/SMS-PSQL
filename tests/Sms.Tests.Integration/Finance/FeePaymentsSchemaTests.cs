@@ -6,7 +6,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class FeePaymentsSchemaTests(SqlServerFixture fx)
+public class FeePaymentsSchemaTests(PostgresFixture fx)
 {
     [Fact]
     public async Task FeePayments_has_idempotency_columns_and_unique_filtered_index()

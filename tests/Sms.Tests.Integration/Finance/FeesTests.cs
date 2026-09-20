@@ -10,7 +10,7 @@ using Sms.Shared.Kernel.Time;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class FeesTests(SqlServerFixture fx)
+public class FeesTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

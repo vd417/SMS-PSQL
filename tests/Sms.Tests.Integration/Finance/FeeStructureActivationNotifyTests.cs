@@ -16,7 +16,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class FeeStructureActivationNotifyTests(SqlServerFixture fx)
+public class FeeStructureActivationNotifyTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -36,7 +36,7 @@ public class FeeStructureActivationNotifyTests(SqlServerFixture fx)
         }
     }
 
-    private static WebApplicationFactory<Program> BuildApp(SqlServerFixture fx, CapturingAnnouncementService fake) =>
+    private static WebApplicationFactory<Program> BuildApp(PostgresFixture fx, CapturingAnnouncementService fake) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("environment", "Production");
@@ -45,7 +45,7 @@ public class FeeStructureActivationNotifyTests(SqlServerFixture fx)
             b.ConfigureTestServices(services => services.AddScoped<IAnnouncementService>(_ => fake));
         });
 
-    private static async Task<(Guid tenantId, Guid principalUserId)> SeedTenantAsync(SqlServerFixture fx)
+    private static async Task<(Guid tenantId, Guid principalUserId)> SeedTenantAsync(PostgresFixture fx)
     {
         var tenantId = Guid.NewGuid();
         var principalUserId = Guid.NewGuid();

@@ -6,7 +6,7 @@ using Sms.Tests.Integration;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class StudentTransportMappingTests(SqlServerFixture fx)
+public class StudentTransportMappingTests(PostgresFixture fx)
 {
     private static async Task Seed(string cs, Guid tenantId, Func<SqlConnection, Task> work)
     {

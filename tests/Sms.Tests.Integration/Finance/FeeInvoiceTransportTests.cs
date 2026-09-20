@@ -15,7 +15,7 @@ namespace Sms.Tests.Integration.Finance;
 /// fee head only contributes to a student's generated invoice when that student's active
 /// StudentBusAssignments row carries that exact FeeHeadId. Every other fee head is unaffected.
 [Collection("sql")]
-public class FeeInvoiceTransportTests(SqlServerFixture fx)
+public class FeeInvoiceTransportTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const string AcademicYear = "2025-26";

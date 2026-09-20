@@ -16,7 +16,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// (the same self-scoped path TripOwnershipTests already relies on) rather than inventing new
 /// trip-seeding SQL.
 [Collection("sql")]
-public class MyTripStatusHandlerTests(SqlServerFixture fx)
+public class MyTripStatusHandlerTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

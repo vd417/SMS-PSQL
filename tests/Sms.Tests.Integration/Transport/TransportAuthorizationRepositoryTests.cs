@@ -11,7 +11,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class TransportAuthorizationRepositoryTests(SqlServerFixture fx)
+public class TransportAuthorizationRepositoryTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

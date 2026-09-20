@@ -6,7 +6,7 @@ using Sms.Migrations;
 namespace Sms.Tests.Integration.Migrations;
 
 [Collection("sql")]
-public class MigrationIdempotenceTests(SqlServerFixture fx)
+public class MigrationIdempotenceTests(PostgresFixture fx)
 {
     [Fact]
     public async Task Rerunning_migrations_is_a_noop_and_login_procs_exist()

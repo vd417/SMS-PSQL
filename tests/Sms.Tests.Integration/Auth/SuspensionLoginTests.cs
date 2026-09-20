@@ -13,7 +13,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Auth;
 
 [Collection("sql")]
-public class SuspensionLoginTests(SqlServerFixture fx)
+public class SuspensionLoginTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
@@ -23,11 +23,11 @@ public class SuspensionLoginTests(SqlServerFixture fx)
             b.UseSetting("Jwt:SigningKey", "integration-test-signing-key-32-bytes-min!!");
         });
 
-    private SqlConnectionFactory PlatformFactory()
+    private NpgsqlConnectionFactory PlatformFactory()
     {
         var ctx = new TenantContext();
         ctx.Set(null, Guid.NewGuid(), isPlatform: true);
-        return new SqlConnectionFactory(fx.ConnectionString, ctx);
+        return new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
     }
 
     private async Task<string> SeedInactiveUserAsync(string role)

@@ -17,7 +17,7 @@ namespace Sms.Tests.Integration.Sis;
 /// class — they must receive the existing applicable fees automatically, with no separate
 /// bulk-import fee logic, no invented periods, correct transport gating, and no duplicates.
 [Collection("sql")]
-public class FeeAutoApplyOnCreateTests(SqlServerFixture fx)
+public class FeeAutoApplyOnCreateTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const string AcademicYear = "2026-27";

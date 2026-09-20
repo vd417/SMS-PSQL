@@ -11,7 +11,7 @@ using FluentAssertions;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class TransportFleetHubTests(SqlServerFixture fx)
+public class TransportFleetHubTests(PostgresFixture fx)
 {
     private const string Key = "test-signing-key-at-least-32-bytes-long!!";
 

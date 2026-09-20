@@ -6,7 +6,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Health;
 
 [Collection("sql")]
-public class HealthEndpointTests(SqlServerFixture fx)
+public class HealthEndpointTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

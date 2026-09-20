@@ -18,7 +18,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class RazorpayFeeWebhookTests(SqlServerFixture fx)
+public class RazorpayFeeWebhookTests(PostgresFixture fx)
 {
     // >= 32 bytes, required by Sms.Shared.Kernel.Configuration.SecretsValidator at host startup —
     // this endpoint is [AllowAnonymous] but the host still validates Jwt:SigningKey is configured.
@@ -33,7 +33,7 @@ public class RazorpayFeeWebhookTests(SqlServerFixture fx)
         public bool VerifyWebhookSignature(string webhookSecret, string body, string signatureHeader) => signatureValid;
     }
 
-    private static WebApplicationFactory<Program> App(SqlServerFixture fx, bool signatureValid = true) =>
+    private static WebApplicationFactory<Program> App(PostgresFixture fx, bool signatureValid = true) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("environment", "Production");
@@ -43,7 +43,7 @@ public class RazorpayFeeWebhookTests(SqlServerFixture fx)
         });
 
     private static async Task<(Guid tenantId, Guid principalUserId, Guid invoiceId, string orderId)> SeedOrderAsync(
-        WebApplicationFactory<Program> app, SqlServerFixture fx)
+        WebApplicationFactory<Program> app, PostgresFixture fx)
     {
         var tenantId = Guid.NewGuid();
         var principalUserId = Guid.NewGuid();

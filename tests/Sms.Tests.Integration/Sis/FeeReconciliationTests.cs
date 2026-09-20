@@ -18,7 +18,7 @@ namespace Sms.Tests.Integration.Sis;
 /// simulate "already in the database, no backfill ever attempted" rather than re-testing the
 /// on-create hooks (that's FeeAutoApplyOnCreateTests's job).
 [Collection("sql")]
-public class FeeReconciliationTests(SqlServerFixture fx)
+public class FeeReconciliationTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const string AcademicYear = "2026-27";

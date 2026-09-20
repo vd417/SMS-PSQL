@@ -13,7 +13,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Attendance;
 
 [Collection("sql")]
-public class CheckinHistoryTests(SqlServerFixture fx)
+public class CheckinHistoryTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

@@ -7,7 +7,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Attendance;
 
 [Collection("sql")]
-public sealed class PeriodAttendanceAuditTests(SqlServerFixture fx)
+public sealed class PeriodAttendanceAuditTests(PostgresFixture fx)
 {
     [Fact]
     public async Task Insert_then_status_change_appends_audit_rows_and_stamps_updated_by()

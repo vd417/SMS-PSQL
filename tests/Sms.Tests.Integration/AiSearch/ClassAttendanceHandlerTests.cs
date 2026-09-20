@@ -17,7 +17,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// class name in play is missing, whether that's because the caller never asked for a class, or
 /// because the authorization service already clamped a disallowed class name back to null.
 [Collection("sql")]
-public class ClassAttendanceHandlerTests(SqlServerFixture fx)
+public class ClassAttendanceHandlerTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

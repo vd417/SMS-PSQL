@@ -12,7 +12,7 @@ using Sms.Shared.Kernel.Time;
 namespace Sms.Tests.Integration.Catre;
 
 [Collection("sql")]
-public class CatreClientsTests(SqlServerFixture fx)
+public class CatreClientsTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -192,7 +192,7 @@ public class CatreClientsTests(SqlServerFixture fx)
 
         var ctx = new Sms.Shared.Kernel.Tenancy.TenantContext();
         ctx.Set(null, Guid.NewGuid(), true); // platform context bypasses RLS on dbo.Users
-        var factory = new Sms.Shared.Kernel.Data.SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new Sms.Shared.Kernel.Data.NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         var roles = (await Dapper.SqlMapper.QueryAsync<string>(c,
             "SELECT ur.Role FROM dbo.UserRoles ur JOIN dbo.Users u ON u.Id = ur.UserId WHERE u.Email = @e",

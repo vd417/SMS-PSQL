@@ -12,7 +12,7 @@ using Sms.Shared.Kernel.Time;
 namespace Sms.Tests.Integration.Catre;
 
 [Collection("sql")]
-public class CatreBillingTests(SqlServerFixture fx)
+public class CatreBillingTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -35,11 +35,11 @@ public class CatreBillingTests(SqlServerFixture fx)
         return client;
     }
 
-    private SqlConnectionFactory PlatformFactory()
+    private NpgsqlConnectionFactory PlatformFactory()
     {
         var ctx = new TenantContext();
         ctx.Set(null, Guid.NewGuid(), isPlatform: true);
-        return new SqlConnectionFactory(fx.ConnectionString, ctx);
+        return new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
     }
 
     private static async Task<JsonElement> Data(HttpResponseMessage res, HttpStatusCode expected)

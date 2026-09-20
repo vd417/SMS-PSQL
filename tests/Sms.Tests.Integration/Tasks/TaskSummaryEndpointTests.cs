@@ -12,11 +12,11 @@ using Xunit;
 namespace Sms.Tests.Integration.Tasks;
 
 [Collection("sql")]
-public class TaskSummaryEndpointTests(SqlServerFixture fx)
+public class TaskSummaryEndpointTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
-    private static WebApplicationFactory<Program> App(SqlServerFixture fx) =>
+    private static WebApplicationFactory<Program> App(PostgresFixture fx) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("environment", "Production");
@@ -35,7 +35,7 @@ public class TaskSummaryEndpointTests(SqlServerFixture fx)
         return client;
     }
 
-    private static async Task SeedUserAsync(SqlServerFixture fx, Guid tenantId, Guid userId, string name)
+    private static async Task SeedUserAsync(PostgresFixture fx, Guid tenantId, Guid userId, string name)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
@@ -45,7 +45,7 @@ public class TaskSummaryEndpointTests(SqlServerFixture fx)
             new { userId, tenantId, name });
     }
 
-    private static async Task SeedManagerRoleAsync(SqlServerFixture fx, Guid userId, string role)
+    private static async Task SeedManagerRoleAsync(PostgresFixture fx, Guid userId, string role)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
@@ -53,7 +53,7 @@ public class TaskSummaryEndpointTests(SqlServerFixture fx)
     }
 
     private static async Task SeedStaffLinkAsync(
-        SqlServerFixture fx, Guid tenantId, Guid userId, string name, string designation)
+        PostgresFixture fx, Guid tenantId, Guid userId, string name, string designation)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();

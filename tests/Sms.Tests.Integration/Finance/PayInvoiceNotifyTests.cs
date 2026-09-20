@@ -17,7 +17,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class PayInvoiceNotifyTests(SqlServerFixture fx)
+public class PayInvoiceNotifyTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -57,7 +57,7 @@ public class PayInvoiceNotifyTests(SqlServerFixture fx)
     }
 
     private static WebApplicationFactory<Program> BuildApp(
-        SqlServerFixture fx, CapturingAnnouncementService fake, CapturingPdfGenerator? pdfFake = null) =>
+        PostgresFixture fx, CapturingAnnouncementService fake, CapturingPdfGenerator? pdfFake = null) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("environment", "Production");
@@ -72,7 +72,7 @@ public class PayInvoiceNotifyTests(SqlServerFixture fx)
         });
 
     private static async Task<(Guid tenantId, Guid principalUserId, Guid studentId, Guid invoiceId)> SeedInvoiceAsync(
-        SqlServerFixture fx, string guardianEmail, string guardianPhone, Guid? guardianUserId = null)
+        PostgresFixture fx, string guardianEmail, string guardianPhone, Guid? guardianUserId = null)
     {
         var tenantId = Guid.NewGuid();
         var principalUserId = Guid.NewGuid();
@@ -197,7 +197,7 @@ public class PayInvoiceNotifyTests(SqlServerFixture fx)
         invoices.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    private static async Task<Guid> StudentIdForAsync(SqlServerFixture fx, Guid tenantId)
+    private static async Task<Guid> StudentIdForAsync(PostgresFixture fx, Guid tenantId)
     {
         await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
         await conn.OpenAsync();

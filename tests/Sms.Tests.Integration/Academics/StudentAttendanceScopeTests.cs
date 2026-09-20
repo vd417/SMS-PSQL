@@ -12,7 +12,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Academics;
 
 [Collection("sql")]
-public class StudentAttendanceScopeTests(SqlServerFixture fx)
+public class StudentAttendanceScopeTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const string AttendanceDateQuery = "?from=2026-08-12&to=2026-08-12";

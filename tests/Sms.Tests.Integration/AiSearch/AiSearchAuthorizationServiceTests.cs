@@ -19,7 +19,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// authenticated caller, and anything the LLM-extracted filters claimed beyond that scope
 /// must be clamped away (never answered, never leaked as "exists but forbidden").
 [Collection("sql")]
-public class AiSearchAuthorizationServiceTests(SqlServerFixture fx)
+public class AiSearchAuthorizationServiceTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

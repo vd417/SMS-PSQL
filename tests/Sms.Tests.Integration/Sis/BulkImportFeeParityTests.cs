@@ -16,7 +16,7 @@ namespace Sms.Tests.Integration.Sis;
 /// CreateStudentAsync / StudentTransportService.SetAsync calls and the same generic, roster-wide
 /// GenerateInvoicesAsync query, so nothing about the creation path should change the result.
 [Collection("sql")]
-public class BulkImportFeeParityTests(SqlServerFixture fx)
+public class BulkImportFeeParityTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const string AcademicYear = "2025-26";

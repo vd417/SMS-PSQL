@@ -16,7 +16,7 @@ namespace Sms.Tests.Integration.Sis;
 /// transport afterward. The existing invoice must be recalculated in place — not duplicated —
 /// while a payment already recorded against an invoice must make it completely untouchable.
 [Collection("sql")]
-public class FeeRecalculationOnTransportChangeTests(SqlServerFixture fx)
+public class FeeRecalculationOnTransportChangeTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const string AcademicYear = "2026-27";

@@ -7,13 +7,13 @@ using Xunit;
 namespace Sms.Tests.Integration.Saas;
 
 [Collection("sql")]
-public class InvitationsSchemaTests(SqlServerFixture fx)
+public class InvitationsSchemaTests(PostgresFixture fx)
 {
     [Fact]
     public async Task Invitations_Create_proc_inserts_a_row_and_returns_its_id()
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 

@@ -11,7 +11,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Staffing;
 
 [Collection("sql")]
-public class LeavePriorityTests(SqlServerFixture fx)
+public class LeavePriorityTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

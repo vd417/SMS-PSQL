@@ -16,7 +16,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class GenerateInvoicesNotifyTests(SqlServerFixture fx)
+public class GenerateInvoicesNotifyTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -36,7 +36,7 @@ public class GenerateInvoicesNotifyTests(SqlServerFixture fx)
         }
     }
 
-    private static async Task<(Guid tenantId, Guid principalUserId, Guid studentId)> SeedAsync(SqlServerFixture fx)
+    private static async Task<(Guid tenantId, Guid principalUserId, Guid studentId)> SeedAsync(PostgresFixture fx)
     {
         var tenantId = Guid.NewGuid();
         var principalUserId = Guid.NewGuid();

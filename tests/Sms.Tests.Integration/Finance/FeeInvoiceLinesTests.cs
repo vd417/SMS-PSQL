@@ -16,7 +16,7 @@ namespace Sms.Tests.Integration.Finance;
 /// total is recorded as its own line, snapshotted at generation time so later Fee Head /
 /// Fee Structure / transport-mapping edits never rewrite an already-generated invoice.
 [Collection("sql")]
-public class FeeInvoiceLinesTests(SqlServerFixture fx)
+public class FeeInvoiceLinesTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const string AcademicYear = "2025-26";

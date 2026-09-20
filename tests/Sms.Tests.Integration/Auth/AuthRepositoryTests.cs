@@ -8,13 +8,13 @@ using Xunit;
 namespace Sms.Tests.Integration.Auth;
 
 [Collection("sql")]
-public class AuthRepositoryTests(SqlServerFixture fx)
+public class AuthRepositoryTests(PostgresFixture fx)
 {
-    private SqlConnectionFactory PlatformFactory()
+    private NpgsqlConnectionFactory PlatformFactory()
     {
         var ctx = new TenantContext();
         ctx.Set(null, Guid.NewGuid(), isPlatform: true);
-        return new SqlConnectionFactory(fx.ConnectionString, ctx);
+        return new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
     }
 
     [Fact]
@@ -24,7 +24,7 @@ public class AuthRepositoryTests(SqlServerFixture fx)
         var email = $"u{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "INSERT dbo.Users (Id, Email, PasswordHash, IsPlatform) VALUES (NEWID(),@e,'h',1)",
+                """INSERT INTO "dbo"."Users" ("Id", "Email", "PasswordHash", "IsPlatform") VALUES (gen_random_uuid(),@e,'h',true)""",
                 new { e = email });
 
         var repo = new AuthRepository(factory);
@@ -39,7 +39,7 @@ public class AuthRepositoryTests(SqlServerFixture fx)
         Guid userId;
         await using (var c = await factory.OpenAsync())
             userId = await c.QuerySingleAsync<Guid>(
-                "INSERT dbo.Users (Id, Email, IsPlatform) OUTPUT inserted.Id VALUES (NEWID(),@e,1)",
+                """INSERT INTO "dbo"."Users" ("Id", "Email", "IsPlatform") VALUES (gen_random_uuid(),@e,true) RETURNING "Id" """,
                 new { e = $"r{Guid.NewGuid():N}@x.com" });
 
         var store = new RefreshTokenStore(factory);

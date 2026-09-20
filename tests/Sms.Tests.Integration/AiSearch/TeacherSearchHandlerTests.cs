@@ -18,7 +18,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// cross-tenant isolation actually holds end to end, exactly like StudentSearchHandlerTests'
 /// admin-search case.
 [Collection("sql")]
-public class TeacherSearchHandlerTests(SqlServerFixture fx)
+public class TeacherSearchHandlerTests(PostgresFixture fx)
 {
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>

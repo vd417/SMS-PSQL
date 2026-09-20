@@ -20,7 +20,7 @@ namespace Sms.Tests.Integration.AiSearch;
 /// to see, even when the name genuinely exists elsewhere in the tenant (or in another tenant
 /// entirely). Mirrors the seeding/DI conventions established in GreetByIdHandlerTests.cs.
 [Collection("sql")]
-public class PersonResolverTests(SqlServerFixture fx)
+public class PersonResolverTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
     private const string Intent = "PersonLookup";

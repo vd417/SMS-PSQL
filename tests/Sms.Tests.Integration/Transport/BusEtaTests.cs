@@ -12,7 +12,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class BusEtaTests(SqlServerFixture fx)
+public class BusEtaTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

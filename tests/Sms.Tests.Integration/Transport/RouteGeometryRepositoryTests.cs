@@ -9,7 +9,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class RouteGeometryRepositoryTests(SqlServerFixture fx)
+public class RouteGeometryRepositoryTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

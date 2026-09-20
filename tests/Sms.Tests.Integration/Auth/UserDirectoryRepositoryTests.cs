@@ -8,7 +8,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Auth;
 
 [Collection("sql")]
-public class UserDirectoryRepositoryTests(SqlServerFixture fx)
+public class UserDirectoryRepositoryTests(PostgresFixture fx)
 {
     // Seeding bypasses RLS the same way TestTenancy/AiConversationContextStoreTests do: a platform
     // (IsPlatform: true) TenantContext, so an arbitrary TenantId can be inserted directly.
@@ -16,7 +16,7 @@ public class UserDirectoryRepositoryTests(SqlServerFixture fx)
     {
         var ctx = new TenantContext();
         ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var conn = await factory.OpenAsync();
         await work(conn);
     }
@@ -25,7 +25,7 @@ public class UserDirectoryRepositoryTests(SqlServerFixture fx)
     {
         var ctx = new TenantContext();
         ctx.Set(tenantId, Guid.NewGuid(), false);
-        var factory = new SqlConnectionFactory(connectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(connectionString, ctx);
         return new UserDirectoryRepository(factory);
     }
 

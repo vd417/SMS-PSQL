@@ -12,7 +12,7 @@ using Sms.Shared.Kernel.Time;
 namespace Sms.Tests.Integration.Catre;
 
 [Collection("sql")]
-public class CatreOpsTests(SqlServerFixture fx)
+public class CatreOpsTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -127,7 +127,7 @@ public class CatreOpsTests(SqlServerFixture fx)
     {
         var ctx = new TenantContext();
         ctx.Set(null, Guid.NewGuid(), isPlatform: true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var action = "suspend client " + Guid.NewGuid().ToString("N");
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(

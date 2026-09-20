@@ -10,7 +10,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Finance;
 
 [Collection("sql")]
-public class FeeHeadsTests(SqlServerFixture fx)
+public class FeeHeadsTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -25,7 +25,7 @@ public class FeeHeadsTests(SqlServerFixture fx)
         return client;
     }
 
-    private static WebApplicationFactory<Program> App(SqlServerFixture fx) =>
+    private static WebApplicationFactory<Program> App(PostgresFixture fx) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
         {
             b.UseSetting("environment", "Production");

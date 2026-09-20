@@ -12,7 +12,7 @@ namespace Sms.Tests.Integration.Transport;
 /// A driver must only be able to mutate their OWN trip. These tests prove that a second driver in the
 /// SAME tenant (so RLS alone does not block them) is rejected with 403 on ping/end/boarding.
 [Collection("sql")]
-public class TripOwnershipTests(SqlServerFixture fx)
+public class TripOwnershipTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 

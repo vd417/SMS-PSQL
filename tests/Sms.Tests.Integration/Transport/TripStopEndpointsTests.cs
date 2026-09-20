@@ -12,7 +12,7 @@ using FluentAssertions;
 namespace Sms.Tests.Integration.Transport;
 
 [Collection("sql")]
-public class TripStopEndpointsTests(SqlServerFixture fx)
+public class TripStopEndpointsTests(PostgresFixture fx)
 {
     private const string Key = "test-signing-key-at-least-32-bytes-long!!";
 

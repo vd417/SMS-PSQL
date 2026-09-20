@@ -12,7 +12,7 @@ using Xunit;
 namespace Sms.Tests.Integration.Saas;
 
 [Collection("sql")]
-public class RoleTemplateLifecycleTests(SqlServerFixture fx)
+public class RoleTemplateLifecycleTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
 
@@ -38,7 +38,7 @@ public class RoleTemplateLifecycleTests(SqlServerFixture fx)
     private async Task<Guid> SeedActiveTenantAsync()
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var id = Guid.NewGuid();
         await using var c = await factory.OpenAsync();
         await c.ExecuteAsync("INSERT dbo.Tenants (Id, Name, Slug, Status, Tier) VALUES (@id,'T',@s,'active','gold')",
@@ -49,7 +49,7 @@ public class RoleTemplateLifecycleTests(SqlServerFixture fx)
     private async Task<int> CountAuditRowsAsync(Guid tenantId, string action)
     {
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
-        var factory = new SqlConnectionFactory(fx.ConnectionString, ctx);
+        var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         return await c.QuerySingleAsync<int>(
             "SELECT COUNT(*) FROM dbo.AuditLog WHERE TenantId = @tenantId AND Action = @action",
