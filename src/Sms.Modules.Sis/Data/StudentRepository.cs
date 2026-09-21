@@ -6,8 +6,8 @@ namespace Sms.Modules.Sis.Data;
 public sealed class StudentRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
     private const string Cols =
-        "Id, TenantId, AdmissionNo, Name, Gender, Grade, Section, ClassLabel, Roll, GuardianName, " +
-        "GuardianPhone, GuardianEmail, AttendancePct, FeeStatus, FeeDue, Status, House, AvatarHue, Dob, Email, Address, PhotoUrl";
+        "\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Gender\", \"Grade\", \"Section\", \"ClassLabel\", \"Roll\", \"GuardianName\", " +
+        "\"GuardianPhone\", \"GuardianEmail\", \"AttendancePct\", \"FeeStatus\", \"FeeDue\", \"Status\", \"House\", \"AvatarHue\", \"Dob\", \"Email\", \"Address\", \"PhotoUrl\"";
 
     /// <summary>
     /// Official AttendancePct from PeriodAttendanceRecords only:
@@ -15,38 +15,42 @@ public sealed class StudentRepository(IDbConnectionFactory factory) : BaseReposi
     /// Legacy daily AttendanceRecords are excluded.
     /// List uses one grouped join (not a correlated apply per student).
     /// </summary>
-    private const string LivePctSelect = @"
-s.Id, s.TenantId, s.AdmissionNo, s.Name, s.Gender, s.Grade, s.Section, s.ClassLabel, s.Roll,
-s.GuardianName, s.GuardianPhone, s.GuardianEmail,
-CAST(CASE WHEN att.Marked > 0
-          THEN ROUND(100.0 * att.Positive / att.Marked, 2)
-          ELSE NULL END AS decimal(5,2)) AS AttendancePct,
-s.FeeStatus, s.FeeDue, s.Status, s.House, s.AvatarHue, s.Dob, s.Email, s.Address, s.PhotoUrl";
+    private const string LivePctSelect = """
+s."Id", s."TenantId", s."AdmissionNo", s."Name", s."Gender", s."Grade", s."Section", s."ClassLabel", s."Roll",
+s."GuardianName", s."GuardianPhone", s."GuardianEmail",
+CAST(CASE WHEN att."Marked" > 0
+          THEN ROUND(100.0 * att."Positive" / att."Marked", 2)
+          ELSE NULL END AS numeric(5,2)) AS "AttendancePct",
+s."FeeStatus", s."FeeDue", s."Status", s."House", s."AvatarHue", s."Dob", s."Email", s."Address", s."PhotoUrl"
+""";
 
-    private const string LivePctFromList = @"
-FROM dbo.Students s
+    private const string LivePctFromList = """
+FROM "dbo"."Students" s
 LEFT JOIN (
-    SELECT par.StudentId,
-           COUNT(*) AS Marked,
-           SUM(CASE WHEN par.Status IN (N'present', N'late') THEN 1 ELSE 0 END) AS Positive
-    FROM dbo.PeriodAttendanceRecords par
-    WHERE (@tenantId IS NULL OR par.TenantId = @tenantId)
-    GROUP BY par.StudentId
-) att ON att.StudentId = s.Id";
+    SELECT par."StudentId",
+           count(*) AS "Marked",
+           sum(CASE WHEN par."Status" IN ('present', 'late') THEN 1 ELSE 0 END) AS "Positive"
+    FROM "dbo"."PeriodAttendanceRecords" par
+    WHERE (@tenantId IS NULL OR par."TenantId" = @tenantId)
+    GROUP BY par."StudentId"
+) att ON att."StudentId" = s."Id"
+""";
 
-    private const string ListWhere = @"
-WHERE (@q IS NULL OR s.Name LIKE '%' + @q + '%' OR s.AdmissionNo LIKE '%' + @q + '%' OR s.ClassLabel LIKE '%' + @q + '%')
-  AND (@grade IS NULL OR s.Grade = @grade) AND (@status IS NULL OR s.Status = @status)
-  AND (@fee IS NULL OR s.FeeStatus = @fee)";
+    private const string ListWhere = """
+WHERE (@q IS NULL OR s."Name" LIKE '%' || @q || '%' OR s."AdmissionNo" LIKE '%' || @q || '%' OR s."ClassLabel" LIKE '%' || @q || '%')
+  AND (@grade IS NULL OR s."Grade" = @grade) AND (@status IS NULL OR s."Status" = @status)
+  AND (@fee IS NULL OR s."FeeStatus" = @fee)
+""";
 
-    private const string LivePctFromOne = @"
-FROM dbo.Students s
-OUTER APPLY (
-    SELECT COUNT(*) AS Marked,
-           SUM(CASE WHEN par.Status IN (N'present', N'late') THEN 1 ELSE 0 END) AS Positive
-    FROM dbo.PeriodAttendanceRecords par
-    WHERE par.StudentId = s.Id
-) att";
+    private const string LivePctFromOne = """
+FROM "dbo"."Students" s
+LEFT JOIN LATERAL (
+    SELECT count(*) AS "Marked",
+           sum(CASE WHEN par."Status" IN ('present', 'late') THEN 1 ELSE 0 END) AS "Positive"
+    FROM "dbo"."PeriodAttendanceRecords" par
+    WHERE par."StudentId" = s."Id"
+) att ON true
+""";
 
     public Task<StudentResponse?> CreateAsync(Guid tenantId, CreateStudentRequest r, CancellationToken ct = default) =>
         QuerySingleProcAsync<StudentResponse>("dbo.Student_Create", new
@@ -64,14 +68,14 @@ OUTER APPLY (
         }, ct);
 
     public async Task<StudentResponse?> GetAsync(Guid id, CancellationToken ct = default) =>
-        (await QueryInlineAsync<StudentResponse>($"SELECT {LivePctSelect} {LivePctFromOne} WHERE s.Id = @id", new { id }, ct))
+        (await QueryInlineAsync<StudentResponse>($"SELECT {LivePctSelect} {LivePctFromOne} WHERE s.\"Id\" = @id", new { id }, ct))
         .FirstOrDefault();
 
     public async Task<StudentResponse?> GetByAdmissionNoAsync(string admissionNo, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(admissionNo)) return null;
         return (await QueryInlineAsync<StudentResponse>(
-            $"SELECT {LivePctSelect} {LivePctFromOne} WHERE LOWER(LTRIM(RTRIM(s.AdmissionNo))) = LOWER(LTRIM(RTRIM(@admissionNo)))",
+            $"SELECT {LivePctSelect} {LivePctFromOne} WHERE lower(trim(s.\"AdmissionNo\")) = lower(trim(@admissionNo))",
             new { admissionNo = admissionNo.Trim() }, ct)).FirstOrDefault();
     }
 
@@ -79,36 +83,37 @@ OUTER APPLY (
     public Task<IReadOnlyList<StudentResponse>> ListLinkedToParentAsync(
         Guid parentUserId, Guid tenantId, CancellationToken ct = default) =>
         QueryInlineAsync<StudentResponse>(
-            $"SELECT {LivePctSelect} {LivePctFromOne} WHERE s.TenantId = @tenantId AND EXISTS (" +
-            "SELECT 1 FROM dbo.ParentStudentLinks l " +
-            "WHERE l.ParentUserId = @parentUserId AND l.StudentId = s.Id AND l.TenantId = @tenantId" +
-            ") ORDER BY s.Name, s.Id",
+            $"SELECT {LivePctSelect} {LivePctFromOne} WHERE s.\"TenantId\" = @tenantId AND EXISTS (" +
+            "SELECT 1 FROM \"dbo\".\"ParentStudentLinks\" l " +
+            "WHERE l.\"ParentUserId\" = @parentUserId AND l.\"StudentId\" = s.\"Id\" AND l.\"TenantId\" = @tenantId" +
+            ") ORDER BY s.\"Name\", s.\"Id\"",
             new { parentUserId, tenantId }, ct);
 
     public Task<IReadOnlyList<Guid>> ListParentUserIdsAsync(
         Guid studentId, string admissionNo, CancellationToken ct = default) =>
-        QueryInlineAsync<Guid>(@"
-SELECT DISTINCT Id FROM (
-    SELECT ParentUserId AS Id FROM dbo.ParentStudentLinks WHERE StudentId = @studentId
+        QueryInlineAsync<Guid>("""
+SELECT DISTINCT "Id" FROM (
+    SELECT "ParentUserId" AS "Id" FROM "dbo"."ParentStudentLinks" WHERE "StudentId" = @studentId
     UNION
-    SELECT u.Id FROM dbo.Users u
-    WHERE @admissionNo IS NOT NULL AND LTRIM(RTRIM(@admissionNo)) <> N'' AND u.StudentId = @admissionNo
-) p", new { studentId, admissionNo }, ct);
+    SELECT u."Id" FROM "dbo"."Users" u
+    WHERE @admissionNo IS NOT NULL AND trim(@admissionNo) <> '' AND u."StudentId" = @admissionNo
+) p
+""", new { studentId, admissionNo }, ct);
 
     public async Task SetGuardianEmailAsync(Guid id, string email, CancellationToken ct = default) =>
         await ExecuteInlineAsync(
-            "UPDATE dbo.Students SET GuardianEmail = @email WHERE Id = @id",
+            """UPDATE "dbo"."Students" SET "GuardianEmail" = @email WHERE "Id" = @id""",
             new { id, email }, ct);
 
     public async Task SetGuardianContactAsync(
         Guid id, string? email, string? phone, string? name, CancellationToken ct = default) =>
         await ExecuteInlineAsync(
             """
-            UPDATE dbo.Students SET
-                GuardianEmail = COALESCE(@email, GuardianEmail),
-                GuardianPhone = COALESCE(@phone, GuardianPhone),
-                GuardianName  = COALESCE(@name, GuardianName)
-            WHERE Id = @id
+            UPDATE "dbo"."Students" SET
+                "GuardianEmail" = COALESCE(@email, "GuardianEmail"),
+                "GuardianPhone" = COALESCE(@phone, "GuardianPhone"),
+                "GuardianName"  = COALESCE(@name, "GuardianName")
+            WHERE "Id" = @id
             """,
             new { id, email, phone, name }, ct);
 
@@ -149,10 +154,12 @@ SELECT DISTINCT Id FROM (
         }
 
         var sql = take is int
-            ? $@"SELECT TOP (@limit) {LivePctSelect} {LivePctFromList} {ListWhere}
-                 AND (@lastName IS NULL OR s.Name > @lastName OR (s.Name = @lastName AND s.Id > @lastId))
-                 ORDER BY s.Name, s.Id"
-            : $"SELECT {LivePctSelect} {LivePctFromList} {ListWhere} ORDER BY s.Name, s.Id";
+            ? $"""
+               SELECT {LivePctSelect} {LivePctFromList} {ListWhere}
+                 AND (@lastName IS NULL OR s."Name" > @lastName OR (s."Name" = @lastName AND s."Id" > @lastId))
+                 ORDER BY s."Name", s."Id" LIMIT @limit
+               """
+            : $"SELECT {LivePctSelect} {LivePctFromList} {ListWhere} ORDER BY s.\"Name\", s.\"Id\"";
 
         var rows = await QueryInlineAsync<StudentResponse>(
             sql,
@@ -179,12 +186,14 @@ SELECT DISTINCT Id FROM (
         }
 
         var rows = await QueryInlineAsync<StudentResponse>(
-            $@"SELECT TOP (@limit) {LivePctSelect} {LivePctFromList}
-               WHERE EXISTS (SELECT 1 FROM dbo.Classes c
-                             WHERE c.Id = @classId AND c.Grade = s.Grade AND c.Section = s.Section)
-                 AND (@lastName IS NULL OR s.Name > @lastName
-                      OR (s.Name = @lastName AND s.Id > @lastId))
-               ORDER BY s.Name, s.Id",
+            $"""
+             SELECT {LivePctSelect} {LivePctFromList}
+               WHERE EXISTS (SELECT 1 FROM "dbo"."Classes" c
+                             WHERE c."Id" = @classId AND c."Grade" = s."Grade" AND c."Section" = s."Section")
+                 AND (@lastName IS NULL OR s."Name" > @lastName
+                      OR (s."Name" = @lastName AND s."Id" > @lastId))
+               ORDER BY s."Name", s."Id" LIMIT @limit
+             """,
             new { classId, limit, lastName, lastId, tenantId }, ct);
 
         string? next = rows.Count == limit

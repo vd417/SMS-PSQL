@@ -28,22 +28,22 @@ public class StudentAttendancePctLiveTests(PostgresFixture fx)
         var studentId = Guid.NewGuid();
         var classId = Guid.NewGuid();
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status) VALUES (@studentId, @tenantId, 'A1', 'S1', 'active')",
+                """INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Status") VALUES (@studentId, @tenantId, 'A1', 'S1', 'active')""",
                 new { studentId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, StudentCount) VALUES (@classId, @tenantId, 'C1', 0)",
+                """INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "StudentCount") VALUES (@classId, @tenantId, 'C1', 0)""",
                 new { classId, tenantId });
 
             // Legacy daily: would be 25% if used (1 present / 4 days) — must be ignored
             var daily = new[] { "present", "absent", "absent", "absent" };
             for (int i = 0; i < daily.Length; i++)
                 await conn.ExecuteAsync(
-                    "INSERT dbo.AttendanceRecords (TenantId, ClassId, StudentId, [Date], Status) VALUES (@tenantId, @classId, @studentId, @date, @status)",
+                    """INSERT INTO "dbo"."AttendanceRecords" ("TenantId", "ClassId", "StudentId", "Date", "Status") VALUES (@tenantId, @classId, @studentId, @date, @status)""",
                     new { tenantId, classId, studentId, date = DateTime.UtcNow.Date.AddDays(-i), status = daily[i] });
 
             // Period: 8 present + 1 late + 2 absent = 81.82%
@@ -54,11 +54,12 @@ public class StudentAttendancePctLiveTests(PostgresFixture fx)
                 ("late", 9), ("absent", 10), ("absent", 11),
             };
             foreach (var (status, period) in periods)
-                await conn.ExecuteAsync(@"
-INSERT dbo.PeriodAttendanceRecords
-  (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status, CreatedAt, UpdatedAt)
-VALUES
-  (NEWID(), @tenantId, @classId, @studentId, @date, @period, N'Math', @status, SYSUTCDATETIME(), SYSUTCDATETIME())",
+                await conn.ExecuteAsync("""
+                    INSERT INTO "dbo"."PeriodAttendanceRecords"
+                      ("Id", "TenantId", "ClassId", "StudentId", "Date", "Period", "Subject", "Status", "CreatedAt", "UpdatedAt")
+                    VALUES
+                      (gen_random_uuid(), @tenantId, @classId, @studentId, @date, @period, 'Math', @status, now(), now())
+                    """,
                     new { tenantId, classId, studentId, date = DateTime.UtcNow.Date, period, status });
         }
 
@@ -104,18 +105,18 @@ VALUES
         var studentId = Guid.NewGuid();
         var classId = Guid.NewGuid();
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status) VALUES (@studentId, @tenantId, 'A2', 'S2', 'active')",
+                """INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Status") VALUES (@studentId, @tenantId, 'A2', 'S2', 'active')""",
                 new { studentId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, StudentCount) VALUES (@classId, @tenantId, 'C2', 0)",
+                """INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "StudentCount") VALUES (@classId, @tenantId, 'C2', 0)""",
                 new { classId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.AttendanceRecords (TenantId, ClassId, StudentId, [Date], Status) VALUES (@tenantId, @classId, @studentId, @date, N'present')",
+                """INSERT INTO "dbo"."AttendanceRecords" ("TenantId", "ClassId", "StudentId", "Date", "Status") VALUES (@tenantId, @classId, @studentId, @date, 'present')""",
                 new { tenantId, classId, studentId, date = DateTime.UtcNow.Date });
         }
 

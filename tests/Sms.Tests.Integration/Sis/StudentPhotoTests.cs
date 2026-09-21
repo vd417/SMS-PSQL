@@ -26,11 +26,11 @@ public class StudentPhotoTests(PostgresFixture fx)
 
     private static async Task SeedStudentAsync(PostgresFixture fx, Guid tenantId, Guid studentId)
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         await conn.ExecuteAsync(
-            "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status) VALUES (@studentId, @tenantId, 'A1', 'S1', 'active')",
+            """INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Status") VALUES (@studentId, @tenantId, 'A1', 'S1', 'active')""",
             new { studentId, tenantId });
     }
 
