@@ -26,8 +26,8 @@ public sealed record IssueNoteResponse(Guid Id, Guid IssueId, Guid AuthorUserId,
 public sealed class IssueRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
     private const string IssueCols =
-        "Id, TenantId, ReporterUserId, Category, Title, Description, Priority, Status, " +
-        "VehicleId, RouteId, TripId, PhotoUrl, CreatedAt, UpdatedAt";
+        "\"Id\", \"TenantId\", \"ReporterUserId\", \"Category\", \"Title\", \"Description\", \"Priority\", \"Status\", " +
+        "\"VehicleId\", \"RouteId\", \"TripId\", \"PhotoUrl\", \"CreatedAt\", \"UpdatedAt\"";
 
     // Same shape as IssueCols (same column count/order for Dapper's positional binding to
     // IssueResponse) but with a literal NULL in place of PhotoUrl: the list endpoint is
@@ -35,25 +35,25 @@ public sealed class IssueRepository(IDbConnectionFactory factory) : BaseReposito
     // multi-tens-of-MB of inline base64 images on every poll. Photos are only ever needed on
     // the single-issue detail fetch (GetAsync), which still selects the real PhotoUrl.
     private const string IssueListCols =
-        "Id, TenantId, ReporterUserId, Category, Title, Description, Priority, Status, " +
-        "VehicleId, RouteId, TripId, CAST(NULL AS nvarchar(max)) AS PhotoUrl, CreatedAt, UpdatedAt";
+        "\"Id\", \"TenantId\", \"ReporterUserId\", \"Category\", \"Title\", \"Description\", \"Priority\", \"Status\", " +
+        "\"VehicleId\", \"RouteId\", \"TripId\", CAST(NULL AS text) AS \"PhotoUrl\", \"CreatedAt\", \"UpdatedAt\"";
 
     private sealed record UserIdRow(Guid Id);
 
     public Task<IReadOnlyList<IssueResponse>> ListAsync(
         string? status, Guid? reporterUserId, CancellationToken ct = default) =>
         QueryInlineAsync<IssueResponse>(
-            $"SELECT {IssueListCols} FROM dbo.Issues WHERE (@status IS NULL OR Status = @status) " +
-            "AND (@reporterUserId IS NULL OR ReporterUserId = @reporterUserId) ORDER BY CreatedAt DESC",
+            $"SELECT {IssueListCols} FROM \"dbo\".\"Issues\" WHERE (@status::text IS NULL OR \"Status\" = @status::text) " +
+            "AND (@reporterUserId::uuid IS NULL OR \"ReporterUserId\" = @reporterUserId::uuid) ORDER BY \"CreatedAt\" DESC",
             new { status, reporterUserId }, ct);
 
     public async Task<IssueResponse?> GetAsync(Guid id, CancellationToken ct = default) =>
-        (await QueryInlineAsync<IssueResponse>($"SELECT {IssueCols} FROM dbo.Issues WHERE Id = @id", new { id }, ct))
+        (await QueryInlineAsync<IssueResponse>($"SELECT {IssueCols} FROM \"dbo\".\"Issues\" WHERE \"Id\" = @id", new { id }, ct))
         .FirstOrDefault();
 
     public Task<IReadOnlyList<IssueNoteResponse>> GetNotesAsync(Guid issueId, CancellationToken ct = default) =>
         QueryInlineAsync<IssueNoteResponse>(
-            "SELECT Id, IssueId, AuthorUserId, Note, CreatedAt FROM dbo.IssueNotes WHERE IssueId = @issueId ORDER BY CreatedAt",
+            "SELECT \"Id\", \"IssueId\", \"AuthorUserId\", \"Note\", \"CreatedAt\" FROM \"dbo\".\"IssueNotes\" WHERE \"IssueId\" = @issueId ORDER BY \"CreatedAt\"",
             new { issueId }, ct);
 
     public Task<IssueResponse?> CreateAsync(
@@ -86,10 +86,10 @@ public sealed class IssueRepository(IDbConnectionFactory factory) : BaseReposito
     public async Task<IReadOnlyList<Guid>> GetManagerUserIdsAsync(Guid tenantId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<UserIdRow>(@"
-SELECT DISTINCT u.Id
-FROM dbo.Users u
-INNER JOIN dbo.UserRoles ur ON ur.UserId = u.Id
-WHERE u.TenantId = @tenantId AND ur.Role IN (@admin, @owner, @principal)",
+SELECT DISTINCT u.""Id""
+FROM ""dbo"".""Users"" u
+INNER JOIN ""dbo"".""UserRoles"" ur ON ur.""UserId"" = u.""Id""
+WHERE u.""TenantId"" = @tenantId AND ur.""Role"" IN (@admin, @owner, @principal)",
             new { tenantId, admin = Policies.SchoolAdmin, owner = Policies.SchoolOwner, principal = Policies.Principal },
             ct);
         return rows.Select(r => r.Id).ToList();

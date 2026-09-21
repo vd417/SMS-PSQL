@@ -901,7 +901,7 @@ CREATE TABLE "dbo"."PlanUpgradeRequests" (
 );
 
 CREATE TABLE "dbo"."PlatformMetricsSnapshot" (
-    "Month" date NOT NULL,
+    "Month" date NOT NULL UNIQUE,
     "Mrr" numeric(18,2) DEFAULT 0 NOT NULL,
     "ActiveClients" integer DEFAULT 0 NOT NULL,
     "CancelledClients" integer DEFAULT 0 NOT NULL,

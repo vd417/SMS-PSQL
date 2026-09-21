@@ -20,8 +20,8 @@ public static class MetricsSnapshotWriter
             var factory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
 
             await using var conn = await factory.OpenAsync();
-            await Dapper.SqlMapper.ExecuteAsync(conn, new Dapper.CommandDefinition(
-                "dbo.PlatformMetrics_UpsertCurrentMonth",
+            await Dapper.SqlMapper.ExecuteScalarAsync<int>(conn, new Dapper.CommandDefinition(
+                "dbo.platformmetrics_upsertcurrentmonth",
                 commandType: System.Data.CommandType.StoredProcedure));
             log.LogInformation("Platform metrics snapshot upserted for the current month.");
         }

@@ -41,7 +41,7 @@ public class IssueEndpointTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Name) VALUES (@userId, @tenantId, @name)",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@userId, @tenantId, @name)",
             new { userId, tenantId, name });
     }
 
@@ -49,7 +49,7 @@ public class IssueEndpointTests(PostgresFixture fx)
     {
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, @role)", new { userId, role });
+        await conn.ExecuteAsync("INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, @role)", new { userId, role });
     }
 
     [Fact]
@@ -287,7 +287,7 @@ public class IssueEndpointTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@busId, @tenantId, @busNo)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@busId, @tenantId, @busNo)",
                 new { busId, tenantId, busNo = "BUS-OWN" });
         }
 

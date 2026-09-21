@@ -287,3 +287,33 @@ BEGIN
     ORDER BY months.m;
 END;
 $$;
+
+-- PlatformMetrics_UpsertCurrentMonth: called by Sms.Api's MetricsSnapshotWriter at startup
+-- (fire-and-forget, swallows its own errors) to refresh dbo.PlatformMetricsSnapshot, which
+-- feeds the Dashboard_CatreOverview/Report_Revenue functions above. Requires a UNIQUE
+-- constraint on "Month" for ON CONFLICT (added to 04_tables.sql) -- the original MERGE had no
+-- such constraint on SQL Server since MERGE doesn't need one.
+CREATE OR REPLACE FUNCTION dbo.platformmetrics_upsertcurrentmonth()
+RETURNS int
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_month date := date_trunc('month', now() AT TIME ZONE 'UTC')::date;
+    v_mrr numeric(18,2);
+    v_active int;
+    v_cancelled int;
+    v_rows int;
+BEGIN
+    SELECT COALESCE(SUM(CASE WHEN "Status" = 'active' THEN "Mrr" ELSE 0 END), 0) INTO v_mrr FROM "dbo"."Tenants";
+    SELECT COUNT(*) INTO v_active FROM "dbo"."Tenants" WHERE "Status" = 'active';
+    SELECT COUNT(*) INTO v_cancelled FROM "dbo"."Tenants" WHERE "Status" = 'cancelled';
+
+    INSERT INTO "dbo"."PlatformMetricsSnapshot" ("Month", "Mrr", "ActiveClients", "CancelledClients", "CreatedAt")
+    VALUES (v_month, v_mrr, v_active, v_cancelled, now() AT TIME ZONE 'UTC')
+    ON CONFLICT ("Month") DO UPDATE SET
+        "Mrr" = EXCLUDED."Mrr", "ActiveClients" = EXCLUDED."ActiveClients", "CancelledClients" = EXCLUDED."CancelledClients";
+
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    RETURN v_rows;
+END;
+$$;
