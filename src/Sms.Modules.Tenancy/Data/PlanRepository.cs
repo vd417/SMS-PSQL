@@ -6,8 +6,8 @@ namespace Sms.Modules.Tenancy.Data;
 public sealed class PlanRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
     private const string Cols =
-        "Id, Name, Tier, Pricing, Price, PerStudent, MinStudents, Period, FeaturesCsv, " +
-        "LimitsStudents, LimitsStaff, LimitsStorageGb, Visibility, Audience, Band, OfferLabel, OfferPct, Color, Description";
+        "\"Id\", \"Name\", \"Tier\", \"Pricing\", \"Price\", \"PerStudent\", \"MinStudents\", \"Period\", \"FeaturesCsv\", " +
+        "\"LimitsStudents\", \"LimitsStaff\", \"LimitsStorageGb\", \"Visibility\", \"Audience\", \"Band\", \"OfferLabel\", \"OfferPct\", \"Color\", \"Description\"";
 
     public Task<PlanRow?> UpsertAsync(PlanUpsertRequest r, CancellationToken ct = default) =>
         QuerySingleProcAsync<PlanRow>("dbo.Plan_Upsert", new
@@ -21,7 +21,7 @@ public sealed class PlanRepository(IDbConnectionFactory factory) : BaseRepositor
 
     public async Task<PlanRow?> SetVisibilityAsync(Guid id, string visibility, CancellationToken ct = default) =>
         (await QueryInlineAsync<PlanRow>(
-            $"UPDATE dbo.Plans SET Visibility = @visibility WHERE Id = @id; SELECT {Cols} FROM dbo.Plans WHERE Id = @id;",
+            $"UPDATE \"dbo\".\"Plans\" SET \"Visibility\" = @visibility WHERE \"Id\" = @id; SELECT {Cols} FROM \"dbo\".\"Plans\" WHERE \"Id\" = @id;",
             new { id, visibility }, ct)).FirstOrDefault();
 
     // The Catre plan editor omits `tier` (it carries `feature_tiers`, which we ignore). Default the
@@ -32,13 +32,13 @@ public sealed class PlanRepository(IDbConnectionFactory factory) : BaseRepositor
             : tier.Trim();
 
     public async Task<PlanRow?> GetAsync(Guid id, CancellationToken ct = default) =>
-        (await QueryInlineAsync<PlanRow>($"SELECT {Cols} FROM dbo.Plans WHERE Id = @id", new { id }, ct))
+        (await QueryInlineAsync<PlanRow>($"SELECT {Cols} FROM \"dbo\".\"Plans\" WHERE \"Id\" = @id", new { id }, ct))
         .FirstOrDefault();
 
     public Task<IReadOnlyList<PlanRow>> ListAsync(
         string? visibility, string? audience, CancellationToken ct = default) =>
         QueryInlineAsync<PlanRow>(
-            $"SELECT {Cols} FROM dbo.Plans WHERE (@visibility IS NULL OR Visibility = @visibility) " +
-            "AND (@audience IS NULL OR Audience = @audience) ORDER BY Price",
+            $"SELECT {Cols} FROM \"dbo\".\"Plans\" WHERE (@visibility IS NULL OR \"Visibility\" = @visibility) " +
+            "AND (@audience IS NULL OR \"Audience\" = @audience) ORDER BY \"Price\"",
             new { visibility, audience }, ct);
 }

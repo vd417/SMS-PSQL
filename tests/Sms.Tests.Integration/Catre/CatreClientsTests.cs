@@ -195,7 +195,7 @@ public class CatreClientsTests(PostgresFixture fx)
         var factory = new Sms.Shared.Kernel.Data.NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         var roles = (await Dapper.SqlMapper.QueryAsync<string>(c,
-            "SELECT ur.Role FROM dbo.UserRoles ur JOIN dbo.Users u ON u.Id = ur.UserId WHERE u.Email = @e",
+            "SELECT ur.\"Role\" FROM \"dbo\".\"UserRoles\" ur JOIN \"dbo\".\"Users\" u ON u.\"Id\" = ur.\"UserId\" WHERE u.\"Email\" = @e",
             new { e = email })).ToList();
 
         roles.Should().ContainSingle().Which.Should().Be("school.owner");

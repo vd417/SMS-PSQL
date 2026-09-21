@@ -30,7 +30,7 @@ public class BillingGateTests(PostgresFixture fx)
         var id = Guid.NewGuid();
         await using var c = await factory.OpenAsync();
         await c.ExecuteAsync(
-            "INSERT dbo.Tenants (Id, Name, Slug, Status, Tier) VALUES (@id,@n,@s,@st,'gold')",
+            """INSERT INTO "dbo"."Tenants" ("Id", "Name", "Slug", "Status", "Tier") VALUES (@id,@n,@s,@st,'gold')""",
             new { id, n = "T", s = $"t{id:N}", st = status });
         return id;
     }

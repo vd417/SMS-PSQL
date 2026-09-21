@@ -66,7 +66,7 @@ public class ProvisioningTests(PostgresFixture fx)
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
         var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using (var c = await factory.OpenAsync())
-            await c.ExecuteAsync("UPDATE dbo.OtpCodes SET CodeHash=@h WHERE Identifier=@id",
+            await c.ExecuteAsync("""UPDATE "dbo"."OtpCodes" SET "CodeHash"=@h WHERE "Identifier"=@id""",
                 new { id = email, h = Sha256Hex("123456") });
 
         var verify = await anon.PostAsJsonAsync("/v1/auth/otp/verify", new { identifier = email, code = "123456" });

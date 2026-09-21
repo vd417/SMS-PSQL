@@ -16,7 +16,7 @@ public sealed class OnboardingRepository(IDbConnectionFactory factory) : BaseRep
     public async Task AdvanceByTenantAsync(Guid tenantId, string stage, CancellationToken ct = default)
     {
         var id = (await QueryInlineAsync<Guid?>(
-            "SELECT TOP 1 Id FROM dbo.OnboardingItems WHERE TenantId = @tenantId ORDER BY Age DESC",
+            """SELECT "Id" FROM "dbo"."OnboardingItems" WHERE "TenantId" = @tenantId ORDER BY "Age" DESC LIMIT 1""",
             new { tenantId }, ct)).FirstOrDefault();
         if (id is Guid oid)
             await AdvanceAsync(oid, stage, ct);
@@ -28,12 +28,12 @@ public sealed class OnboardingRepository(IDbConnectionFactory factory) : BaseRep
     public async Task<OnboardingItemResponse?> GetAsync(Guid id, CancellationToken ct = default)
     {
         var item = (await QueryInlineAsync<OnboardingItemRow>(
-            "SELECT Id, TenantId, Name, Slug, Owner, Value, Stage, Age, " +
-            "ContactName, ContactEmail, ContactPhone, Address FROM dbo.OnboardingItems WHERE Id = @id",
+            "SELECT \"Id\", \"TenantId\", \"Name\", \"Slug\", \"Owner\", \"Value\", \"Stage\", \"Age\", " +
+            "\"ContactName\", \"ContactEmail\", \"ContactPhone\", \"Address\" FROM \"dbo\".\"OnboardingItems\" WHERE \"Id\" = @id",
             new { id }, ct)).FirstOrDefault();
         if (item is null) return null;
         var checks = await QueryInlineAsync<ChecklistRow>(
-            "SELECT OnboardingId, Label, Done FROM dbo.OnboardingChecklist WHERE OnboardingId = @id ORDER BY Seq",
+            "SELECT \"OnboardingId\", \"Label\", \"Done\" FROM \"dbo\".\"OnboardingChecklist\" WHERE \"OnboardingId\" = @id ORDER BY \"Seq\"",
             new { id }, ct);
         return Compose(item, checks);
     }
@@ -41,11 +41,11 @@ public sealed class OnboardingRepository(IDbConnectionFactory factory) : BaseRep
     public async Task<IReadOnlyList<OnboardingItemResponse>> ListAsync(string? stage, CancellationToken ct = default)
     {
         var items = await QueryInlineAsync<OnboardingItemRow>(
-            "SELECT Id, TenantId, Name, Slug, Owner, Value, Stage, Age, " +
-            "ContactName, ContactEmail, ContactPhone, Address FROM dbo.OnboardingItems " +
-            "WHERE (@stage IS NULL OR Stage = @stage) ORDER BY Age DESC", new { stage }, ct);
+            "SELECT \"Id\", \"TenantId\", \"Name\", \"Slug\", \"Owner\", \"Value\", \"Stage\", \"Age\", " +
+            "\"ContactName\", \"ContactEmail\", \"ContactPhone\", \"Address\" FROM \"dbo\".\"OnboardingItems\" " +
+            "WHERE (@stage IS NULL OR \"Stage\" = @stage) ORDER BY \"Age\" DESC", new { stage }, ct);
         var checks = await QueryInlineAsync<ChecklistRow>(
-            "SELECT OnboardingId, Label, Done FROM dbo.OnboardingChecklist ORDER BY Seq", null, ct);
+            "SELECT \"OnboardingId\", \"Label\", \"Done\" FROM \"dbo\".\"OnboardingChecklist\" ORDER BY \"Seq\"", null, ct);
         var byItem = checks.GroupBy(c => c.OnboardingId).ToDictionary(g => g.Key, g => (IReadOnlyList<ChecklistRow>)g.ToList());
         return items.Select(i => Compose(i, byItem.TryGetValue(i.Id, out var cs) ? cs : [])).ToList();
     }
