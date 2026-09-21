@@ -35,10 +35,10 @@ public class ClassNextPeriodTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, StudentCount) VALUES (@classId, @tenantId, 'C1', 0)",
+                "INSERT INTO \"dbo\".\"Classes\" (\"Id\", \"TenantId\", \"Name\", \"StudentCount\") VALUES (@classId, @tenantId, 'C1', 0)",
                 new { classId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TimetableSlots (TenantId, [Day], Period, ClassId, Subject, StartTime) VALUES (@tenantId, @day, 1, @classId, 'Science', @startTime)",
+                "INSERT INTO \"dbo\".\"TimetableSlots\" (\"TenantId\", \"Day\", \"Period\", \"ClassId\", \"Subject\", \"StartTime\") VALUES (@tenantId, @day, 1, @classId, 'Science', @startTime)",
                 new { tenantId, day = today3LetterDay, classId, startTime = future });
         }
 

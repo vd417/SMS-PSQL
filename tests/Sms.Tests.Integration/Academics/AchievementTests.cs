@@ -57,18 +57,18 @@ public class AchievementTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status) VALUES (@studentId, @tenantId, 'A1', 'S1', 'active')",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\") VALUES (@studentId, @tenantId, 'A1', 'S1', 'active')",
                 new { studentId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, StudentCount) VALUES (@classId, @tenantId, 'IV-B', 0)",
+                "INSERT INTO \"dbo\".\"Classes\" (\"Id\", \"TenantId\", \"Name\", \"StudentCount\") VALUES (@classId, @tenantId, 'IV-B', 0)",
                 new { classId, tenantId });
             for (var period = 1; period <= 5; period++)
             {
                 await conn.ExecuteAsync(@"
-INSERT dbo.PeriodAttendanceRecords
-  (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status, CreatedAt, UpdatedAt)
+INSERT INTO ""dbo"".""PeriodAttendanceRecords""
+  (""Id"", ""TenantId"", ""ClassId"", ""StudentId"", ""Date"", ""Period"", ""Subject"", ""Status"", ""CreatedAt"", ""UpdatedAt"")
 VALUES
-  (NEWID(), @tenantId, @classId, @studentId, @date, @period, N'Math', N'present', SYSUTCDATETIME(), SYSUTCDATETIME())",
+  (gen_random_uuid(), @tenantId, @classId, @studentId, @date, @period, 'Math', 'present', now(), now())",
                     new { tenantId, classId, studentId, date = DateTime.UtcNow.Date, period });
             }
         }
@@ -93,7 +93,7 @@ VALUES
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status) VALUES (@studentId, @tenantId, 'A2', 'S2', 'active')",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\") VALUES (@studentId, @tenantId, 'A2', 'S2', 'active')",
                 new { studentId, tenantId });
         }
 

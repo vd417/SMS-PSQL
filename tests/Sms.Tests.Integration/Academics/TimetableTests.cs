@@ -62,13 +62,13 @@ public class TimetableTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId)", new { teacherUserId, tenantId });
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId)", new { teacherUserId, tenantId });
             var teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, 'T1', @teacherUserId)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'T1', @teacherUserId)",
                 new { teacherId, tenantId, teacherUserId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Subjects (Id, TenantId, Name, TeacherId) VALUES (NEWID(), @tenantId, 'Mathematics', @teacherId)",
+                "INSERT INTO \"dbo\".\"Subjects\" (\"Id\", \"TenantId\", \"Name\", \"TeacherId\") VALUES (gen_random_uuid(), @tenantId, 'Mathematics', @teacherId)",
                 new { tenantId, teacherId });
         }
 
@@ -114,7 +114,7 @@ public class TimetableTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@teacherId, @tenantId, 'Asha Rao')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\") VALUES (@teacherId, @tenantId, 'Asha Rao')",
                 new { teacherId, tenantId });
         }
 
@@ -144,13 +144,13 @@ public class TimetableTests(PostgresFixture fx)
             var subjectDefaultTeacherId = Guid.NewGuid();
             slotTeacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@subjectDefaultTeacherId, @tenantId, 'Default Teacher')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\") VALUES (@subjectDefaultTeacherId, @tenantId, 'Default Teacher')",
                 new { subjectDefaultTeacherId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@slotTeacherId, @tenantId, 'Period Teacher')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\") VALUES (@slotTeacherId, @tenantId, 'Period Teacher')",
                 new { slotTeacherId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Subjects (Id, TenantId, Name, TeacherId) VALUES (NEWID(), @tenantId, 'Science', @subjectDefaultTeacherId)",
+                "INSERT INTO \"dbo\".\"Subjects\" (\"Id\", \"TenantId\", \"Name\", \"TeacherId\") VALUES (gen_random_uuid(), @tenantId, 'Science', @subjectDefaultTeacherId)",
                 new { tenantId, subjectDefaultTeacherId });
         }
 
@@ -179,10 +179,10 @@ public class TimetableTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             var teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@teacherId, @tenantId, 'Asha Rao')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\") VALUES (@teacherId, @tenantId, 'Asha Rao')",
                 new { teacherId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Subjects (Id, TenantId, Name, TeacherId) VALUES (NEWID(), @tenantId, 'Science', @teacherId)",
+                "INSERT INTO \"dbo\".\"Subjects\" (\"Id\", \"TenantId\", \"Name\", \"TeacherId\") VALUES (gen_random_uuid(), @tenantId, 'Science', @teacherId)",
                 new { tenantId, teacherId });
         }
 
@@ -319,10 +319,10 @@ public class TimetableTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, StudentCount) VALUES (@classId, @tenantId, 'IX-A', 0)",
+                "INSERT INTO \"dbo\".\"Classes\" (\"Id\", \"TenantId\", \"Name\", \"StudentCount\") VALUES (@classId, @tenantId, 'IX-A', 0)",
                 new { classId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, StudentCount) VALUES (@otherClassId, @tenantId, 'IX-B', 0)",
+                "INSERT INTO \"dbo\".\"Classes\" (\"Id\", \"TenantId\", \"Name\", \"StudentCount\") VALUES (@otherClassId, @tenantId, 'IX-B', 0)",
                 new { otherClassId, tenantId });
         }
 

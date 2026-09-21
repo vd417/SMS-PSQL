@@ -5,11 +5,11 @@ namespace Sms.Modules.Academics.Data;
 
 public sealed class CalendarRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
-    private const string Cols = "Id, TenantId, Title, [Date], Time, Type, Description, ChannelsJson";
+    private const string Cols = "\"Id\", \"TenantId\", \"Title\", \"Date\", \"Time\", \"Type\", \"Description\", \"ChannelsJson\"";
 
     public Task<IReadOnlyList<CalendarEventResponse>> ListAsync(CancellationToken ct = default) =>
         QueryInlineAsync<CalendarEventResponse>(
-            $"SELECT {Cols} FROM dbo.CalendarEvents ORDER BY [Date], Time", null, ct);
+            $"SELECT {Cols} FROM \"dbo\".\"CalendarEvents\" ORDER BY \"Date\", \"Time\"", null, ct);
 
     public Task<CalendarEventResponse?> CreateAsync(Guid tenantId, CreateCalendarEventRequest r, CancellationToken ct = default) =>
         QuerySingleProcAsync<CalendarEventResponse>("dbo.CalendarEvent_Create", new

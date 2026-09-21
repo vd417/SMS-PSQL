@@ -108,21 +108,21 @@ public class AttendanceRollCallHttpTests(PostgresFixture fx)
         await conn.ExecuteAsync(
             "SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(@"
-INSERT dbo.Users (Id, TenantId) VALUES
+INSERT INTO ""dbo"".""Users"" (""Id"", ""TenantId"") VALUES
     (@classTeacherUserId, @tenantId),
     (@firstPeriodTeacherUserId, @tenantId),
     (@subjectTeacherUserId, @tenantId);
-INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES
-    (@classTeacherId, @tenantId, N'Class Teacher', @classTeacherUserId),
-    (@firstPeriodTeacherId, @tenantId, N'First Period Teacher', @firstPeriodTeacherUserId),
-    (@subjectTeacherId, @tenantId, N'Subject Teacher', @subjectTeacherUserId);
-INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId)
-VALUES (@classId, @tenantId, N'IX-A', 0, @classTeacherId);
-INSERT dbo.TimetableSlots
-    (TenantId, [Day], Period, Subject, ClassId, ClassName, StartTime, EndTime, TeacherId)
+INSERT INTO ""dbo"".""Teachers"" (""Id"", ""TenantId"", ""Name"", ""UserId"") VALUES
+    (@classTeacherId, @tenantId, 'Class Teacher', @classTeacherUserId),
+    (@firstPeriodTeacherId, @tenantId, 'First Period Teacher', @firstPeriodTeacherUserId),
+    (@subjectTeacherId, @tenantId, 'Subject Teacher', @subjectTeacherUserId);
+INSERT INTO ""dbo"".""Classes"" (""Id"", ""TenantId"", ""Name"", ""StudentCount"", ""ClassTeacherId"")
+VALUES (@classId, @tenantId, 'IX-A', 0, @classTeacherId);
+INSERT INTO ""dbo"".""TimetableSlots""
+    (""TenantId"", ""Day"", ""Period"", ""Subject"", ""ClassId"", ""ClassName"", ""StartTime"", ""EndTime"", ""TeacherId"")
 VALUES
-    (@tenantId, N'Wed', 1, N'Math', @classId, N'IX-A', N'09:00', N'09:45', @firstPeriodTeacherId),
-    (@tenantId, N'Wed', 2, N'English', @classId, N'IX-A', N'09:45', N'10:30', @subjectTeacherId);",
+    (@tenantId, 'Wed', 1, 'Math', @classId, 'IX-A', '09:00', '09:45', @firstPeriodTeacherId),
+    (@tenantId, 'Wed', 2, 'English', @classId, 'IX-A', '09:45', '10:30', @subjectTeacherId);",
             new
             {
                 tenantId,

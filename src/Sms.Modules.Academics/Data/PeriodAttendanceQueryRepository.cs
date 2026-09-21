@@ -84,11 +84,11 @@ public sealed class PeriodAttendanceQueryRepository(IDbConnectionFactory factory
         var rows = await conn.QueryAsync<PeriodAttendanceAuditRow>(
             new CommandDefinition(
                 """
-                SELECT Id, RecordId, ClassId, StudentId, [Date], Period, Subject,
-                       FromStatus, ToStatus, ActorId, ActorName, ActorRole, At
-                FROM dbo.PeriodAttendanceAudit
-                WHERE RecordId = @RecordId
-                ORDER BY At DESC
+                SELECT "Id", "RecordId", "ClassId", "StudentId", "Date", "Period", "Subject",
+                       "FromStatus", "ToStatus", "ActorId", "ActorName", "ActorRole", "At"
+                FROM "dbo"."PeriodAttendanceAudit"
+                WHERE "RecordId" = @RecordId
+                ORDER BY "At" DESC
                 """,
                 new { RecordId = recordId },
                 cancellationToken: ct));
@@ -196,64 +196,71 @@ public sealed record PeriodAttendanceAggregateCommand(string Sql, DynamicParamet
 
 public static class PeriodAttendanceAggregateSql
 {
+    // SQL Server's recursive CTE (implicit recursion via self-reference) requires the explicit
+    // RECURSIVE keyword in Postgres; DATEADD(DAY, 1, x) -> date + integer; DATENAME(WEEKDAY, x)
+    // -> to_char(x, 'DY') (locale-dependent 3-letter abbreviation, same as the source's own
+    // LEFT(...,3) truncation -- both sides of every day-name comparison go through the same
+    // upper(to_char(...)) so a locale mismatch would show up as a symmetric non-match, not a
+    // silent wrong answer). OPTION (MAXRECURSION 32767) has no Postgres equivalent and is
+    // dropped -- Postgres recursive CTEs aren't statement-level depth-limited the same way.
     private const string DateSeries = """
-        WITH Dates AS (
-            SELECT CAST(@From AS date) AS [Date]
+        WITH RECURSIVE "Dates" AS (
+            SELECT @From::date AS "Date"
             UNION ALL
-            SELECT DATEADD(DAY, 1, [Date])
-            FROM Dates
-            WHERE [Date] < CAST(@To AS date)
+            SELECT "Date" + 1
+            FROM "Dates"
+            WHERE "Date" < @To::date
         )
         """;
 
     public static PeriodAttendanceAggregateCommand BuildClassDay(Guid classId, DateOnly date)
     {
         const string sql = """
-            WITH ExpectedSessions AS (
-                SELECT ts.Period, LOWER(LTRIM(RTRIM(ts.Subject))) AS Subject
-                FROM dbo.TimetableSlots ts
-                WHERE ts.ClassId = @ClassId
-                  AND UPPER(LEFT(LTRIM(RTRIM(ts.[Day])), 3))
-                      = UPPER(LEFT(DATENAME(WEEKDAY, @Date), 3))
+            WITH "ExpectedSessions" AS (
+                SELECT ts."Period", lower(trim(ts."Subject")) AS "Subject"
+                FROM "dbo"."TimetableSlots" ts
+                WHERE ts."ClassId" = @ClassId
+                  AND upper(left(trim(ts."Day"), 3))
+                      = upper(left(to_char(@Date::date, 'DY'), 3))
             ),
-            StatusCounts AS (
+            "StatusCounts" AS (
                 SELECT
-                    ISNULL(SUM(CASE WHEN par.Status = N'present' THEN 1 ELSE 0 END), 0) AS Present,
-                    ISNULL(SUM(CASE WHEN par.Status = N'absent' THEN 1 ELSE 0 END), 0) AS Absent,
-                    ISNULL(SUM(CASE WHEN par.Status = N'late' THEN 1 ELSE 0 END), 0) AS Late,
-                    ISNULL(SUM(CASE WHEN par.Status = N'leave' THEN 1 ELSE 0 END), 0) AS Leave
-                FROM ExpectedSessions es
-                LEFT JOIN dbo.PeriodAttendanceRecords par
-                  ON par.ClassId = @ClassId
-                 AND par.[Date] = @Date
-                 AND par.Period = es.Period
-                 AND LOWER(LTRIM(RTRIM(par.Subject))) = es.Subject
+                    COALESCE(SUM(CASE WHEN par."Status" = 'present' THEN 1 ELSE 0 END), 0) AS "Present",
+                    COALESCE(SUM(CASE WHEN par."Status" = 'absent' THEN 1 ELSE 0 END), 0) AS "Absent",
+                    COALESCE(SUM(CASE WHEN par."Status" = 'late' THEN 1 ELSE 0 END), 0) AS "Late",
+                    COALESCE(SUM(CASE WHEN par."Status" = 'leave' THEN 1 ELSE 0 END), 0) AS "Leave"
+                FROM "ExpectedSessions" es
+                LEFT JOIN "dbo"."PeriodAttendanceRecords" par
+                  ON par."ClassId" = @ClassId
+                 AND par."Date" = @Date
+                 AND par."Period" = es."Period"
+                 AND lower(trim(par."Subject")) = es."Subject"
             ),
-            MarkedSessions AS (
-                SELECT par.Period, LOWER(LTRIM(RTRIM(par.Subject))) AS Subject
-                FROM dbo.PeriodAttendanceRecords par
-                WHERE par.ClassId = @ClassId AND par.[Date] = @Date
-                GROUP BY par.Period, LOWER(LTRIM(RTRIM(par.Subject)))
+            "MarkedSessions" AS (
+                SELECT par."Period", lower(trim(par."Subject")) AS "Subject"
+                FROM "dbo"."PeriodAttendanceRecords" par
+                WHERE par."ClassId" = @ClassId AND par."Date" = @Date
+                GROUP BY par."Period", lower(trim(par."Subject"))
             )
             SELECT
-                (SELECT COUNT(*)
-                 FROM dbo.Classes c
-                 INNER JOIN dbo.Students s
-                   ON (c.Grade IS NOT NULL AND c.Section IS NOT NULL
-                       AND s.Grade = c.Grade AND s.Section = c.Section)
-                   OR (c.Name IS NOT NULL AND s.ClassLabel = c.Name)
-                 WHERE c.Id = @ClassId AND s.Status = N'active') AS TotalStudents,
-                sc.Present,
-                sc.Absent,
-                sc.Late,
-                sc.Leave,
-                (SELECT COUNT(*) FROM ExpectedSessions) AS TotalPeriods,
-                (SELECT COUNT(*) FROM MarkedSessions ms
+                CAST((SELECT COUNT(*)
+                 FROM "dbo"."Classes" c
+                 INNER JOIN "dbo"."Students" s
+                   ON (c."Grade" IS NOT NULL AND c."Section" IS NOT NULL
+                       AND s."Grade" = c."Grade" AND s."Section" = c."Section")
+                   OR (c."Name" IS NOT NULL AND s."ClassLabel" = c."Name")
+                 WHERE c."Id" = @ClassId AND s."Status" = 'active') AS int) AS "TotalStudents",
+                CAST(sc."Present" AS int) AS "Present",
+                CAST(sc."Absent" AS int) AS "Absent",
+                CAST(sc."Late" AS int) AS "Late",
+                CAST(sc."Leave" AS int) AS "Leave",
+                CAST((SELECT COUNT(*) FROM "ExpectedSessions") AS int) AS "TotalPeriods",
+                CAST((SELECT COUNT(*) FROM "MarkedSessions" ms
                  WHERE EXISTS (
-                     SELECT 1 FROM ExpectedSessions es
-                     WHERE es.Period = ms.Period AND es.Subject = ms.Subject
-                 )) AS MarkedPeriods
-            FROM StatusCounts sc;
+                     SELECT 1 FROM "ExpectedSessions" es
+                     WHERE es."Period" = ms."Period" AND es."Subject" = ms."Subject"
+                 )) AS int) AS "MarkedPeriods"
+            FROM "StatusCounts" sc;
             """;
 
         var parameters = new DynamicParameters();
@@ -269,56 +276,55 @@ public static class PeriodAttendanceAggregateSql
     {
         ValidateRange(from, to);
         var sql = DateSeries + """
-            , ExpectedSessions AS (
+            , "ExpectedSessions" AS (
                 SELECT
-                    d.[Date],
-                    ts.ClassId,
-                    ts.Period,
-                    LTRIM(RTRIM(ts.Subject)) AS Subject,
-                    LOWER(LTRIM(RTRIM(ts.Subject))) AS SubjectKey,
-                    t.Name AS TeacherName
-                FROM Dates d
-                INNER JOIN dbo.TimetableSlots ts
-                  ON ts.ClassId = @ClassId
-                 AND UPPER(LEFT(LTRIM(RTRIM(ts.[Day])), 3))
-                     = UPPER(LEFT(DATENAME(WEEKDAY, d.[Date]), 3))
-                LEFT JOIN dbo.Teachers t ON t.Id = ts.TeacherId
-                WHERE NULLIF(LTRIM(RTRIM(ts.Subject)), N'') IS NOT NULL
+                    d."Date",
+                    ts."ClassId",
+                    ts."Period",
+                    trim(ts."Subject") AS "Subject",
+                    lower(trim(ts."Subject")) AS "SubjectKey",
+                    t."Name" AS "TeacherName"
+                FROM "Dates" d
+                INNER JOIN "dbo"."TimetableSlots" ts
+                  ON ts."ClassId" = @ClassId
+                 AND upper(left(trim(ts."Day"), 3))
+                     = upper(left(to_char(d."Date", 'DY'), 3))
+                LEFT JOIN "dbo"."Teachers" t ON t."Id" = ts."TeacherId"
+                WHERE nullif(trim(ts."Subject"), '') IS NOT NULL
             ),
-            MarkedSessions AS (
+            "MarkedSessions" AS (
                 SELECT
-                    par.[Date],
-                    par.ClassId,
-                    par.Period,
-                    LOWER(LTRIM(RTRIM(par.Subject))) AS SubjectKey,
-                    SUM(CASE WHEN par.Status = N'present' THEN 1 ELSE 0 END) AS Present,
-                    SUM(CASE WHEN par.Status = N'absent' THEN 1 ELSE 0 END) AS Absent,
-                    SUM(CASE WHEN par.Status = N'late' THEN 1 ELSE 0 END) AS Late,
-                    SUM(CASE WHEN par.Status = N'leave' THEN 1 ELSE 0 END) AS Leave
-                FROM dbo.PeriodAttendanceRecords par
-                WHERE par.ClassId = @ClassId
-                  AND par.[Date] >= @From AND par.[Date] <= @To
-                GROUP BY par.[Date], par.ClassId, par.Period,
-                         LOWER(LTRIM(RTRIM(par.Subject)))
+                    par."Date",
+                    par."ClassId",
+                    par."Period",
+                    lower(trim(par."Subject")) AS "SubjectKey",
+                    SUM(CASE WHEN par."Status" = 'present' THEN 1 ELSE 0 END) AS "Present",
+                    SUM(CASE WHEN par."Status" = 'absent' THEN 1 ELSE 0 END) AS "Absent",
+                    SUM(CASE WHEN par."Status" = 'late' THEN 1 ELSE 0 END) AS "Late",
+                    SUM(CASE WHEN par."Status" = 'leave' THEN 1 ELSE 0 END) AS "Leave"
+                FROM "dbo"."PeriodAttendanceRecords" par
+                WHERE par."ClassId" = @ClassId
+                  AND par."Date" >= @From AND par."Date" <= @To
+                GROUP BY par."Date", par."ClassId", par."Period",
+                         lower(trim(par."Subject"))
             )
             SELECT
-                es.Subject,
-                es.TeacherName,
-                COUNT(*) AS Periods,
-                SUM(CASE WHEN ms.Period IS NOT NULL THEN 1 ELSE 0 END) AS Marked,
-                ISNULL(SUM(ms.Present), 0) AS Present,
-                ISNULL(SUM(ms.Absent), 0) AS Absent,
-                ISNULL(SUM(ms.Late), 0) AS Late,
-                ISNULL(SUM(ms.Leave), 0) AS Leave
-            FROM ExpectedSessions es
-            LEFT JOIN MarkedSessions ms
-              ON ms.[Date] = es.[Date]
-             AND ms.ClassId = es.ClassId
-             AND ms.Period = es.Period
-             AND ms.SubjectKey = es.SubjectKey
-            GROUP BY es.Subject, es.TeacherName
-            ORDER BY es.Subject, es.TeacherName
-            OPTION (MAXRECURSION 32767);
+                es."Subject",
+                es."TeacherName",
+                CAST(COUNT(*) AS int) AS "Periods",
+                CAST(SUM(CASE WHEN ms."Period" IS NOT NULL THEN 1 ELSE 0 END) AS int) AS "Marked",
+                CAST(COALESCE(SUM(ms."Present"), 0) AS int) AS "Present",
+                CAST(COALESCE(SUM(ms."Absent"), 0) AS int) AS "Absent",
+                CAST(COALESCE(SUM(ms."Late"), 0) AS int) AS "Late",
+                CAST(COALESCE(SUM(ms."Leave"), 0) AS int) AS "Leave"
+            FROM "ExpectedSessions" es
+            LEFT JOIN "MarkedSessions" ms
+              ON ms."Date" = es."Date"
+             AND ms."ClassId" = es."ClassId"
+             AND ms."Period" = es."Period"
+             AND ms."SubjectKey" = es."SubjectKey"
+            GROUP BY es."Subject", es."TeacherName"
+            ORDER BY es."Subject", es."TeacherName";
             """;
 
         return BuildDateRangeCommand(sql, from, to, ("ClassId", classId));
@@ -328,59 +334,58 @@ public static class PeriodAttendanceAggregateSql
     {
         ValidateRange(from, to);
         var sql = DateSeries + """
-            , ExpectedSessions AS (
+            , "ExpectedSessions" AS (
                 SELECT
-                    d.[Date],
-                    ts.ClassId,
-                    c.Grade,
-                    c.Section,
-                    ts.Period,
-                    LTRIM(RTRIM(ts.Subject)) AS Subject,
-                    LOWER(LTRIM(RTRIM(ts.Subject))) AS SubjectKey,
-                    ts.TeacherId,
-                    t.Name AS TeacherName
-                FROM Dates d
-                INNER JOIN dbo.TimetableSlots ts
-                  ON UPPER(LEFT(LTRIM(RTRIM(ts.[Day])), 3))
-                     = UPPER(LEFT(DATENAME(WEEKDAY, d.[Date]), 3))
-                INNER JOIN dbo.Classes c ON c.Id = ts.ClassId
-                INNER JOIN dbo.Teachers t ON t.Id = ts.TeacherId
-                WHERE ts.TeacherId IS NOT NULL
-                  AND NULLIF(LTRIM(RTRIM(ts.Subject)), N'') IS NOT NULL
+                    d."Date",
+                    ts."ClassId",
+                    c."Grade",
+                    c."Section",
+                    ts."Period",
+                    trim(ts."Subject") AS "Subject",
+                    lower(trim(ts."Subject")) AS "SubjectKey",
+                    ts."TeacherId",
+                    t."Name" AS "TeacherName"
+                FROM "Dates" d
+                INNER JOIN "dbo"."TimetableSlots" ts
+                  ON upper(left(trim(ts."Day"), 3))
+                     = upper(left(to_char(d."Date", 'DY'), 3))
+                INNER JOIN "dbo"."Classes" c ON c."Id" = ts."ClassId"
+                INNER JOIN "dbo"."Teachers" t ON t."Id" = ts."TeacherId"
+                WHERE ts."TeacherId" IS NOT NULL
+                  AND nullif(trim(ts."Subject"), '') IS NOT NULL
             ),
-            MarkedSessions AS (
+            "MarkedSessions" AS (
                 SELECT
-                    par.[Date],
-                    par.ClassId,
-                    par.Period,
-                    LOWER(LTRIM(RTRIM(par.Subject))) AS SubjectKey,
-                    MAX(REPLACE(LOWER(par.MarkedByRole), N'school.', N'')) AS MarkerRole
-                FROM dbo.PeriodAttendanceRecords par
-                WHERE par.[Date] >= @From AND par.[Date] <= @To
-                GROUP BY par.[Date], par.ClassId, par.Period,
-                         LOWER(LTRIM(RTRIM(par.Subject)))
+                    par."Date",
+                    par."ClassId",
+                    par."Period",
+                    lower(trim(par."Subject")) AS "SubjectKey",
+                    MAX(replace(lower(par."MarkedByRole"), 'school.', '')) AS "MarkerRole"
+                FROM "dbo"."PeriodAttendanceRecords" par
+                WHERE par."Date" >= @From AND par."Date" <= @To
+                GROUP BY par."Date", par."ClassId", par."Period",
+                         lower(trim(par."Subject"))
             )
             SELECT
-                es.TeacherId,
-                es.TeacherName,
-                COUNT(DISTINCT NULLIF(LTRIM(RTRIM(es.Grade)), N'')) AS Classes,
-                COUNT(DISTINCT es.ClassId) AS Sections,
-                COUNT(DISTINCT es.SubjectKey) AS Subjects,
-                COUNT(*) AS ExpectedPeriods,
-                SUM(CASE WHEN ms.Period IS NOT NULL THEN 1 ELSE 0 END) AS MarkedPeriods,
-                SUM(CASE WHEN ms.MarkerRole = N'teacher' THEN 1 ELSE 0 END) AS TeacherMarked,
-                SUM(CASE WHEN ms.MarkerRole = N'staff' THEN 1 ELSE 0 END) AS StaffMarked,
-                SUM(CASE WHEN ms.MarkerRole = N'principal' THEN 1 ELSE 0 END) AS PrincipalMarked,
-                SUM(CASE WHEN ms.MarkerRole = N'admin' THEN 1 ELSE 0 END) AS AdminMarked
-            FROM ExpectedSessions es
-            LEFT JOIN MarkedSessions ms
-              ON ms.[Date] = es.[Date]
-             AND ms.ClassId = es.ClassId
-             AND ms.Period = es.Period
-             AND ms.SubjectKey = es.SubjectKey
-            GROUP BY es.TeacherId, es.TeacherName
-            ORDER BY es.TeacherName
-            OPTION (MAXRECURSION 32767);
+                es."TeacherId",
+                es."TeacherName",
+                CAST(COUNT(DISTINCT nullif(trim(es."Grade"), '')) AS int) AS "Classes",
+                CAST(COUNT(DISTINCT es."ClassId") AS int) AS "Sections",
+                CAST(COUNT(DISTINCT es."SubjectKey") AS int) AS "Subjects",
+                CAST(COUNT(*) AS int) AS "ExpectedPeriods",
+                CAST(SUM(CASE WHEN ms."Period" IS NOT NULL THEN 1 ELSE 0 END) AS int) AS "MarkedPeriods",
+                CAST(SUM(CASE WHEN ms."MarkerRole" = 'teacher' THEN 1 ELSE 0 END) AS int) AS "TeacherMarked",
+                CAST(SUM(CASE WHEN ms."MarkerRole" = 'staff' THEN 1 ELSE 0 END) AS int) AS "StaffMarked",
+                CAST(SUM(CASE WHEN ms."MarkerRole" = 'principal' THEN 1 ELSE 0 END) AS int) AS "PrincipalMarked",
+                CAST(SUM(CASE WHEN ms."MarkerRole" = 'admin' THEN 1 ELSE 0 END) AS int) AS "AdminMarked"
+            FROM "ExpectedSessions" es
+            LEFT JOIN "MarkedSessions" ms
+              ON ms."Date" = es."Date"
+             AND ms."ClassId" = es."ClassId"
+             AND ms."Period" = es."Period"
+             AND ms."SubjectKey" = es."SubjectKey"
+            GROUP BY es."TeacherId", es."TeacherName"
+            ORDER BY es."TeacherName";
             """;
 
         return BuildDateRangeCommand(sql, from, to);
@@ -399,26 +404,26 @@ public static class PeriodAttendanceAggregateSql
         ValidateRange(from, to);
         const string sql = """
             SELECT
-                ISNULL(SUM(CASE WHEN par.Status = N'present' THEN 1 ELSE 0 END), 0) AS Present,
-                ISNULL(SUM(CASE WHEN par.Status = N'absent' THEN 1 ELSE 0 END), 0) AS Absent,
-                ISNULL(SUM(CASE WHEN par.Status = N'late' THEN 1 ELSE 0 END), 0) AS Late,
-                ISNULL(SUM(CASE WHEN par.Status = N'leave' THEN 1 ELSE 0 END), 0) AS Leave
-            FROM dbo.PeriodAttendanceRecords par
-            INNER JOIN dbo.Classes c ON c.Id = par.ClassId
-            LEFT JOIN dbo.TimetableSlots ts
-              ON ts.ClassId = par.ClassId
-             AND ts.Period = par.Period
-             AND UPPER(LEFT(LTRIM(RTRIM(ts.[Day])), 3))
-                 = UPPER(LEFT(DATENAME(WEEKDAY, par.[Date]), 3))
-             AND LOWER(LTRIM(RTRIM(ts.Subject))) = LOWER(LTRIM(RTRIM(par.Subject)))
-            WHERE par.[Date] >= @From AND par.[Date] <= @To
-              AND (@ClassId IS NULL OR par.ClassId = @ClassId)
-              AND (@Grade IS NULL OR c.Grade = @Grade)
-              AND (@Section IS NULL OR c.Section = @Section)
-              AND (@StudentId IS NULL OR par.StudentId = @StudentId)
+                CAST(COALESCE(SUM(CASE WHEN par."Status" = 'present' THEN 1 ELSE 0 END), 0) AS int) AS "Present",
+                CAST(COALESCE(SUM(CASE WHEN par."Status" = 'absent' THEN 1 ELSE 0 END), 0) AS int) AS "Absent",
+                CAST(COALESCE(SUM(CASE WHEN par."Status" = 'late' THEN 1 ELSE 0 END), 0) AS int) AS "Late",
+                CAST(COALESCE(SUM(CASE WHEN par."Status" = 'leave' THEN 1 ELSE 0 END), 0) AS int) AS "Leave"
+            FROM "dbo"."PeriodAttendanceRecords" par
+            INNER JOIN "dbo"."Classes" c ON c."Id" = par."ClassId"
+            LEFT JOIN "dbo"."TimetableSlots" ts
+              ON ts."ClassId" = par."ClassId"
+             AND ts."Period" = par."Period"
+             AND upper(left(trim(ts."Day"), 3))
+                 = upper(left(to_char(par."Date", 'DY'), 3))
+             AND lower(trim(ts."Subject")) = lower(trim(par."Subject"))
+            WHERE par."Date" >= @From AND par."Date" <= @To
+              AND (@ClassId IS NULL OR par."ClassId" = @ClassId)
+              AND (@Grade IS NULL OR c."Grade" = @Grade)
+              AND (@Section IS NULL OR c."Section" = @Section)
+              AND (@StudentId IS NULL OR par."StudentId" = @StudentId)
               AND (@Subject IS NULL
-                   OR LOWER(LTRIM(RTRIM(par.Subject))) = LOWER(LTRIM(RTRIM(@Subject))))
-              AND (@TeacherId IS NULL OR ts.TeacherId = @TeacherId);
+                   OR lower(trim(par."Subject")) = lower(trim(@Subject)))
+              AND (@TeacherId IS NULL OR ts."TeacherId" = @TeacherId);
             """;
 
         var parameters = DateRangeParameters(from, to);
@@ -474,71 +479,71 @@ public sealed record PeriodAttendanceQueryCommand(
 public static class PeriodAttendanceQuerySql
 {
     private const string FromAndJoins = """
-        FROM dbo.PeriodAttendanceRecords par
-        INNER JOIN dbo.Students s ON s.Id = par.StudentId
-        INNER JOIN dbo.Classes c ON c.Id = par.ClassId
-        LEFT JOIN dbo.Users u ON u.Id = par.MarkedBy
-        LEFT JOIN dbo.Users uu ON uu.Id = par.UpdatedBy
-        LEFT JOIN dbo.TimetableSlots ts
-          ON ts.ClassId = par.ClassId
-         AND ts.Period = par.Period
-         AND UPPER(LEFT(LTRIM(RTRIM(ts.[Day])), 3)) = UPPER(LEFT(DATENAME(WEEKDAY, par.[Date]), 3))
-         AND LOWER(LTRIM(RTRIM(ts.Subject))) = LOWER(LTRIM(RTRIM(par.Subject)))
-        LEFT JOIN dbo.Teachers t ON t.Id = ts.TeacherId
+        FROM "dbo"."PeriodAttendanceRecords" par
+        INNER JOIN "dbo"."Students" s ON s."Id" = par."StudentId"
+        INNER JOIN "dbo"."Classes" c ON c."Id" = par."ClassId"
+        LEFT JOIN "dbo"."Users" u ON u."Id" = par."MarkedBy"
+        LEFT JOIN "dbo"."Users" uu ON uu."Id" = par."UpdatedBy"
+        LEFT JOIN "dbo"."TimetableSlots" ts
+          ON ts."ClassId" = par."ClassId"
+         AND ts."Period" = par."Period"
+         AND upper(left(trim(ts."Day"), 3)) = upper(left(to_char(par."Date", 'DY'), 3))
+         AND lower(trim(ts."Subject")) = lower(trim(par."Subject"))
+        LEFT JOIN "dbo"."Teachers" t ON t."Id" = ts."TeacherId"
         """;
 
     private const string Filters = """
-        WHERE par.[Date] >= @From
-          AND par.[Date] <= @To
-          AND (@ClassId IS NULL OR par.ClassId = @ClassId)
-          AND (@Grade IS NULL OR c.Grade = @Grade)
-          AND (@Section IS NULL OR c.Section = @Section)
-          AND (@Subject IS NULL OR LOWER(LTRIM(RTRIM(par.Subject))) = LOWER(LTRIM(RTRIM(@Subject))))
-          AND (@Period IS NULL OR par.Period = @Period)
-          AND (@AssignedTeacherId IS NULL OR ts.TeacherId = @AssignedTeacherId)
+        WHERE par."Date" >= @From
+          AND par."Date" <= @To
+          AND (@ClassId IS NULL OR par."ClassId" = @ClassId)
+          AND (@Grade IS NULL OR c."Grade" = @Grade)
+          AND (@Section IS NULL OR c."Section" = @Section)
+          AND (@Subject IS NULL OR lower(trim(par."Subject")) = lower(trim(@Subject)))
+          AND (@Period IS NULL OR par."Period" = @Period)
+          AND (@AssignedTeacherId IS NULL OR ts."TeacherId" = @AssignedTeacherId)
           AND (@AuthorizedTeacherId IS NULL
-               OR ts.TeacherId = @AuthorizedTeacherId
-               OR c.ClassTeacherId = @AuthorizedTeacherId)
-          AND (@MarkedBy IS NULL OR par.MarkedBy = @MarkedBy)
+               OR ts."TeacherId" = @AuthorizedTeacherId
+               OR c."ClassTeacherId" = @AuthorizedTeacherId)
+          AND (@MarkedBy IS NULL OR par."MarkedBy" = @MarkedBy)
           AND (@MarkedByRole IS NULL
-               OR REPLACE(LOWER(par.MarkedByRole), N'school.', N'') = LOWER(@MarkedByRole))
-          AND (@Status IS NULL OR par.Status = @Status)
-          AND (@GeoFenceStatus IS NULL OR COALESCE(par.GeoFenceStatus, N'not_required') = @GeoFenceStatus)
-          AND (@Q IS NULL OR s.Name LIKE N'%' + @Q + N'%' OR s.AdmissionNo LIKE N'%' + @Q + N'%')
+               OR replace(lower(par."MarkedByRole"), 'school.', '') = lower(@MarkedByRole))
+          AND (@Status IS NULL OR par."Status" = @Status)
+          AND (@GeoFenceStatus IS NULL OR COALESCE(par."GeoFenceStatus", 'not_required') = @GeoFenceStatus)
+          AND (@Q IS NULL OR s."Name" LIKE '%' || @Q || '%' OR s."AdmissionNo" LIKE '%' || @Q || '%')
         """;
 
-    private const string Sql = "SELECT COUNT(*)\n" + FromAndJoins + "\n" + Filters + ";\n" + """
-        SELECT par.Id,
-               par.ClassId,
-               COALESCE(c.Grade, N'') AS Grade,
-               COALESCE(c.Section, N'') AS Section,
-               c.Name AS ClassLabel,
-               par.StudentId,
-               s.Name AS StudentName,
-               COALESCE(s.AdmissionNo, N'') AS AdmissionNo,
-               par.[Date],
-               par.Period,
-               par.PeriodId,
-               par.Subject,
-               par.SubjectId,
-               ts.StartTime,
-               ts.EndTime,
-               par.Status,
-               ts.TeacherId AS AssignedTeacherId,
-               t.Name AS AssignedTeacherName,
-               par.MarkedBy,
-               u.Name AS MarkedByName,
-               REPLACE(LOWER(par.MarkedByRole), N'school.', N'') AS MarkedByRole,
-               COALESCE(par.UpdatedAt, par.CreatedAt) AS MarkedAt,
-               COALESCE(par.GeoFenceStatus, N'not_required') AS GeoFenceStatus,
-               par.GeoDistanceMeters,
-               par.GeoCapturedAt,
-               par.UpdatedBy,
-               uu.Name AS UpdatedByName,
-               REPLACE(LOWER(par.UpdatedByRole), N'school.', N'') AS UpdatedByRole,
-               par.UpdatedAt
+    private const string Sql = "SELECT CAST(COUNT(*) AS int)\n" + FromAndJoins + "\n" + Filters + ";\n" + """
+        SELECT par."Id",
+               par."ClassId",
+               COALESCE(c."Grade", '') AS "Grade",
+               COALESCE(c."Section", '') AS "Section",
+               c."Name" AS "ClassLabel",
+               par."StudentId",
+               s."Name" AS "StudentName",
+               COALESCE(s."AdmissionNo", '') AS "AdmissionNo",
+               par."Date",
+               par."Period",
+               par."PeriodId",
+               par."Subject",
+               par."SubjectId",
+               ts."StartTime",
+               ts."EndTime",
+               par."Status",
+               ts."TeacherId" AS "AssignedTeacherId",
+               t."Name" AS "AssignedTeacherName",
+               par."MarkedBy",
+               u."Name" AS "MarkedByName",
+               replace(lower(par."MarkedByRole"), 'school.', '') AS "MarkedByRole",
+               COALESCE(par."UpdatedAt", par."CreatedAt") AS "MarkedAt",
+               COALESCE(par."GeoFenceStatus", 'not_required') AS "GeoFenceStatus",
+               par."GeoDistanceMeters",
+               par."GeoCapturedAt",
+               par."UpdatedBy",
+               uu."Name" AS "UpdatedByName",
+               replace(lower(par."UpdatedByRole"), 'school.', '') AS "UpdatedByRole",
+               par."UpdatedAt"
         """ + "\n" + FromAndJoins + "\n" + Filters + "\n" + """
-        ORDER BY par.[Date] DESC, c.Name, par.Period, s.Name
+        ORDER BY par."Date" DESC, c."Name", par."Period", s."Name"
         OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
         """;
 

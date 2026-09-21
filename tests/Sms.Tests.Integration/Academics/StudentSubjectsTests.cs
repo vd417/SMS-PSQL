@@ -63,27 +63,27 @@ public class StudentSubjectsTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, StudentId, IsPlatform, Status) VALUES (@studentUserId, @tenantId, N'sccrdtb/STU/26/0099', 0, 'active')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"StudentId\", \"IsPlatform\", \"Status\") VALUES (@studentUserId, @tenantId, 'sccrdtb/STU/26/0099', false, 'active')",
                 new { studentUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status) " +
-                "VALUES (NEWID(), @tenantId, N'sccrdtb/STU/26/0099', N'Ankit', N'9', N'A', N'9-A', N'active')",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Grade\", \"Section\", \"ClassLabel\", \"Status\") " +
+                "VALUES (gen_random_uuid(), @tenantId, 'sccrdtb/STU/26/0099', 'Ankit', '9', 'A', '9-A', 'active')",
                 new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@teacherId, @tenantId, N'Ravi Kumar')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\") VALUES (@teacherId, @tenantId, 'Ravi Kumar')",
                 new { teacherId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, Grade, Section, Subject) VALUES (@classId, @tenantId, N'9-A', N'9', N'A', N'Mathematics')",
+                "INSERT INTO \"dbo\".\"Classes\" (\"Id\", \"TenantId\", \"Name\", \"Grade\", \"Section\", \"Subject\") VALUES (@classId, @tenantId, '9-A', '9', 'A', 'Mathematics')",
                 new { classId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Subjects (Id, TenantId, Name, Short, TeacherId) VALUES " +
-                "(@mathId, @tenantId, N'Mathematics', N'Math', @teacherId), " +
-                "(@sciId, @tenantId, N'Science', N'Sci', NULL), " +
-                "(@artId, @tenantId, N'Art', N'Art', NULL)",
+                "INSERT INTO \"dbo\".\"Subjects\" (\"Id\", \"TenantId\", \"Name\", \"Short\", \"TeacherId\") VALUES " +
+                "(@mathId, @tenantId, 'Mathematics', 'Math', @teacherId), " +
+                "(@sciId, @tenantId, 'Science', 'Sci', NULL), " +
+                "(@artId, @tenantId, 'Art', 'Art', NULL)",
                 new { mathId, sciId, artId, teacherId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TimetableSlots (Id, TenantId, [Day], Period, Subject, ClassId, ClassName, TeacherId) " +
-                "VALUES (NEWID(), @tenantId, N'Mon', 1, N'Science', @classId, N'9-A', @teacherId)",
+                "INSERT INTO \"dbo\".\"TimetableSlots\" (\"Id\", \"TenantId\", \"Day\", \"Period\", \"Subject\", \"ClassId\", \"ClassName\", \"TeacherId\") " +
+                "VALUES (gen_random_uuid(), @tenantId, 'Mon', 1, 'Science', @classId, '9-A', @teacherId)",
                 new { tenantId, classId, teacherId });
         }
 

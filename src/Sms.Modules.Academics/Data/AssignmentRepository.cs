@@ -14,12 +14,12 @@ public sealed class AssignmentRepository(IDbConnectionFactory factory) : BaseRep
     {
         var d = today.Date;
         var rows = await QueryInlineAsync<Row>(@"
-SELECT a.Id, a.TenantId, a.Title, a.ClassId, a.ClassName, a.Subject, a.DueDate,
-  (SELECT COUNT(*) FROM dbo.Homework h WHERE h.AssignmentId = a.Id AND h.Status IN ('done','submitted')) AS SubmissionsCount,
-  ISNULL((SELECT COUNT(*) FROM dbo.Students s JOIN dbo.Classes c
-          ON c.Id = a.ClassId AND s.Grade = c.Grade AND s.Section = c.Section), 0) AS TotalStudents,
-  a.Status AS RawStatus, a.Description, a.ImageUri, a.Period
-FROM dbo.Assignments a ORDER BY a.DueDate", null, ct);
+SELECT a.""Id"", a.""TenantId"", a.""Title"", a.""ClassId"", a.""ClassName"", a.""Subject"", a.""DueDate"",
+  CAST((SELECT COUNT(*) FROM ""dbo"".""Homework"" h WHERE h.""AssignmentId"" = a.""Id"" AND h.""Status"" IN ('done','submitted')) AS int) AS ""SubmissionsCount"",
+  CAST(COALESCE((SELECT COUNT(*) FROM ""dbo"".""Students"" s JOIN ""dbo"".""Classes"" c
+          ON c.""Id"" = a.""ClassId"" AND s.""Grade"" = c.""Grade"" AND s.""Section"" = c.""Section""), 0) AS int) AS ""TotalStudents"",
+  a.""Status"" AS ""RawStatus"", a.""Description"", a.""ImageUri"", a.""Period""
+FROM ""dbo"".""Assignments"" a ORDER BY a.""DueDate""", null, ct);
 
         return rows.Select(r => new AssignmentResponse(
             r.Id, r.TenantId, r.Title, r.ClassId, r.ClassName, r.Subject, r.DueDate,

@@ -33,11 +33,11 @@ public class ClassStudentCountLiveTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, Grade, Section, StudentCount) VALUES (@classId, @tenantId, 'C1', '5', 'A', 0)",
+                "INSERT INTO \"dbo\".\"Classes\" (\"Id\", \"TenantId\", \"Name\", \"Grade\", \"Section\", \"StudentCount\") VALUES (@classId, @tenantId, 'C1', '5', 'A', 0)",
                 new { classId, tenantId });
             for (int i = 0; i < 3; i++)
                 await conn.ExecuteAsync(
-                    "INSERT dbo.Students (TenantId, AdmissionNo, Name, Grade, Section, Status) VALUES (@tenantId, @adm, @name, '5', 'A', 'active')",
+                    "INSERT INTO \"dbo\".\"Students\" (\"TenantId\", \"AdmissionNo\", \"Name\", \"Grade\", \"Section\", \"Status\") VALUES (@tenantId, @adm, @name, '5', 'A', 'active')",
                     new { tenantId, adm = $"A{i}", name = $"Student {i}" });
         }
 

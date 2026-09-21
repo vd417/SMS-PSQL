@@ -36,24 +36,24 @@ public class TimetableTeacherFilterTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId)", new { teacherUserId, tenantId });
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId)", new { teacherUserId, tenantId });
             var teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, 'T1', @teacherUserId)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'T1', @teacherUserId)",
                 new { teacherId, tenantId, teacherUserId });
             var myClassId = Guid.NewGuid();
             var otherClassId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId) VALUES (@myClassId, @tenantId, 'MyClass', 0, @teacherId)",
+                "INSERT INTO \"dbo\".\"Classes\" (\"Id\", \"TenantId\", \"Name\", \"StudentCount\", \"ClassTeacherId\") VALUES (@myClassId, @tenantId, 'MyClass', 0, @teacherId)",
                 new { myClassId, tenantId, teacherId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId) VALUES (@otherClassId, @tenantId, 'OtherClass', 0, NULL)",
+                "INSERT INTO \"dbo\".\"Classes\" (\"Id\", \"TenantId\", \"Name\", \"StudentCount\", \"ClassTeacherId\") VALUES (@otherClassId, @tenantId, 'OtherClass', 0, NULL)",
                 new { otherClassId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TimetableSlots (TenantId, [Day], Period, ClassId, ClassName) VALUES (@tenantId, 'Mon', 1, @myClassId, 'MyClass')",
+                "INSERT INTO \"dbo\".\"TimetableSlots\" (\"TenantId\", \"Day\", \"Period\", \"ClassId\", \"ClassName\") VALUES (@tenantId, 'Mon', 1, @myClassId, 'MyClass')",
                 new { tenantId, myClassId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TimetableSlots (TenantId, [Day], Period, ClassId, ClassName) VALUES (@tenantId, 'Mon', 2, @otherClassId, 'OtherClass')",
+                "INSERT INTO \"dbo\".\"TimetableSlots\" (\"TenantId\", \"Day\", \"Period\", \"ClassId\", \"ClassName\") VALUES (@tenantId, 'Mon', 2, @otherClassId, 'OtherClass')",
                 new { tenantId, otherClassId });
         }
 
@@ -82,10 +82,10 @@ public class TimetableTeacherFilterTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TimetableSlots (TenantId, [Day], Period, ClassName) VALUES (@tenantId, 'Tue', 1, 'X')",
+                "INSERT INTO \"dbo\".\"TimetableSlots\" (\"TenantId\", \"Day\", \"Period\", \"ClassName\") VALUES (@tenantId, 'Tue', 1, 'X')",
                 new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TimetableSlots (TenantId, [Day], Period, ClassName) VALUES (@tenantId, 'Tue', 2, 'Y')",
+                "INSERT INTO \"dbo\".\"TimetableSlots\" (\"TenantId\", \"Day\", \"Period\", \"ClassName\") VALUES (@tenantId, 'Tue', 2, 'Y')",
                 new { tenantId });
         }
 
@@ -112,10 +112,10 @@ public class TimetableTeacherFilterTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TimetableSlots (TenantId, [Day], Period, Subject, ClassName) VALUES (@tenantId, 'Mon', 1, 'Math', 'IV-B')",
+                "INSERT INTO \"dbo\".\"TimetableSlots\" (\"TenantId\", \"Day\", \"Period\", \"Subject\", \"ClassName\") VALUES (@tenantId, 'Mon', 1, 'Math', 'IV-B')",
                 new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TimetableSlots (TenantId, [Day], Period, Subject, ClassName) VALUES (@tenantId, 'Tue', 2, 'Hindi', 'V-A')",
+                "INSERT INTO \"dbo\".\"TimetableSlots\" (\"TenantId\", \"Day\", \"Period\", \"Subject\", \"ClassName\") VALUES (@tenantId, 'Tue', 2, 'Hindi', 'V-A')",
                 new { tenantId });
         }
 

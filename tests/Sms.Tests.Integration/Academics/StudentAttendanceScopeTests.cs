@@ -68,7 +68,7 @@ public class StudentAttendanceScopeTests(PostgresFixture fx)
                 "SELECT set_config('app.tenant_id', @tenantId::text, false)",
                 new { tenantId = seed.TenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, StudentId, IsPlatform, Status) VALUES (@id, @tenantId, NULL, 0, N'active');",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"StudentId\", \"IsPlatform\", \"Status\") VALUES (@id, @tenantId, NULL, false, 'active');",
                 new { id = unlinkedParent, tenantId = seed.TenantId });
         }
 
@@ -140,16 +140,15 @@ public class StudentAttendanceScopeTests(PostgresFixture fx)
             "SELECT set_config('app.tenant_id', @tenantId::text, false)",
             new { tenantId });
         await conn.ExecuteAsync(@"
-INSERT dbo.Users (Id, TenantId, StudentId, IsPlatform, Status)
-VALUES (@userId, @tenantId, @admissionNo, 0, N'active');
-INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status) VALUES
-    (@linkedStudentId, @tenantId, @admissionNo, N'Linked Student', N'active'),
-    (@otherStudentId, @tenantId, N'SCOPE/STU/0002', N'Other Student', N'active');
-INSERT dbo.AttendanceRecords (Id, TenantId, ClassId, StudentId, [Date], Status)
-VALUES (NEWID(), @tenantId, @classId, @linkedStudentId, '2026-08-12', N'present');
-IF OBJECT_ID(N'dbo.ParentStudentLinks', N'U') IS NOT NULL
-    INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId)
-    VALUES (@userId, @linkedStudentId, @tenantId);",
+INSERT INTO ""dbo"".""Users"" (""Id"", ""TenantId"", ""StudentId"", ""IsPlatform"", ""Status"")
+VALUES (@userId, @tenantId, @admissionNo, false, 'active');
+INSERT INTO ""dbo"".""Students"" (""Id"", ""TenantId"", ""AdmissionNo"", ""Name"", ""Status"") VALUES
+    (@linkedStudentId, @tenantId, @admissionNo, 'Linked Student', 'active'),
+    (@otherStudentId, @tenantId, 'SCOPE/STU/0002', 'Other Student', 'active');
+INSERT INTO ""dbo"".""AttendanceRecords"" (""Id"", ""TenantId"", ""ClassId"", ""StudentId"", ""Date"", ""Status"")
+VALUES (gen_random_uuid(), @tenantId, @classId, @linkedStudentId, '2026-08-12', 'present');
+INSERT INTO ""dbo"".""ParentStudentLinks"" (""ParentUserId"", ""StudentId"", ""TenantId"")
+VALUES (@userId, @linkedStudentId, @tenantId);",
             new
             {
                 tenantId,
