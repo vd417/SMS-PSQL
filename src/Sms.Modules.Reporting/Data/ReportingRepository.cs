@@ -12,14 +12,14 @@ public sealed class ReportingRepository(IDbConnectionFactory factory, CheckInRep
     {
         var row = await QueryInlineAsync<DashboardStatsResponse>(@"
 SELECT
-  (SELECT COUNT(*) FROM dbo.Students)                                            AS TotalStudents,
-  (SELECT COUNT(*) FROM dbo.Classes)                                             AS TotalClasses,
-  (SELECT COUNT(*) FROM dbo.AttendanceRecords
-     WHERE [Date] = @today AND Status IN (N'present', N'late'))                   AS AttendanceToday,
-  (SELECT COUNT(*) FROM dbo.Homework
-     WHERE Status = 'todo' AND (DueDate IS NULL OR DueDate >= @today))           AS PendingAssignments,
-  (SELECT COUNT(*) FROM dbo.ExamPapers
-     WHERE Status = 'upcoming' AND ([Date] IS NULL OR [Date] >= @today))         AS UpcomingExams",
+  CAST((SELECT COUNT(*) FROM ""dbo"".""Students"") AS int)                                          AS ""TotalStudents"",
+  CAST((SELECT COUNT(*) FROM ""dbo"".""Classes"") AS int)                                            AS ""TotalClasses"",
+  CAST((SELECT COUNT(*) FROM ""dbo"".""AttendanceRecords""
+     WHERE ""Date"" = @today::date AND ""Status"" IN ('present', 'late')) AS int)                    AS ""AttendanceToday"",
+  CAST((SELECT COUNT(*) FROM ""dbo"".""Homework""
+     WHERE ""Status"" = 'todo' AND (""DueDate"" IS NULL OR ""DueDate"" >= @today::date)) AS int)      AS ""PendingAssignments"",
+  CAST((SELECT COUNT(*) FROM ""dbo"".""ExamPapers""
+     WHERE ""Status"" = 'upcoming' AND (""Date"" IS NULL OR ""Date"" >= @today::date)) AS int)        AS ""UpcomingExams""",
             new { today = today.Date }, ct);
         return row[0];
     }
@@ -29,20 +29,20 @@ SELECT
         await using var conn = await Factory.OpenAsync(ct);
         using var multi = await conn.QueryMultipleAsync(new CommandDefinition(@"
 SELECT
-  (SELECT COUNT(*) FROM dbo.Students) AS StudentCount,
-  (SELECT COUNT(*) FROM dbo.Teachers) AS TeacherCount,
-  (SELECT COUNT(*) FROM dbo.Staff) AS StaffCount;
+  CAST((SELECT COUNT(*) FROM ""dbo"".""Students"") AS int) AS ""StudentCount"",
+  CAST((SELECT COUNT(*) FROM ""dbo"".""Teachers"") AS int) AS ""TeacherCount"",
+  CAST((SELECT COUNT(*) FROM ""dbo"".""Staff"") AS int) AS ""StaffCount"";
 
 SELECT
-  SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(Gender, N'')))) = N'M' THEN 1 ELSE 0 END) AS Boys,
-  SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(Gender, N'')))) = N'F' THEN 1 ELSE 0 END) AS Girls,
-  SUM(CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(Gender, N'')))) NOT IN (N'M', N'F') THEN 1 ELSE 0 END) AS Unspecified
-FROM dbo.Students;
+  CAST(SUM(CASE WHEN UPPER(TRIM(COALESCE(""Gender"", ''))) = 'M' THEN 1 ELSE 0 END) AS int) AS ""Boys"",
+  CAST(SUM(CASE WHEN UPPER(TRIM(COALESCE(""Gender"", ''))) = 'F' THEN 1 ELSE 0 END) AS int) AS ""Girls"",
+  CAST(SUM(CASE WHEN UPPER(TRIM(COALESCE(""Gender"", ''))) NOT IN ('M', 'F') THEN 1 ELSE 0 END) AS int) AS ""Unspecified""
+FROM ""dbo"".""Students"";
 
-SELECT LTRIM(RTRIM(Grade)) AS Grade, COUNT(*) AS Count
-FROM dbo.Students
-WHERE Grade IS NOT NULL AND LTRIM(RTRIM(Grade)) <> N'' AND LTRIM(RTRIM(Grade)) NOT IN (N'—', N'-')
-GROUP BY LTRIM(RTRIM(Grade));
+SELECT TRIM(""Grade"") AS ""Grade"", CAST(COUNT(*) AS int) AS ""Count""
+FROM ""dbo"".""Students""
+WHERE ""Grade"" IS NOT NULL AND TRIM(""Grade"") <> '' AND TRIM(""Grade"") NOT IN ('—', '-')
+GROUP BY TRIM(""Grade"");
 ", cancellationToken: ct));
         var counts = await multi.ReadSingleAsync<(int StudentCount, int TeacherCount, int StaffCount)>();
         var gender = await multi.ReadSingleAsync<(int Boys, int Girls, int Unspecified)>();
@@ -149,35 +149,35 @@ GROUP BY LTRIM(RTRIM(Grade));
         DateTime startUtc, DateTime endUtc, CancellationToken ct)
     {
         var punches = await QueryInlineAsync<PunchRow>(@"
-SELECT UserId, Kind, At, Verified
-FROM dbo.CheckIns
-WHERE At >= @startUtc AND At < @endUtc
-  AND LOWER(LTRIM(RTRIM(Kind))) IN ('in', 'out')
-ORDER BY At",
+SELECT ""UserId"", ""Kind"", ""At"", ""Verified""
+FROM ""dbo"".""CheckIns""
+WHERE ""At"" >= @startUtc AND ""At"" < @endUtc
+  AND LOWER(TRIM(""Kind"")) IN ('in', 'out')
+ORDER BY ""At""",
             new { startUtc, endUtc }, ct);
         var punchIndex = BuildPunchIndex(punches);
         var users = await QueryInlineAsync<UserRow>(
-            "SELECT Id, Email, Phone, Name FROM dbo.Users", null, ct);
+            "SELECT \"Id\", \"Email\", \"Phone\", \"Name\" FROM \"dbo\".\"Users\"", null, ct);
 
         var teacherRows = await QueryInlineAsync<RosterPersonRow>(@"
-SELECT t.Id AS PersonId, t.Name, t.Email,
-       COALESCE(NULLIF(LTRIM(RTRIM(t.Phone)), ''), NULLIF(LTRIM(RTRIM(u.Phone)), '')) AS Phone,
-       t.SubjectsCsv, t.Designation,
-       CAST(NULL AS nvarchar(64)) AS Role, t.UserId
-FROM dbo.Teachers t
-LEFT JOIN dbo.Users u ON u.Id = t.UserId
-WHERE t.Status = 'active'
-ORDER BY t.Name", null, ct);
+SELECT t.""Id"" AS ""PersonId"", t.""Name"", t.""Email"",
+       COALESCE(NULLIF(TRIM(t.""Phone""), ''), NULLIF(TRIM(u.""Phone""), '')) AS ""Phone"",
+       t.""SubjectsCsv"", t.""Designation"",
+       CAST(NULL AS text) AS ""Role"", t.""UserId""
+FROM ""dbo"".""Teachers"" t
+LEFT JOIN ""dbo"".""Users"" u ON u.""Id"" = t.""UserId""
+WHERE t.""Status"" = 'active'
+ORDER BY t.""Name""", null, ct);
 
         var supportRows = await QueryInlineAsync<RosterPersonRow>(@"
-SELECT s.Id AS PersonId, s.Name, s.Email,
-       COALESCE(NULLIF(LTRIM(RTRIM(s.Phone)), ''), NULLIF(LTRIM(RTRIM(u.Phone)), '')) AS Phone,
-       CAST(NULL AS nvarchar(200)) AS SubjectsCsv, CAST(NULL AS nvarchar(64)) AS Designation,
-       s.Role, s.UserId
-FROM dbo.Staff s
-LEFT JOIN dbo.Users u ON u.Id = s.UserId
-WHERE s.Status = 'active'
-ORDER BY s.Name", null, ct);
+SELECT s.""Id"" AS ""PersonId"", s.""Name"", s.""Email"",
+       COALESCE(NULLIF(TRIM(s.""Phone""), ''), NULLIF(TRIM(u.""Phone""), '')) AS ""Phone"",
+       CAST(NULL AS text) AS ""SubjectsCsv"", CAST(NULL AS text) AS ""Designation"",
+       s.""Role"", s.""UserId""
+FROM ""dbo"".""Staff"" s
+LEFT JOIN ""dbo"".""Users"" u ON u.""Id"" = s.""UserId""
+WHERE s.""Status"" = 'active'
+ORDER BY s.""Name""", null, ct);
 
         static PrincipalStaffEntry ToEntry(
             RosterPersonRow r, IReadOnlyList<UserRow> users, Dictionary<Guid, DayPunches> index, bool isTeacher)
@@ -212,10 +212,10 @@ ORDER BY s.Name", null, ct);
         var toExclusive = d.AddDays(1);
         var rows = await QueryInlineAsync<StudentTotalsRow>(@"
 SELECT
-  ISNULL((SELECT COUNT(*) FROM dbo.PeriodAttendanceRecords
-          WHERE [Date] >= @from AND [Date] < @toExclusive AND Status IN (N'present', N'late')), 0) AS PresentTotal,
-  ISNULL((SELECT COUNT(*) FROM dbo.PeriodAttendanceRecords
-          WHERE [Date] >= @from AND [Date] < @toExclusive), 0) AS StudentTotal",
+  CAST(COALESCE((SELECT COUNT(*) FROM ""dbo"".""PeriodAttendanceRecords""
+          WHERE ""Date"" >= @from::date AND ""Date"" < @toExclusive::date AND ""Status"" IN ('present', 'late')), 0) AS int) AS ""PresentTotal"",
+  CAST(COALESCE((SELECT COUNT(*) FROM ""dbo"".""PeriodAttendanceRecords""
+          WHERE ""Date"" >= @from::date AND ""Date"" < @toExclusive::date), 0) AS int) AS ""StudentTotal""",
             new { from, toExclusive }, ct);
 
         var row = rows.Count > 0 ? rows[0] : new StudentTotalsRow(0, 0);
@@ -239,7 +239,7 @@ SELECT
             : 0m;
 
         var pendingRows = await QueryInlineAsync<int>(
-            "SELECT COUNT(*) FROM dbo.LeaveRequests WHERE Status = 'pending'", null, ct);
+            "SELECT CAST(COUNT(*) AS int) FROM \"dbo\".\"LeaveRequests\" WHERE \"Status\" = 'pending'", null, ct);
         var pendingApprovals = pendingRows.Count > 0 ? pendingRows[0] : 0;
 
         var kpis = new PrincipalKpis(studentsPct, staffPresent, staff.Count, pendingApprovals);
@@ -252,23 +252,23 @@ SELECT
         var d = day.ToDateTime(TimeOnly.MinValue);
         var (startUtc, endUtc) = LocalDayBoundsUtc(day, utcOffset);
         var classes = await QueryInlineAsync<PrincipalClassAttendance>(@"
-SELECT c.Id AS ClassId, c.Name AS ClassName,
-       ISNULL(a.Present, 0) AS Present,
-       ISNULL(a.Marked, 0) AS Total,
+SELECT c.""Id"" AS ""ClassId"", c.""Name"" AS ""ClassName"",
+       CAST(COALESCE(a.""Present"", 0) AS int) AS ""Present"",
+       CAST(COALESCE(a.""Marked"", 0) AS int) AS ""Total"",
        CAST(CASE
-         WHEN ISNULL(a.Marked, 0) > 0
-         THEN ROUND(100.0 * ISNULL(a.Present, 0) / a.Marked, 1)
-         ELSE 0 END AS decimal(5,1)) AS Pct,
-       ISNULL(a.Marked, 0) AS Marked
-FROM dbo.Classes c
-OUTER APPLY (
+         WHEN COALESCE(a.""Marked"", 0) > 0
+         THEN ROUND(100.0 * COALESCE(a.""Present"", 0) / a.""Marked"", 1)
+         ELSE 0 END AS decimal(5,1)) AS ""Pct"",
+       CAST(COALESCE(a.""Marked"", 0) AS int) AS ""Marked""
+FROM ""dbo"".""Classes"" c
+LEFT JOIN LATERAL (
   SELECT
-    SUM(CASE WHEN par.Status IN (N'present', N'late') THEN 1 ELSE 0 END) AS Present,
-    COUNT(*) AS Marked
-  FROM dbo.PeriodAttendanceRecords par
-  WHERE par.ClassId = c.Id AND par.[Date] >= @from AND par.[Date] < @toExclusive
-) a
-ORDER BY c.Name", new { from = d, toExclusive = d.AddDays(1) }, ct);
+    SUM(CASE WHEN par.""Status"" IN ('present', 'late') THEN 1 ELSE 0 END) AS ""Present"",
+    COUNT(*) AS ""Marked""
+  FROM ""dbo"".""PeriodAttendanceRecords"" par
+  WHERE par.""ClassId"" = c.""Id"" AND par.""Date"" >= @from::date AND par.""Date"" < @toExclusive::date
+) a ON true
+ORDER BY c.""Name""", new { from = d, toExclusive = d.AddDays(1) }, ct);
 
         var (presentTotal, studentTotal) = await ResolveStudentTotalsAsync(d, ct);
         decimal overall = studentTotal > 0
@@ -286,19 +286,19 @@ ORDER BY c.Name", new { from = d, toExclusive = d.AddDays(1) }, ct);
         Guid personId, int limit, TimeSpan utcOffset, CancellationToken ct = default)
     {
         var users = await QueryInlineAsync<UserRow>(
-            "SELECT Id, Email, Phone, Name FROM dbo.Users", null, ct);
+            "SELECT \"Id\", \"Email\", \"Phone\", \"Name\" FROM \"dbo\".\"Users\"", null, ct);
 
         var teacherRow = (await QueryInlineAsync<RosterPersonRow>(@"
-SELECT t.Id AS PersonId, t.Name, t.Email,
-       CAST(NULL AS nvarchar(50)) AS Phone, CAST(NULL AS nvarchar(200)) AS SubjectsCsv,
-       CAST(NULL AS nvarchar(64)) AS Designation, CAST(NULL AS nvarchar(64)) AS Role, t.UserId
-FROM dbo.Teachers t WHERE t.Id = @personId", new { personId }, ct)).FirstOrDefault();
+SELECT t.""Id"" AS ""PersonId"", t.""Name"", t.""Email"",
+       CAST(NULL AS text) AS ""Phone"", CAST(NULL AS text) AS ""SubjectsCsv"",
+       CAST(NULL AS text) AS ""Designation"", CAST(NULL AS text) AS ""Role"", t.""UserId""
+FROM ""dbo"".""Teachers"" t WHERE t.""Id"" = @personId", new { personId }, ct)).FirstOrDefault();
 
         var person = teacherRow ?? (await QueryInlineAsync<RosterPersonRow>(@"
-SELECT s.Id AS PersonId, s.Name, s.Email,
-       CAST(NULL AS nvarchar(50)) AS Phone, CAST(NULL AS nvarchar(200)) AS SubjectsCsv,
-       CAST(NULL AS nvarchar(64)) AS Designation, CAST(NULL AS nvarchar(64)) AS Role, s.UserId
-FROM dbo.Staff s WHERE s.Id = @personId", new { personId }, ct)).FirstOrDefault();
+SELECT s.""Id"" AS ""PersonId"", s.""Name"", s.""Email"",
+       CAST(NULL AS text) AS ""Phone"", CAST(NULL AS text) AS ""SubjectsCsv"",
+       CAST(NULL AS text) AS ""Designation"", CAST(NULL AS text) AS ""Role"", s.""UserId""
+FROM ""dbo"".""Staff"" s WHERE s.""Id"" = @personId", new { personId }, ct)).FirstOrDefault();
 
         if (person is null) return Array.Empty<TeacherAttendanceDayResponse>();
 

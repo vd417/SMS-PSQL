@@ -21,8 +21,8 @@ public static class MetricsSnapshotWriter
 
             await using var conn = await factory.OpenAsync();
             await Dapper.SqlMapper.ExecuteScalarAsync<int>(conn, new Dapper.CommandDefinition(
-                "dbo.platformmetrics_upsertcurrentmonth",
-                commandType: System.Data.CommandType.StoredProcedure));
+                "SELECT * FROM dbo.platformmetrics_upsertcurrentmonth()",
+                commandType: System.Data.CommandType.Text));
             log.LogInformation("Platform metrics snapshot upserted for the current month.");
         }
         catch (Exception ex)

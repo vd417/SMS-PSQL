@@ -111,10 +111,10 @@ public class PrincipalAttendanceTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "UPDATE dbo.Classes SET StudentCount = 4 WHERE Id = @id AND TenantId = @tenantId",
+                "UPDATE \"dbo\".\"Classes\" SET \"StudentCount\" = 4 WHERE \"Id\" = @id AND \"TenantId\" = @tenantId",
                 new { id = classAId, tenantId });
             await conn.ExecuteAsync(
-                "UPDATE dbo.Classes SET StudentCount = 3 WHERE Id = @id AND TenantId = @tenantId",
+                "UPDATE \"dbo\".\"Classes\" SET \"StudentCount\" = 3 WHERE \"Id\" = @id AND \"TenantId\" = @tenantId",
                 new { id = classBId, tenantId });
         });
 
@@ -141,10 +141,10 @@ public class PrincipalAttendanceTests(PostgresFixture fx)
             })
             {
                 await conn.ExecuteAsync(@"
-INSERT dbo.PeriodAttendanceRecords
-  (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status, CreatedAt, UpdatedAt)
+INSERT INTO ""dbo"".""PeriodAttendanceRecords""
+  (""Id"", ""TenantId"", ""ClassId"", ""StudentId"", ""Date"", ""Period"", ""Subject"", ""Status"", ""CreatedAt"", ""UpdatedAt"")
 VALUES
-  (NEWID(), @tenantId, @classId, @studentId, @date, 1, N'Math', @status, SYSUTCDATETIME(), SYSUTCDATETIME())",
+  (gen_random_uuid(), @tenantId, @classId, @studentId, @date, 1, 'Math', @status, now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC')",
                     new { tenantId, classId = classAId, studentId = row.StudentId, date = todayDt, status = row.Status });
             }
         });
@@ -157,24 +157,24 @@ VALUES
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Teachers (TenantId, Name, Email, SubjectsCsv, Phone, Designation, Status) " +
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"Email\", \"SubjectsCsv\", \"Phone\", \"Designation\", \"Status\") " +
                 "VALUES (@TenantId, @Name, @Email, @SubjectsCsv, @Phone, @Designation, @Status)",
                 new { TenantId = tenantId, Name = "PA Teacher One", Email = teacher1Email,
                       SubjectsCsv = "Physics", Phone = "9000000001",
                       Designation = "Teacher", Status = "active" });
 
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Users (Id, TenantId, Email, Status) VALUES (@Id, @TenantId, @Email, @Status)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Status\") VALUES (@Id, @TenantId, @Email, @Status)",
                 new { Id = userId, TenantId = tenantId, Email = teacher1Email, Status = "active" });
 
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.CheckIns (TenantId, UserId, Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified) " +
+                "INSERT INTO \"dbo\".\"CheckIns\" (\"TenantId\", \"UserId\", \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\") " +
                 "VALUES (@TenantId, @UserId, @Kind, @At, 0, 0, 0, 0, @Verified)",
                 new { TenantId = tenantId, UserId = userId, Kind = "in",
                       At = DateTime.UtcNow.Date.AddHours(8), Verified = true });
 
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.CheckIns (TenantId, UserId, Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified) " +
+                "INSERT INTO \"dbo\".\"CheckIns\" (\"TenantId\", \"UserId\", \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\") " +
                 "VALUES (@TenantId, @UserId, @Kind, @At, 0, 0, 0, 0, @Verified)",
                 new { TenantId = tenantId, UserId = userId, Kind = "out",
                       At = DateTime.UtcNow.Date.AddHours(16), Verified = true });
@@ -243,18 +243,18 @@ VALUES
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Teachers (TenantId, Name, Email, SubjectsCsv, Phone, Designation, Status) " +
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"Email\", \"SubjectsCsv\", \"Phone\", \"Designation\", \"Status\") " +
                 "VALUES (@TenantId, @Name, @Email, @SubjectsCsv, @Phone, @Designation, @Status)",
                 new { TenantId = tenantId, Name = "Silver Teacher", Email = $"silver-{tenantId:N}@x.com",
                       SubjectsCsv = "Maths", Phone = "9000000099",
                       Designation = "Teacher", Status = "active" });
 
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Users (Id, TenantId, Email, Status) VALUES (@Id, @TenantId, @Email, @Status)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Status\") VALUES (@Id, @TenantId, @Email, @Status)",
                 new { Id = userId, TenantId = tenantId, Email = $"silver-{tenantId:N}@x.com", Status = "active" });
 
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.CheckIns (TenantId, UserId, Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified) " +
+                "INSERT INTO \"dbo\".\"CheckIns\" (\"TenantId\", \"UserId\", \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\") " +
                 "VALUES (@TenantId, @UserId, @Kind, @At, 0, 0, 0, 0, @Verified)",
                 new { TenantId = tenantId, UserId = userId, Kind = "in",
                       At = DateTime.UtcNow, Verified = true });
@@ -281,19 +281,19 @@ VALUES
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Users (Id, TenantId, Email, Name, Status) VALUES (@Id, @TenantId, @Email, @Name, @Status)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Name\", \"Status\") VALUES (@Id, @TenantId, @Email, @Name, @Status)",
                 new { Id = userId, TenantId = tenantId, Email = $"name-link-{tenantId:N}@x.com",
                       Name = "Name Link Teacher", Status = "active" });
 
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Teachers (TenantId, Name, SubjectsCsv, Phone, Designation, Status) " +
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"SubjectsCsv\", \"Phone\", \"Designation\", \"Status\") " +
                 "VALUES (@TenantId, @Name, @SubjectsCsv, @Phone, @Designation, @Status)",
                 new { TenantId = tenantId, Name = "Name Link Teacher",
                       SubjectsCsv = "Maths", Phone = "9000000088",
                       Designation = "Teacher", Status = "active" });
 
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.CheckIns (TenantId, UserId, Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified) " +
+                "INSERT INTO \"dbo\".\"CheckIns\" (\"TenantId\", \"UserId\", \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\") " +
                 "VALUES (@TenantId, @UserId, @Kind, @At, 0, 0, 0, 0, @Verified)",
                 new { TenantId = tenantId, UserId = userId, Kind = "in",
                       At = DateTime.UtcNow, Verified = true });

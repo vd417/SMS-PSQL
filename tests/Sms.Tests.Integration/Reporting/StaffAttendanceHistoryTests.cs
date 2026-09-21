@@ -66,15 +66,14 @@ public class StaffAttendanceHistoryTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             teacherId = await conn.ExecuteScalarAsync<Guid>(
-                "INSERT INTO dbo.Teachers (TenantId, Name, Email, SubjectsCsv, Phone, Designation, Status) " +
-                "OUTPUT inserted.Id " +
-                "VALUES (@TenantId, @Name, @Email, @SubjectsCsv, @Phone, @Designation, @Status)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"Email\", \"SubjectsCsv\", \"Phone\", \"Designation\", \"Status\") " +
+                "VALUES (@TenantId, @Name, @Email, @SubjectsCsv, @Phone, @Designation, @Status) RETURNING \"Id\"",
                 new { TenantId = tenantId, Name = "History Teacher", Email = teacherEmail,
                       SubjectsCsv = "Science", Phone = "9000000077",
                       Designation = "Teacher", Status = "active" });
 
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Users (Id, TenantId, Email, Status) VALUES (@Id, @TenantId, @Email, @Status)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Status\") VALUES (@Id, @TenantId, @Email, @Status)",
                 new { Id = userId, TenantId = tenantId, Email = teacherEmail, Status = "active" });
 
             var yesterday = DateTime.UtcNow.Date.AddDays(-1);
@@ -87,7 +86,7 @@ public class StaffAttendanceHistoryTests(PostgresFixture fx)
             })
             {
                 await conn.ExecuteAsync(
-                    "INSERT INTO dbo.CheckIns (TenantId, UserId, Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified) " +
+                    "INSERT INTO \"dbo\".\"CheckIns\" (\"TenantId\", \"UserId\", \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\") " +
                     "VALUES (@TenantId, @UserId, @Kind, @At, 0, 0, 0, 0, @Verified)",
                     new { TenantId = tenantId, UserId = userId, Kind = kind, At = day.AddHours(hour), Verified = true });
             }

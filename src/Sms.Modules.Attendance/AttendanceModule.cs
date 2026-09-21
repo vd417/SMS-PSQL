@@ -72,13 +72,13 @@ public sealed class CheckInRepository(IDbConnectionFactory factory) : BaseReposi
     public async Task<SchoolLocationResponse?> GetSchoolLocationAsync(Guid tenantId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<SchoolLocationResponse>(
-            @"SELECT COALESCE(sl.Lat, t.Lat, 0) AS Lat,
-                     COALESCE(sl.Lng, t.Lng, 0) AS Lng,
-                     COALESCE(sl.RadiusMeters, t.GeofenceRadiusMeters, 50) AS RadiusMeters,
-                     COALESCE(sl.Name, t.Name) AS Name
-              FROM dbo.Tenants t
-              LEFT JOIN dbo.SchoolLocations sl ON sl.TenantId = t.Id
-              WHERE t.Id = @tenantId",
+            @"SELECT COALESCE(sl.""Lat"", t.""Lat"", 0) AS ""Lat"",
+                     COALESCE(sl.""Lng"", t.""Lng"", 0) AS ""Lng"",
+                     COALESCE(sl.""RadiusMeters"", t.""GeofenceRadiusMeters"", 50) AS ""RadiusMeters"",
+                     COALESCE(sl.""Name"", t.""Name"") AS ""Name""
+              FROM ""dbo"".""Tenants"" t
+              LEFT JOIN ""dbo"".""SchoolLocations"" sl ON sl.""TenantId"" = t.""Id""
+              WHERE t.""Id"" = @tenantId",
             new { tenantId }, ct);
         var loc = rows.FirstOrDefault();
         if (loc is null || (loc.Lat == 0 && loc.Lng == 0))

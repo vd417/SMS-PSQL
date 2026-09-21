@@ -97,7 +97,7 @@ public class PrincipalOverviewTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "UPDATE dbo.Classes SET StudentCount = 4 WHERE Id = @classId AND TenantId = @tenantId",
+                "UPDATE \"dbo\".\"Classes\" SET \"StudentCount\" = 4 WHERE \"Id\" = @classId AND \"TenantId\" = @tenantId",
                 new { classId, tenantId });
         });
 
@@ -123,10 +123,10 @@ public class PrincipalOverviewTests(PostgresFixture fx)
             })
             {
                 await conn.ExecuteAsync(@"
-INSERT dbo.PeriodAttendanceRecords
-  (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status, CreatedAt, UpdatedAt)
+INSERT INTO ""dbo"".""PeriodAttendanceRecords""
+  (""Id"", ""TenantId"", ""ClassId"", ""StudentId"", ""Date"", ""Period"", ""Subject"", ""Status"", ""CreatedAt"", ""UpdatedAt"")
 VALUES
-  (NEWID(), @tenantId, @classId, @studentId, @date, 1, N'Math', @status, SYSUTCDATETIME(), SYSUTCDATETIME())",
+  (gen_random_uuid(), @tenantId, @classId, @studentId, @date, 1, 'Math', @status, now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC')",
                     new { tenantId, classId, studentId = row.StudentId, date = todayDt, status = row.Status });
             }
         });
@@ -142,7 +142,7 @@ VALUES
         {
             // Teacher 1 - active, with email matching a Users row
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Teachers (TenantId, Name, Email, SubjectsCsv, Phone, Designation, Status) " +
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"Email\", \"SubjectsCsv\", \"Phone\", \"Designation\", \"Status\") " +
                 "VALUES (@TenantId, @Name, @Email, @SubjectsCsv, @Phone, @Designation, @Status)",
                 new { TenantId = tenantId, Name = "Alice Teacher", Email = teacher1Email,
                       SubjectsCsv = "Maths,Science", Phone = "9876543210",
@@ -150,7 +150,7 @@ VALUES
 
             // Teacher 2 - active, no matching user or check-in
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Teachers (TenantId, Name, Email, SubjectsCsv, Phone, Designation, Status) " +
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"Email\", \"SubjectsCsv\", \"Phone\", \"Designation\", \"Status\") " +
                 "VALUES (@TenantId, @Name, @Email, @SubjectsCsv, @Phone, @Designation, @Status)",
                 new { TenantId = tenantId, Name = "Bob Teacher", Email = teacher2Email,
                       SubjectsCsv = "English", Phone = "9876543211",
@@ -158,19 +158,19 @@ VALUES
 
             // Users row matching teacher 1's email (no RLS on Users)
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Users (Id, TenantId, Email, Status) VALUES (@Id, @TenantId, @Email, @Status)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Status\") VALUES (@Id, @TenantId, @Email, @Status)",
                 new { Id = userId, TenantId = tenantId, Email = teacher1Email, Status = "active" });
 
             // CheckIns row for that user - verified 'in' today
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.CheckIns (TenantId, UserId, Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified) " +
+                "INSERT INTO \"dbo\".\"CheckIns\" (\"TenantId\", \"UserId\", \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\") " +
                 "VALUES (@TenantId, @UserId, @Kind, @At, 0, 0, 0, 0, @Verified)",
                 new { TenantId = tenantId, UserId = userId, Kind = "in",
                       At = DateTime.UtcNow, Verified = true });
 
             // LeaveRequest with Status='pending'
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.LeaveRequests (TenantId, RequesterId, Type, Status) " +
+                "INSERT INTO \"dbo\".\"LeaveRequests\" (\"TenantId\", \"RequesterId\", \"Type\", \"Status\") " +
                 "VALUES (@TenantId, @RequesterId, @Type, @Status)",
                 new { TenantId = tenantId, RequesterId = userId, Type = "casual", Status = "pending" });
         });

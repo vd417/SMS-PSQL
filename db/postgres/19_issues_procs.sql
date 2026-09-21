@@ -65,3 +65,24 @@ BEGIN
     SELECT "Id", "IssueId", "AuthorUserId", "Note", "CreatedAt" FROM "dbo"."IssueNotes" WHERE "Id" = v_id;
 END;
 $$;
+
+-- CheckIn_Insert: Attendance module's own proc (name doesn't match this file's module, but this
+-- was the smallest/cheapest place to add it -- see the established "CSV family name != calling
+-- module" bug class). Called via ExecuteProcAsync, so RETURNS int + GET DIAGNOSTICS, never
+-- RETURNS TABLE.
+CREATE OR REPLACE FUNCTION dbo.checkin_insert(
+    TenantId uuid, UserId uuid, Kind varchar(3), At timestamptz,
+    Lat double precision, Lng double precision, AccuracyMeters double precision,
+    DistanceMeters double precision, Verified boolean
+)
+RETURNS int
+LANGUAGE plpgsql
+AS $$
+DECLARE v_rows int;
+BEGIN
+    INSERT INTO "dbo"."CheckIns" ("Id", "TenantId", "UserId", "Kind", "At", "Lat", "Lng", "AccuracyMeters", "DistanceMeters", "Verified")
+    VALUES (gen_random_uuid(), TenantId, UserId, Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified);
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    RETURN v_rows;
+END;
+$$;
