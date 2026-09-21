@@ -41,7 +41,7 @@ public class TaskEndpointTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Name) VALUES (@userId, @tenantId, @name)",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@userId, @tenantId, @name)",
             new { userId, tenantId, name });
     }
 
@@ -49,7 +49,7 @@ public class TaskEndpointTests(PostgresFixture fx)
     {
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, @role)", new { userId, role });
+        await conn.ExecuteAsync("INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, @role)", new { userId, role });
     }
 
     /// Links a user to a dbo.Staff row with the given free-text designation (e.g. "Driver"),
@@ -61,7 +61,7 @@ public class TaskEndpointTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Staff (Id, TenantId, Name, Role, UserId) VALUES (NEWID(), @tenantId, @name, @role, @userId)",
+            "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\", \"Role\", \"UserId\") VALUES (gen_random_uuid(), @tenantId, @name, @role, @userId)",
             new { tenantId, name = $"Staff {designation}", role = designation, userId });
     }
 

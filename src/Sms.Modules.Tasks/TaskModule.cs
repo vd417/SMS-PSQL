@@ -86,17 +86,17 @@ public static class TaskCursor
 public sealed class TaskRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
     private const string TaskCols =
-        "t.Id, t.TenantId, t.Title, t.Detail, t.Category, t.AssignedToUserId, t.AssignedToRoleKey, " +
-        "t.Priority, t.Status, t.DueDate, t.Remarks, t.PhotoUrl, t.CreatedByUserId, t.CompletedByUserId, " +
-        "t.CreatedAt, t.CompletedAt, au.Name AS AssignedToUserName, cu.Name AS CreatedByUserName, " +
-        "xu.Name AS CompletedByUserName";
+        "t.\"Id\", t.\"TenantId\", t.\"Title\", t.\"Detail\", t.\"Category\", t.\"AssignedToUserId\", t.\"AssignedToRoleKey\", " +
+        "t.\"Priority\", t.\"Status\", t.\"DueDate\", t.\"Remarks\", t.\"PhotoUrl\", t.\"CreatedByUserId\", t.\"CompletedByUserId\", " +
+        "t.\"CreatedAt\", t.\"CompletedAt\", au.\"Name\" AS \"AssignedToUserName\", cu.\"Name\" AS \"CreatedByUserName\", " +
+        "xu.\"Name\" AS \"CompletedByUserName\"";
 
     private const string TaskFromJoin =
         """
-        FROM dbo.Tasks t
-        LEFT JOIN dbo.Users au ON au.Id = t.AssignedToUserId
-        LEFT JOIN dbo.Users cu ON cu.Id = t.CreatedByUserId
-        LEFT JOIN dbo.Users xu ON xu.Id = t.CompletedByUserId
+        FROM "dbo"."Tasks" t
+        LEFT JOIN "dbo"."Users" au ON au."Id" = t."AssignedToUserId"
+        LEFT JOIN "dbo"."Users" cu ON cu."Id" = t."CreatedByUserId"
+        LEFT JOIN "dbo"."Users" xu ON xu."Id" = t."CompletedByUserId"
         """;
 
     /// Page size for ListAllAsync: one row over this is fetched so the caller can tell whether
@@ -109,9 +109,9 @@ public sealed class TaskRepository(IDbConnectionFactory factory) : BaseRepositor
         Guid userId, string? roleKey, CancellationToken ct = default) =>
         QueryInlineAsync<TaskResponse>(
             $"SELECT {TaskCols} {TaskFromJoin} " +
-            "WHERE t.AssignedToUserId = @userId " +
-            "   OR (t.AssignedToRoleKey = @roleKey AND t.AssignedToUserId IS NULL AND @roleKey IS NOT NULL) " +
-            "ORDER BY t.CreatedAt DESC",
+            "WHERE t.\"AssignedToUserId\" = @userId " +
+            "   OR (t.\"AssignedToRoleKey\" = @roleKey::text AND t.\"AssignedToUserId\" IS NULL AND @roleKey::text IS NOT NULL) " +
+            "ORDER BY t.\"CreatedAt\" DESC",
             new { userId, roleKey }, ct);
 
     /// Manager tenant-wide list, with optional filters and real keyset pagination on
@@ -125,17 +125,18 @@ public sealed class TaskRepository(IDbConnectionFactory factory) : BaseRepositor
         var cursor = TaskCursor.Decode(filter.Cursor);
         var rows = await QueryInlineAsync<TaskResponse>(
             $"""
-            SELECT TOP (@limit) {TaskCols}
+            SELECT {TaskCols}
             {TaskFromJoin}
-            WHERE (@status IS NULL OR t.Status = @status)
-              AND (@assignedToUserId IS NULL OR t.AssignedToUserId = @assignedToUserId)
-              AND (@assignedToRoleKey IS NULL OR t.AssignedToRoleKey = @assignedToRoleKey)
-              AND (@from IS NULL OR t.CreatedAt >= @from)
-              AND (@to IS NULL OR t.CreatedAt <= @to)
-              AND (@cursorCreatedAt IS NULL
-                   OR t.CreatedAt < @cursorCreatedAt
-                   OR (t.CreatedAt = @cursorCreatedAt AND t.Id < @cursorId))
-            ORDER BY t.CreatedAt DESC, t.Id DESC
+            WHERE (@status::text IS NULL OR t."Status" = @status::text)
+              AND (@assignedToUserId::uuid IS NULL OR t."AssignedToUserId" = @assignedToUserId::uuid)
+              AND (@assignedToRoleKey::text IS NULL OR t."AssignedToRoleKey" = @assignedToRoleKey::text)
+              AND (@from::timestamptz IS NULL OR t."CreatedAt" >= @from::timestamptz)
+              AND (@to::timestamptz IS NULL OR t."CreatedAt" <= @to::timestamptz)
+              AND (@cursorCreatedAt::timestamptz IS NULL
+                   OR t."CreatedAt" < @cursorCreatedAt::timestamptz
+                   OR (t."CreatedAt" = @cursorCreatedAt::timestamptz AND t."Id" < @cursorId::uuid))
+            ORDER BY t."CreatedAt" DESC, t."Id" DESC
+            LIMIT @limit
             """,
             new
             {
@@ -156,7 +157,7 @@ public sealed class TaskRepository(IDbConnectionFactory factory) : BaseRepositor
     }
 
     public async Task<TaskResponse?> GetAsync(Guid id, CancellationToken ct = default) =>
-        (await QueryInlineAsync<TaskResponse>($"SELECT {TaskCols} {TaskFromJoin} WHERE t.Id = @id", new { id }, ct))
+        (await QueryInlineAsync<TaskResponse>($"SELECT {TaskCols} {TaskFromJoin} WHERE t.\"Id\" = @id", new { id }, ct))
         .FirstOrDefault();
 
     public Task<TaskResponse?> CreateAsync(
@@ -186,7 +187,7 @@ public sealed class TaskRepository(IDbConnectionFactory factory) : BaseRepositor
     public async Task<string?> GetCallerRoleKeyAsync(Guid userId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<RoleRow>(
-            "SELECT TOP 1 Role FROM dbo.Staff WHERE UserId = @userId", new { userId }, ct);
+            "SELECT \"Role\" FROM \"dbo\".\"Staff\" WHERE \"UserId\" = @userId LIMIT 1", new { userId }, ct);
         return StaffRoleMapper.ToRoleKey(rows.FirstOrDefault()?.Role);
     }
 
@@ -198,7 +199,7 @@ public sealed class TaskRepository(IDbConnectionFactory factory) : BaseRepositor
     /// asserts every input StaffRoleMapper recognizes maps identically here.
     private const string RoleKeyCase =
         """
-        CASE LOWER(LTRIM(RTRIM(s.Role)))
+        CASE lower(trim(s."Role"))
           WHEN 'driver' THEN 'driver'
           WHEN 'conductor' THEN 'conductor'
           WHEN 'bus attendant' THEN 'conductor'
@@ -216,9 +217,9 @@ public sealed class TaskRepository(IDbConnectionFactory factory) : BaseRepositor
     private const string DutyStaffCte =
         $"""
         DutyStaff AS (
-            SELECT s.UserId, s.Name, {RoleKeyCase} AS RoleKey
-            FROM dbo.Staff s
-            WHERE s.UserId IS NOT NULL
+            SELECT s."UserId" AS "UserId", s."Name" AS "Name", {RoleKeyCase} AS "RoleKey"
+            FROM "dbo"."Staff" s
+            WHERE s."UserId" IS NOT NULL
         )
         """;
 
@@ -234,30 +235,30 @@ public sealed class TaskRepository(IDbConnectionFactory factory) : BaseRepositor
         DateTime today, CancellationToken ct = default) =>
         QueryInlineAsync<PersonTaskSummary>(
             $"""
-            ;WITH {DutyStaffCte},
+            WITH {DutyStaffCte},
             Eligible AS (
-                SELECT UserId, Name, RoleKey FROM DutyStaff WHERE RoleKey IS NOT NULL
+                SELECT "UserId", "Name", "RoleKey" FROM DutyStaff WHERE "RoleKey" IS NOT NULL
                 UNION
-                SELECT t.AssignedToUserId AS UserId, u.Name, ds.RoleKey
-                FROM dbo.Tasks t
-                JOIN dbo.Users u ON u.Id = t.AssignedToUserId
-                LEFT JOIN DutyStaff ds ON ds.UserId = t.AssignedToUserId
-                WHERE t.AssignedToUserId IS NOT NULL
+                SELECT t."AssignedToUserId" AS "UserId", u."Name" AS "Name", ds."RoleKey" AS "RoleKey"
+                FROM "dbo"."Tasks" t
+                JOIN "dbo"."Users" u ON u."Id" = t."AssignedToUserId"
+                LEFT JOIN DutyStaff ds ON ds."UserId" = t."AssignedToUserId"
+                WHERE t."AssignedToUserId" IS NOT NULL
             )
             SELECT
-                e.UserId, e.Name, e.RoleKey,
-                COUNT(m.Id) AS TotalTasks,
-                SUM(CASE WHEN m.Status = 'pending' THEN 1 ELSE 0 END) AS PendingTasks,
-                SUM(CASE WHEN m.Status = 'completed' THEN 1 ELSE 0 END) AS CompletedTasks,
-                SUM(CASE WHEN m.Status <> 'completed' AND m.DueDate IS NOT NULL AND m.DueDate < @today
-                         THEN 1 ELSE 0 END) AS OverdueTasks,
-                MAX(CASE WHEN m.CompletedByUserId = e.UserId THEN m.CompletedAt ELSE m.CreatedAt END) AS LastActivityAt
+                e."UserId", e."Name", e."RoleKey",
+                CAST(COUNT(m."Id") AS int) AS "TotalTasks",
+                CAST(SUM(CASE WHEN m."Status" = 'pending' THEN 1 ELSE 0 END) AS int) AS "PendingTasks",
+                CAST(SUM(CASE WHEN m."Status" = 'completed' THEN 1 ELSE 0 END) AS int) AS "CompletedTasks",
+                CAST(SUM(CASE WHEN m."Status" <> 'completed' AND m."DueDate" IS NOT NULL AND m."DueDate" < @today
+                         THEN 1 ELSE 0 END) AS int) AS "OverdueTasks",
+                MAX(CASE WHEN m."CompletedByUserId" = e."UserId" THEN m."CompletedAt" ELSE m."CreatedAt" END) AS "LastActivityAt"
             FROM Eligible e
-            LEFT JOIN dbo.Tasks m
-                ON m.AssignedToUserId = e.UserId
-                OR (m.AssignedToRoleKey = e.RoleKey AND m.AssignedToUserId IS NULL AND e.RoleKey IS NOT NULL)
-            GROUP BY e.UserId, e.Name, e.RoleKey
-            ORDER BY e.Name
+            LEFT JOIN "dbo"."Tasks" m
+                ON m."AssignedToUserId" = e."UserId"
+                OR (m."AssignedToRoleKey" = e."RoleKey" AND m."AssignedToUserId" IS NULL AND e."RoleKey" IS NOT NULL)
+            GROUP BY e."UserId", e."Name", e."RoleKey"
+            ORDER BY e."Name"
             """,
             new { today }, ct);
 
@@ -269,21 +270,21 @@ public sealed class TaskRepository(IDbConnectionFactory factory) : BaseRepositor
         DateTime today, CancellationToken ct = default) =>
         QueryInlineAsync<RoleTaskSummary>(
             $"""
-            ;WITH {DutyStaffCte}
+            WITH {DutyStaffCte}
             SELECT
-                rk.RoleKey,
-                (SELECT COUNT(*) FROM DutyStaff ds WHERE ds.RoleKey = rk.RoleKey) AS Headcount,
-                COUNT(m.Id) AS TotalTasks,
-                SUM(CASE WHEN m.Status = 'pending' THEN 1 ELSE 0 END) AS PendingTasks,
-                SUM(CASE WHEN m.Status = 'completed' THEN 1 ELSE 0 END) AS CompletedTasks,
-                SUM(CASE WHEN m.Status <> 'completed' AND m.DueDate IS NOT NULL AND m.DueDate < @today
-                         THEN 1 ELSE 0 END) AS OverdueTasks,
-                MAX(ISNULL(m.CompletedAt, m.CreatedAt)) AS LastActivityAt
-            FROM (VALUES ('driver'), ('conductor'), ('sweeper'), ('gardener'), ('guard'), ('peon')) AS rk(RoleKey)
-            LEFT JOIN dbo.Tasks m
-                ON m.AssignedToRoleKey = rk.RoleKey
-                OR m.AssignedToUserId IN (SELECT UserId FROM DutyStaff WHERE RoleKey = rk.RoleKey)
-            GROUP BY rk.RoleKey
+                rk."RoleKey",
+                CAST((SELECT COUNT(*) FROM DutyStaff ds WHERE ds."RoleKey" = rk."RoleKey") AS int) AS "Headcount",
+                CAST(COUNT(m."Id") AS int) AS "TotalTasks",
+                CAST(SUM(CASE WHEN m."Status" = 'pending' THEN 1 ELSE 0 END) AS int) AS "PendingTasks",
+                CAST(SUM(CASE WHEN m."Status" = 'completed' THEN 1 ELSE 0 END) AS int) AS "CompletedTasks",
+                CAST(SUM(CASE WHEN m."Status" <> 'completed' AND m."DueDate" IS NOT NULL AND m."DueDate" < @today
+                         THEN 1 ELSE 0 END) AS int) AS "OverdueTasks",
+                MAX(COALESCE(m."CompletedAt", m."CreatedAt")) AS "LastActivityAt"
+            FROM (VALUES ('driver'), ('conductor'), ('sweeper'), ('gardener'), ('guard'), ('peon')) AS rk("RoleKey")
+            LEFT JOIN "dbo"."Tasks" m
+                ON m."AssignedToRoleKey" = rk."RoleKey"
+                OR m."AssignedToUserId" IN (SELECT "UserId" FROM DutyStaff WHERE "RoleKey" = rk."RoleKey")
+            GROUP BY rk."RoleKey"
             """,
             new { today }, ct);
 }
