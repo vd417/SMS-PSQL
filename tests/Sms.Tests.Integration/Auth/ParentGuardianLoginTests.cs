@@ -173,7 +173,7 @@ public class ParentGuardianLoginTests(PostgresFixture fx)
         var id = created.GetProperty("id").GetGuid();
         var adm = created.GetProperty("admission_no").GetString();
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
@@ -212,7 +212,7 @@ public class ParentGuardianLoginTests(PostgresFixture fx)
         const string sharedPhone = "7080080089";
         const string adm = "sccrdtb/STU/26/PATCH";
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
@@ -258,7 +258,7 @@ public class ParentGuardianLoginTests(PostgresFixture fx)
         const string sharedPhone = "7111987654";
         const string adm = "FG-PHONE-ADM-1";
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");

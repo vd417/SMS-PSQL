@@ -52,7 +52,7 @@ public class AchievementTests(PostgresFixture fx)
         var classId = Guid.NewGuid();
         var teacher = Client(app, tenantId, Policies.Teacher);
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -88,7 +88,7 @@ VALUES
         var studentId = Guid.NewGuid();
         var teacher = Client(app, tenantId, Policies.Teacher);
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

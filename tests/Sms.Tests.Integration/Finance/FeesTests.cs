@@ -304,7 +304,7 @@ public class FeesTests(PostgresFixture fx)
         listed.EnumerateArray().First(e => e.GetProperty("id").GetGuid() == paymentId)
             .GetProperty("invoice_id").GetGuid().Should().Be(invoiceId);
 
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenant", new { tenant });
         var row = await conn.QuerySingleAsync<(Guid InvoiceId, string HeadId, string Method)>(
@@ -389,7 +389,7 @@ public class FeesTests(PostgresFixture fx)
         }), HttpStatusCode.OK);
         var paymentId = paid.GetProperty("id").GetString();
 
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenant", new { tenant });
         var count = await conn.QuerySingleAsync<int>(
@@ -525,7 +525,7 @@ public class FeesTests(PostgresFixture fx)
         var second = await Data(await client.PostAsJsonAsync("/v1/fees/payments", body), HttpStatusCode.Created);
         first.GetProperty("id").GetGuid().Should().Be(second.GetProperty("id").GetGuid());
 
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenant", new { tenant });
         var paymentCount = await conn.QuerySingleAsync<int>(
@@ -621,7 +621,7 @@ public class FeesTests(PostgresFixture fx)
         }), HttpStatusCode.Conflict);
         err.GetProperty("code").GetString().Should().Be("idempotency_key_reused");
 
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenant", new { tenant });
         var paymentCount = await conn.QuerySingleAsync<int>(

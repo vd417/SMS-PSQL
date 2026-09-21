@@ -79,7 +79,7 @@ public class PayInvoiceNotifyTests(PostgresFixture fx)
         var studentId = Guid.NewGuid();
         var invoiceId = Guid.NewGuid();
 
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         await conn.ExecuteAsync(
@@ -199,7 +199,7 @@ public class PayInvoiceNotifyTests(PostgresFixture fx)
 
     private static async Task<Guid> StudentIdForAsync(PostgresFixture fx, Guid tenantId)
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         return await conn.QuerySingleAsync<Guid>(
@@ -250,7 +250,7 @@ public class PayInvoiceNotifyTests(PostgresFixture fx)
         var studentBId = Guid.NewGuid();
         var invoiceAId = Guid.NewGuid();
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

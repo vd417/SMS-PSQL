@@ -30,7 +30,7 @@ public class ClassNextPeriodTests(PostgresFixture fx)
         var today3LetterDay = DateTime.UtcNow.ToString("ddd"); // e.g. "Mon"
         var future = DateTime.UtcNow.AddHours(1).ToString("HH:mm");
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

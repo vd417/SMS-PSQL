@@ -62,7 +62,7 @@ public class ClassesScopingTests(PostgresFixture fx)
             new { name = "Other", grade = "IX", section = "C" }), HttpStatusCode.Created))
             .GetProperty("id").GetGuid();
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

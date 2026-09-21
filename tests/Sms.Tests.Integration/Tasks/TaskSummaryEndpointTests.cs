@@ -37,7 +37,7 @@ public class TaskSummaryEndpointTests(PostgresFixture fx)
 
     private static async Task SeedUserAsync(PostgresFixture fx, Guid tenantId, Guid userId, string name)
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         await conn.ExecuteAsync(
@@ -47,7 +47,7 @@ public class TaskSummaryEndpointTests(PostgresFixture fx)
 
     private static async Task SeedManagerRoleAsync(PostgresFixture fx, Guid userId, string role)
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, @role)", new { userId, role });
     }
@@ -55,7 +55,7 @@ public class TaskSummaryEndpointTests(PostgresFixture fx)
     private static async Task SeedStaffLinkAsync(
         PostgresFixture fx, Guid tenantId, Guid userId, string name, string designation)
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         await conn.ExecuteAsync(
@@ -148,7 +148,7 @@ public class TaskSummaryEndpointTests(PostgresFixture fx)
         var adminId = Guid.NewGuid();
         await SeedUserAsync(fx, tenantId, adminId, "Admin");
         await SeedManagerRoleAsync(fx, adminId, Policies.SchoolAdmin);
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

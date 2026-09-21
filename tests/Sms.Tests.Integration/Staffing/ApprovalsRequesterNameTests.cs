@@ -28,7 +28,7 @@ public class ApprovalsRequesterNameTests(PostgresFixture fx)
         var tenantId = Guid.NewGuid();
         var requesterId = Guid.NewGuid();
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -69,7 +69,7 @@ public class ApprovalsRequesterNameTests(PostgresFixture fx)
         var principalId = Guid.NewGuid();
         var leaveId = Guid.NewGuid();
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -116,7 +116,7 @@ public class ApprovalsRequesterNameTests(PostgresFixture fx)
         var principalId = Guid.NewGuid();
         var leaveId = Guid.NewGuid();
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

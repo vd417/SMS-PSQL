@@ -37,7 +37,7 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
 
     private static async Task SeedUserAsync(PostgresFixture fx, Guid tenantId, Guid userId, string name)
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         await conn.ExecuteAsync(
@@ -47,7 +47,7 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
 
     private static async Task SeedManagerRoleAsync(PostgresFixture fx, Guid userId, string role)
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, @role)", new { userId, role });
     }
@@ -55,7 +55,7 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
     private static async Task<Guid> SeedBusAsync(PostgresFixture fx, Guid tenantId, string busNo)
     {
         var busId = Guid.NewGuid();
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         await conn.ExecuteAsync(
@@ -70,7 +70,7 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
     private static async Task SeedBusAssignmentAsync(
         PostgresFixture fx, Guid tenantId, Guid busId, Guid userId, string dutyRole)
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         // dbo.Staff.UserId is unique, so re-use the same staff row for a userId already linked to

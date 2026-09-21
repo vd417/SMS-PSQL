@@ -11,7 +11,7 @@ public class M0084_IdentityLinkTests(PostgresFixture fx)
     [Fact]
     public async Task Users_Teachers_Staff_have_new_columns()
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
 
         var userCols = (await conn.QueryAsync<string>(
@@ -30,7 +30,7 @@ public class M0084_IdentityLinkTests(PostgresFixture fx)
     [Fact]
     public async Task Teachers_UserId_unique_index_rejects_duplicate_link()
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();

@@ -27,7 +27,7 @@ public class ChatPresenceTests(PostgresFixture fx)
         });
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -44,7 +44,7 @@ public class ChatPresenceTests(PostgresFixture fx)
 
         await client.GetAsync("/v1/auth/me");
 
-        await using var checkConn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var checkConn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await checkConn.OpenAsync();
         await checkConn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         var lastSeen = await checkConn.QuerySingleAsync<DateTime?>(
@@ -64,7 +64,7 @@ public class ChatPresenceTests(PostgresFixture fx)
         });
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -114,7 +114,7 @@ public class ChatPresenceTests(PostgresFixture fx)
         var studentId = Guid.NewGuid();
         var parentThreadId = Guid.NewGuid();
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

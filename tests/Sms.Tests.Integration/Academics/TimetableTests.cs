@@ -57,7 +57,7 @@ public class TimetableTests(PostgresFixture fx)
 
         // Teacher must be linked (Teachers.UserId) and assigned to the subject the
         // slot is created for — /timetable now scopes teachers to their own slots.
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -108,7 +108,7 @@ public class TimetableTests(PostgresFixture fx)
         var principal = Client(app, tenantId, Policies.Principal);
         Guid teacherId;
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -137,7 +137,7 @@ public class TimetableTests(PostgresFixture fx)
         var principal = Client(app, tenantId, Policies.Principal);
         Guid slotTeacherId;
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -173,7 +173,7 @@ public class TimetableTests(PostgresFixture fx)
         var tenantId = Guid.NewGuid();
         var principal = Client(app, tenantId, Policies.Principal);
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -314,7 +314,7 @@ public class TimetableTests(PostgresFixture fx)
         var classId = Guid.NewGuid();
         var otherClassId = Guid.NewGuid();
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

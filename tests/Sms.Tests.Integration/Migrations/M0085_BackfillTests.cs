@@ -10,7 +10,7 @@ public class M0085_BackfillTests(PostgresFixture fx)
     [Fact]
     public async Task Clean_single_match_links_teacher_and_copies_name()
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
@@ -54,7 +54,7 @@ WHERE u.Id = @userId AND u.Name IS NULL", new { userId });
     [Fact]
     public async Task Ambiguous_match_is_not_linked_and_would_be_reported()
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         var tenantId = Guid.NewGuid();
 
@@ -136,7 +136,7 @@ WHERE t.Id = @teacherId AND t.UserId IS NULL AND x.Cnt <> 1
     [Fact]
     public async Task Report_insert_is_idempotent_when_rerun_outside_the_migration_gate()
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         var tenantId = Guid.NewGuid();
 
@@ -178,7 +178,7 @@ WHERE t.Id = @teacherId AND t.UserId IS NULL AND x.Cnt <> 1
     [Fact]
     public async Task Report_table_exists_and_is_queryable()
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         var count = await conn.QuerySingleAsync<int>(
             "SELECT COUNT(*) FROM dbo._Migration_UnmatchedDirectoryRows");
@@ -188,7 +188,7 @@ WHERE t.Id = @teacherId AND t.UserId IS NULL AND x.Cnt <> 1
     [Fact]
     public async Task Report_table_has_expected_columns()
     {
-        await using var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString);
+        await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         var cols = (await conn.QueryAsync<string>(
             "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '_Migration_UnmatchedDirectoryRows'")).ToList();

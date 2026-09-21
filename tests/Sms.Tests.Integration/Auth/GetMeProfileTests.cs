@@ -25,7 +25,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         var hasher = new Sms.Shared.Kernel.Auth.PasswordHasher();
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -61,7 +61,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         var hasher = new Sms.Shared.Kernel.Auth.PasswordHasher();
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -92,7 +92,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         var hasher = new Sms.Shared.Kernel.Auth.PasswordHasher();
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -130,7 +130,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         const string email = "contact@x.com";
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -170,7 +170,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         const string email = "principal@x.com";
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -210,7 +210,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         const string email = "shared-phone@x.com";
         const string phone = "7388119922";
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
@@ -254,7 +254,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         const string email = "switch-phone@x.com";
         const string phone = "9000001234";
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
@@ -295,7 +295,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         using var meDoc = JsonDocument.Parse(await meRes.Content.ReadAsStringAsync());
         meDoc.RootElement.GetProperty("data").GetProperty("phone").GetString().Should().Be(phone);
 
-        await using (var conn = new Microsoft.Data.SqlClient.SqlConnection(fx.ConnectionString))
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
