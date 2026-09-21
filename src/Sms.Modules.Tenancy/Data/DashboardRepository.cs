@@ -1,5 +1,3 @@
-using System.Data;
-using Dapper;
 using Sms.Modules.Tenancy.Contracts;
 using Sms.Shared.Kernel.Data;
 
@@ -15,15 +13,15 @@ public sealed class DashboardRepository(IDbConnectionFactory factory) : BaseRepo
     /// One round-trip: counts+churn, plan mix, recent activity, usage alerts, monthly series.
     public async Task<DashboardOverview> OverviewAsync(CancellationToken ct = default)
     {
-        await using var conn = await Factory.OpenAsync(ct);
-        using var multi = await conn.QueryMultipleAsync(new CommandDefinition(
-            "dbo.Dashboard_CatreOverview", commandType: CommandType.StoredProcedure, cancellationToken: ct));
-
-        var c = await multi.ReadSingleAsync<CountsRow>();
-        var mix = (await multi.ReadAsync<PlanMixRow>()).ToList();
-        var activity = (await multi.ReadAsync<RecentActivityItem>()).ToList();
-        var alerts = (await multi.ReadAsync<UsageAlertItem>()).ToList();
-        var months = (await multi.ReadAsync<MonthRow>()).ToList();
+        // PL/pgSQL functions can only return one result set each, unlike the original
+        // Dashboard_CatreOverview's 5-resultset QueryMultipleAsync round-trip -- split into 5
+        // separate function calls (see db/postgres/18_catre_procs.sql).
+        var c = await QuerySingleProcAsync<CountsRow>("dbo.dashboard_catreoverview_headline", null, ct)
+            ?? new CountsRow(0, 0, 0, 0, 0, 0, 0, 0);
+        var mix = (await QueryProcAsync<PlanMixRow>("dbo.dashboard_catreoverview_planmix", null, ct)).ToList();
+        var activity = (await QueryProcAsync<RecentActivityItem>("dbo.dashboard_catreoverview_recentactivity", null, ct)).ToList();
+        var alerts = (await QueryProcAsync<UsageAlertItem>("dbo.dashboard_catreoverview_usagealerts", null, ct)).ToList();
+        var months = (await QueryProcAsync<MonthRow>("dbo.dashboard_catreoverview_months", null, ct)).ToList();
 
         return new DashboardOverview(
             new DashCounts(c.Total, c.Active, c.Trial, c.Suspended, c.Cancelled),

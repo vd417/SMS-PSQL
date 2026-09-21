@@ -67,8 +67,8 @@ public class CatreBillingTests(PostgresFixture fx)
         Guid invoiceId;
         await using (var c = await factory.OpenAsync())
             invoiceId = await c.QuerySingleAsync<Guid>(
-                "INSERT dbo.Invoices (Id, TenantId, TenantName, PlanName, Amount, Status, Issued, Due) " +
-                "OUTPUT inserted.Id VALUES (NEWID(), @t, 'Greenwood', 'Gold', 14999, 'open', SYSUTCDATETIME(), SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Invoices\" (\"Id\", \"TenantId\", \"TenantName\", \"PlanName\", \"Amount\", \"Status\", \"Issued\", \"Due\") " +
+                "VALUES (gen_random_uuid(), @t, 'Greenwood', 'Gold', 14999, 'open', now(), now()) RETURNING \"Id\"",
                 new { t = Guid.NewGuid() });
 
         await using var app = App();

@@ -53,12 +53,12 @@ public class CatreDashboardTests(PostgresFixture fx)
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Tenants (Id, Name, Slug, Tier, Status, Mrr, StudentsCount, LimitsStudents) " +
+                "INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\", \"Tier\", \"Status\", \"Mrr\", \"StudentsCount\", \"LimitsStudents\") " +
                 "VALUES (@id, @name, @slug, 'growth', 'active', 5000, 95, 100)",
                 new { id = tid, name = $"Over-Limit School {tid:N}", slug = $"over-limit-{tid:N}" });
             await conn.ExecuteAsync(
-                "INSERT dbo.AuditLog (Id, Action, Target, Kind, At) " +
-                "VALUES (NEWID(), 'client.created', @t, 'client', SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"AuditLog\" (\"Id\", \"Action\", \"Target\", \"Kind\", \"At\") " +
+                "VALUES (gen_random_uuid(), 'client.created', @t, 'client', now())",
                 new { t = tid.ToString() });
         }
 
@@ -91,10 +91,9 @@ public class CatreDashboardTests(PostgresFixture fx)
             var lastMonth = DateTime.UtcNow.AddMonths(-1);
             var firstOfLast = new DateTime(lastMonth.Year, lastMonth.Month, 1);
             await conn.ExecuteAsync(
-                "MERGE dbo.PlatformMetricsSnapshot AS t USING (SELECT @m AS Month) s ON t.Month = s.Month " +
-                "WHEN MATCHED THEN UPDATE SET Mrr=1000, ActiveClients=10, CancelledClients=1 " +
-                "WHEN NOT MATCHED THEN INSERT (Month, Mrr, ActiveClients, CancelledClients) " +
-                "VALUES (@m, 1000, 10, 1);",
+                "INSERT INTO \"dbo\".\"PlatformMetricsSnapshot\" (\"Month\", \"Mrr\", \"ActiveClients\", \"CancelledClients\") " +
+                "VALUES (@m::date, 1000, 10, 1) " +
+                "ON CONFLICT (\"Month\") DO UPDATE SET \"Mrr\" = 1000, \"ActiveClients\" = 10, \"CancelledClients\" = 1",
                 new { m = firstOfLast });
         }
 

@@ -7,7 +7,7 @@ namespace Sms.Modules.Tenancy.Data;
 
 public sealed class TeamRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
-    private const string Cols = "Id, Name, Email, Role, Status, LastLogin, Joined, EmployeeId, PhotoUrl, Phone";
+    private const string Cols = "\"Id\", \"Name\", \"Email\", \"Role\", \"Status\", \"LastLogin\", \"Joined\", \"EmployeeId\", \"PhotoUrl\", \"Phone\"";
 
     private sealed record TeamMemberRow(
         Guid Id, string Name, string Email, string Role, string Status, DateTime? LastLogin, DateTime Joined,
@@ -18,17 +18,17 @@ public sealed class TeamRepository(IDbConnectionFactory factory) : BaseRepositor
 
     public async Task<TeamMemberResponse?> InviteAsync(InviteTeamRequest r, CancellationToken ct = default)
     {
-        var row = await QuerySingleProcAsync<TeamMemberRow>("dbo.Team_Invite",
+        var row = await QuerySingleProcAsync<TeamMemberRow>("dbo.team_invite",
             new { r.Name, r.Email, r.Role, r.EmployeeId, r.PhotoUrl, r.Phone }, ct);
         return row is null ? null : await GetComposedAsync(row.Id, ct);
     }
 
     public async Task<IReadOnlyList<TeamMemberResponse>> ListAsync(CancellationToken ct = default)
     {
-        var rows = await QueryInlineAsync<TeamMemberRow>($"SELECT {Cols} FROM dbo.TeamMembers ORDER BY Joined DESC", null, ct);
+        var rows = await QueryInlineAsync<TeamMemberRow>($"SELECT {Cols} FROM \"dbo\".\"TeamMembers\" ORDER BY \"Joined\" DESC", null, ct);
         var docs = await QueryInlineAsync<TeamDocumentMeta>(
-            "SELECT Id, TeamMemberId, Label, FileName, ContentType, SizeBytes, CreatedAt AS Created " +
-            "FROM dbo.TeamDocuments ORDER BY CreatedAt DESC", null, ct);
+            "SELECT \"Id\", \"TeamMemberId\", \"Label\", \"FileName\", \"ContentType\", \"SizeBytes\", \"CreatedAt\" AS \"Created\" " +
+            "FROM \"dbo\".\"TeamDocuments\" ORDER BY \"CreatedAt\" DESC", null, ct);
         var byMember = docs.GroupBy(d => d.TeamMemberId).ToDictionary(g => g.Key, g => (IReadOnlyList<TeamDocumentMeta>)g.ToList());
         return rows.Select(r => Map(r, byMember.TryGetValue(r.Id, out var list) ? list : [])).ToList();
     }
@@ -38,13 +38,13 @@ public sealed class TeamRepository(IDbConnectionFactory factory) : BaseRepositor
 
     public async Task<TeamMemberResponse?> UpdateAsync(Guid id, UpdateTeamRequest r, CancellationToken ct = default)
     {
-        var row = await QuerySingleProcAsync<TeamMemberRow>("dbo.Team_Update",
+        var row = await QuerySingleProcAsync<TeamMemberRow>("dbo.team_update",
             new { Id = id, r.Role, r.Status, r.Name, r.EmployeeId, r.PhotoUrl, r.Phone }, ct);
         return row is null ? null : await GetComposedAsync(id, ct);
     }
 
     public Task<TeamDocumentMeta?> AddDocumentAsync(Guid memberId, TeamDocumentInput doc, int sizeBytes, CancellationToken ct = default) =>
-        QuerySingleProcAsync<TeamDocumentMeta>("dbo.TeamDocument_Add", new
+        QuerySingleProcAsync<TeamDocumentMeta>("dbo.teamdocument_add", new
         {
             TeamMemberId = memberId,
             doc.Label,
@@ -56,18 +56,17 @@ public sealed class TeamRepository(IDbConnectionFactory factory) : BaseRepositor
 
     public async Task<bool> DeleteDocumentAsync(Guid memberId, Guid docId, CancellationToken ct = default)
     {
-        await using var conn = await Factory.OpenAsync(ct);
-        var n = await conn.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM dbo.TeamDocuments WHERE Id = @docId AND TeamMemberId = @memberId",
-            new { docId, memberId }, cancellationToken: ct));
+        var n = await ExecuteInlineAsync(
+            "DELETE FROM \"dbo\".\"TeamDocuments\" WHERE \"Id\" = @docId AND \"TeamMemberId\" = @memberId",
+            new { docId, memberId }, ct);
         return n > 0;
     }
 
     public async Task<TeamDocumentDetail?> GetDocumentAsync(Guid memberId, Guid docId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<DocContentRow>(
-            "SELECT Id, TeamMemberId, Label, FileName, ContentType, SizeBytes, CreatedAt AS Created, Content " +
-            "FROM dbo.TeamDocuments WHERE Id = @docId AND TeamMemberId = @memberId",
+            "SELECT \"Id\", \"TeamMemberId\", \"Label\", \"FileName\", \"ContentType\", \"SizeBytes\", \"CreatedAt\" AS \"Created\", \"Content\" " +
+            "FROM \"dbo\".\"TeamDocuments\" WHERE \"Id\" = @docId AND \"TeamMemberId\" = @memberId",
             new { docId, memberId }, ct);
         var r = rows.FirstOrDefault();
         return r is null ? null : new TeamDocumentDetail(r.Id, r.TeamMemberId, r.Label, r.FileName, r.ContentType, r.SizeBytes, r.Created, r.Content);
@@ -75,12 +74,12 @@ public sealed class TeamRepository(IDbConnectionFactory factory) : BaseRepositor
 
     private async Task<TeamMemberResponse?> GetComposedAsync(Guid id, CancellationToken ct)
     {
-        var rows = await QueryInlineAsync<TeamMemberRow>($"SELECT {Cols} FROM dbo.TeamMembers WHERE Id = @id", new { id }, ct);
+        var rows = await QueryInlineAsync<TeamMemberRow>($"SELECT {Cols} FROM \"dbo\".\"TeamMembers\" WHERE \"Id\" = @id", new { id }, ct);
         var row = rows.FirstOrDefault();
         if (row is null) return null;
         var docs = await QueryInlineAsync<TeamDocumentMeta>(
-            "SELECT Id, TeamMemberId, Label, FileName, ContentType, SizeBytes, CreatedAt AS Created " +
-            "FROM dbo.TeamDocuments WHERE TeamMemberId = @id ORDER BY CreatedAt DESC", new { id }, ct);
+            "SELECT \"Id\", \"TeamMemberId\", \"Label\", \"FileName\", \"ContentType\", \"SizeBytes\", \"CreatedAt\" AS \"Created\" " +
+            "FROM \"dbo\".\"TeamDocuments\" WHERE \"TeamMemberId\" = @id ORDER BY \"CreatedAt\" DESC", new { id }, ct);
         return Map(row, docs);
     }
 
@@ -93,15 +92,15 @@ public sealed class AuditRepository(IDbConnectionFactory factory) : BaseReposito
     public Task<IReadOnlyList<AuditEntry>> ListAsync(
         string? kind, Guid? actorId, Guid? tenantId, CancellationToken ct = default) =>
         QueryInlineAsync<AuditEntry>(
-            "SELECT Id, ActorId, ActorName, Role, Action, Target, Kind, At AS [Time] FROM dbo.AuditLog " +
-            "WHERE (@kind IS NULL OR Kind = @kind) AND (@actorId IS NULL OR ActorId = @actorId) " +
-            "AND (@tenantId IS NULL OR TenantId = @tenantId) ORDER BY At DESC",
+            "SELECT \"Id\", \"ActorId\", \"ActorName\", \"Role\", \"Action\", \"Target\", \"Kind\", \"At\" AS \"Time\" FROM \"dbo\".\"AuditLog\" " +
+            "WHERE (@kind::text IS NULL OR \"Kind\" = @kind::text) AND (@actorId::uuid IS NULL OR \"ActorId\" = @actorId::uuid) " +
+            "AND (@tenantId::uuid IS NULL OR \"TenantId\" = @tenantId::uuid) ORDER BY \"At\" DESC",
             new { kind, actorId, tenantId }, ct);
 
     public Task<AuditEntry?> InsertAsync(
         Guid? actorId, string? actorName, string? role, string action,
         string? target, string? kind, Guid? tenantId, CancellationToken ct = default) =>
-        QuerySingleProcAsync<AuditEntry>("dbo.Audit_Insert", new
+        QuerySingleProcAsync<AuditEntry>("dbo.audit_insert", new
         {
             ActorId = actorId,
             ActorName = actorName,
@@ -136,28 +135,26 @@ public sealed class AuditRepository(IDbConnectionFactory factory) : BaseReposito
             // cursor at all — start from the beginning rather than throwing.
         }
 
-        // DateTime2 params must be typed explicitly: Dapper otherwise binds plain .NET DateTime
-        // values as SqlDbType.DateTime (~3.33ms precision), which silently rounds the value and
-        // breaks equality/ordering comparisons against the datetime2(7) `At` column — critical
-        // here since the cursor's tie-break depends on an exact At match.
+        // DateTime params must be typed explicitly as timestamptz: Npgsql otherwise can't resolve
+        // a null DateTime? parameter's type in the "@x IS NULL OR ..." comparisons below.
         var p = new DynamicParameters();
-        p.Add("tenantId", tenantId);
-        p.Add("action", action);
-        p.Add("actorId", actorId);
+        p.Add("tenantId", tenantId, DbType.Guid);
+        p.Add("action", action, DbType.String);
+        p.Add("actorId", actorId, DbType.Guid);
         p.Add("from", from, DbType.DateTime2);
         p.Add("to", to, DbType.DateTime2);
         p.Add("cursorAt", cursorAt, DbType.DateTime2);
-        p.Add("cursorId", cursorId);
+        p.Add("cursorId", cursorId, DbType.Guid);
         p.Add("take", pageSize + 1);
 
         var rows = await QueryInlineAsync<AuditEntry>(
-            "SELECT TOP (@take) Id, ActorId, ActorName, Role, Action, Target, Kind, At AS [Time] " +
-            "FROM dbo.AuditLog WHERE TenantId = @tenantId " +
-            "AND (@action IS NULL OR Action = @action) " +
-            "AND (@actorId IS NULL OR ActorId = @actorId) " +
-            "AND (@from IS NULL OR At >= @from) AND (@to IS NULL OR At <= @to) " +
-            "AND (@cursorAt IS NULL OR At < @cursorAt OR (At = @cursorAt AND Id < @cursorId)) " +
-            "ORDER BY At DESC, Id DESC",
+            "SELECT \"Id\", \"ActorId\", \"ActorName\", \"Role\", \"Action\", \"Target\", \"Kind\", \"At\" AS \"Time\" " +
+            "FROM \"dbo\".\"AuditLog\" WHERE \"TenantId\" = @tenantId::uuid " +
+            "AND (@action::text IS NULL OR \"Action\" = @action::text) " +
+            "AND (@actorId::uuid IS NULL OR \"ActorId\" = @actorId::uuid) " +
+            "AND (@from::timestamptz IS NULL OR \"At\" >= @from::timestamptz) AND (@to::timestamptz IS NULL OR \"At\" <= @to::timestamptz) " +
+            "AND (@cursorAt::timestamptz IS NULL OR \"At\" < @cursorAt::timestamptz OR (\"At\" = @cursorAt::timestamptz AND \"Id\" < @cursorId::uuid)) " +
+            "ORDER BY \"At\" DESC, \"Id\" DESC LIMIT @take",
             p, ct);
 
         var hasMore = rows.Count > pageSize;
@@ -175,13 +172,13 @@ public sealed class ReportRepository(IDbConnectionFactory factory) : BaseReposit
 
     public async Task<RevenueReport> RevenueAsync(CancellationToken ct = default)
     {
-        await using var conn = await Factory.OpenAsync(ct);
-        using var multi = await conn.QueryMultipleAsync(new CommandDefinition(
-            "dbo.Report_Revenue", commandType: CommandType.StoredProcedure, cancellationToken: ct));
-
-        var h = await multi.ReadSingleAsync<Headline>();
-        var perPlan = (await multi.ReadAsync<PlanAgg>()).ToList();
-        var series = (await multi.ReadAsync<RevMonth>()).ToList();
+        // PL/pgSQL functions can only return one result set each, unlike the original
+        // Report_Revenue's 3-resultset QueryMultipleAsync round-trip -- split into 3 separate
+        // function calls (see db/postgres/18_catre_procs.sql).
+        var h = await QuerySingleProcAsync<Headline>("dbo.report_revenue_headline", null, ct)
+            ?? new Headline(0, 0, 0, 0);
+        var perPlan = (await QueryProcAsync<PlanAgg>("dbo.report_revenue_perplan", null, ct)).ToList();
+        var series = (await QueryProcAsync<RevMonth>("dbo.report_revenue_months", null, ct)).ToList();
 
         var arpa = h.ActiveCount > 0 ? Math.Round(h.TotalMrr / h.ActiveCount, 2) : 0m;
         var perf = perPlan.Select(p => new PlanPerf(p.PlanName, p.Clients, p.Mrr,

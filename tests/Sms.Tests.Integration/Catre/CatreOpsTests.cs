@@ -131,8 +131,8 @@ public class CatreOpsTests(PostgresFixture fx)
         var action = "suspend client " + Guid.NewGuid().ToString("N");
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "INSERT dbo.AuditLog (Id, ActorId, ActorName, Role, Action, Target, Kind) " +
-                "VALUES (NEWID(), @a, 'Rohan', 'admin', @act, 'Greenwood', 'suspend')",
+                "INSERT INTO \"dbo\".\"AuditLog\" (\"Id\", \"ActorId\", \"ActorName\", \"Role\", \"Action\", \"Target\", \"Kind\") " +
+                "VALUES (gen_random_uuid(), @a, 'Rohan', 'admin', @act, 'Greenwood', 'suspend')",
                 new { a = Guid.NewGuid(), act = action });
 
         await using var app = App();
