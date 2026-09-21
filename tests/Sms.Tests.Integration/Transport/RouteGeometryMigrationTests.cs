@@ -34,29 +34,29 @@ public class RouteGeometryMigrationTests(PostgresFixture fx)
     [Fact]
     public async Task RouteGeometriesTenantPolicy_security_policy_exists_and_targets_the_table()
     {
-        // Column-existence alone (above) says nothing about whether M0207's
-        // CREATE SECURITY POLICY statement actually applied, or whether it was later dropped.
-        // Query sys.security_policies/sys.security_predicates directly, the same way SQL Server's
-        // own catalog would be inspected to audit RLS coverage in production.
+        // Column-existence alone (above) says nothing about whether the RLS conversion actually
+        // applied, or whether it was later dropped. SQL Server's single CREATE SECURITY POLICY
+        // (one FILTER + one BLOCK predicate) became four native Postgres per-command policies
+        // (SELECT/UPDATE/DELETE/INSERT, see 07_rls_policies.sql) — query pg_class/pg_policies
+        // directly, the Postgres-native way to audit RLS coverage, preserving the same intent:
+        // row security is enabled, and both a filter (USING) and a block (WITH CHECK) predicate
+        // exist and target this table.
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
 
-        var policy = await conn.QuerySingleOrDefaultAsync<(string Name, bool IsEnabled)?>(
-            @"SELECT p.name AS Name, p.is_enabled AS IsEnabled
-              FROM sys.security_policies p
-              WHERE p.name = 'RouteGeometriesTenantPolicy'");
+        var rlsEnabled = await conn.QuerySingleAsync<bool>(
+            "SELECT relrowsecurity FROM pg_class WHERE relname = 'RouteGeometries'");
+        rlsEnabled.Should().BeTrue("RLS must be enabled on RouteGeometries");
 
-        policy.Should().NotBeNull("M0207 must create rls.RouteGeometriesTenantPolicy");
-        policy!.Value.IsEnabled.Should().BeTrue("the policy must be WITH (STATE = ON)");
+        var policies = (await conn.QueryAsync<(string PolicyName, string? Qual, string? WithCheck)>(
+            @"SELECT policyname AS PolicyName, qual AS Qual, with_check AS WithCheck
+              FROM pg_policies
+              WHERE schemaname = 'dbo' AND tablename = 'RouteGeometries'")).ToList();
 
-        var predicates = (await conn.QueryAsync<(string PredicateType, string TargetObject)>(
-            @"SELECT sp.predicate_type_desc AS PredicateType, OBJECT_NAME(sp.target_object_id) AS TargetObject
-              FROM sys.security_predicates sp
-              JOIN sys.security_policies pol ON pol.object_id = sp.object_id
-              WHERE pol.name = 'RouteGeometriesTenantPolicy'")).ToList();
-
-        predicates.Should().Contain(p => p.TargetObject == "RouteGeometries" && p.PredicateType == "FILTER");
-        predicates.Should().Contain(p => p.TargetObject == "RouteGeometries" && p.PredicateType == "BLOCK");
+        policies.Should().NotBeEmpty("RLS policies must exist for RouteGeometries");
+        policies.Should().Contain(p => p.PolicyName.StartsWith("RouteGeometriesTenantPolicy"));
+        policies.Should().Contain(p => p.Qual != null, "a filter (USING) predicate must exist");
+        policies.Should().Contain(p => p.WithCheck != null, "a block (WITH CHECK) predicate must exist");
     }
 
     private static RouteGeometryRepository MakeRepo(string connectionString, Guid tenantId)

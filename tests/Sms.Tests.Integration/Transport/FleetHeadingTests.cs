@@ -33,15 +33,15 @@ public class FleetHeadingTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
                 new { Id = busId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                @"INSERT INTO dbo.Trips (Id, TenantId, BusId, Direction, Status, StartedAt)
-                  VALUES (@Id, @TenantId, @BusId, 'pickup', 'live', SYSUTCDATETIME())",
+                @"INSERT INTO ""dbo"".""Trips"" (""Id"", ""TenantId"", ""BusId"", ""Direction"", ""Status"", ""StartedAt"")
+                  VALUES (@Id, @TenantId, @BusId, 'pickup', 'live', now())",
                 new { Id = tripId, TenantId = tenantId, BusId = busId });
             await conn.ExecuteAsync(
-                @"INSERT INTO dbo.TripPings (Id, TenantId, TripId, Lat, Lng, SpeedKmh, Heading, At)
-                  VALUES (@Id, @TenantId, @TripId, 12.1, 77.1, 25, 214.5, SYSUTCDATETIME())",
+                @"INSERT INTO ""dbo"".""TripPings"" (""Id"", ""TenantId"", ""TripId"", ""Lat"", ""Lng"", ""SpeedKmh"", ""Heading"", ""At"")
+                  VALUES (@Id, @TenantId, @TripId, 12.1, 77.1, 25, 214.5, now())",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, TripId = tripId });
         }
         await using var app = App();

@@ -29,7 +29,7 @@ public class RouteGeometryRepositoryTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync(
-            "INSERT INTO dbo.TransportRoutes (Id, TenantId, Name) VALUES (@RouteId, @TenantId, 'Test Route')",
+            "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@RouteId, @TenantId, 'Test Route')",
             new { RouteId = routeId, TenantId = tenantId });
         return (tenantId, routeId);
     }

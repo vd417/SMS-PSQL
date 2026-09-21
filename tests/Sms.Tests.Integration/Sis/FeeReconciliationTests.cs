@@ -137,7 +137,7 @@ public class FeeReconciliationTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         var rows = await conn.QueryAsync<InvoiceRow>(
-            "SELECT Id, StudentId, Period, Amount FROM dbo.FeeInvoices WHERE StudentId IN @ids",
+            "SELECT \"Id\", \"StudentId\", \"Period\", \"Amount\" FROM \"dbo\".\"FeeInvoices\" WHERE \"StudentId\" IN @ids",
             new { ids = studentIds });
         return rows.ToList();
     }
@@ -188,7 +188,7 @@ public class FeeReconciliationTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, @Name)",
+            "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, @Name)",
             new { Id = id, TenantId = tenantId, Name = name });
         return id;
     }

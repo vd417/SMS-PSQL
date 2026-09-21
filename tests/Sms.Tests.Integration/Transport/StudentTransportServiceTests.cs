@@ -48,7 +48,7 @@ public class StudentTransportServiceTests(PostgresFixture fx)
     {
         var id = Guid.NewGuid();
         await Seed(cs, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @Adm, 'Test Student')",
+            "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @Adm, 'Test Student')",
             new { Id = id, TenantId = tenantId, Adm = adm }));
         return id;
     }
@@ -57,7 +57,7 @@ public class StudentTransportServiceTests(PostgresFixture fx)
     {
         var id = Guid.NewGuid();
         await Seed(cs, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, @Name)",
+            "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, @Name)",
             new { Id = id, TenantId = tenantId, Name = name }));
         return id;
     }
@@ -66,7 +66,7 @@ public class StudentTransportServiceTests(PostgresFixture fx)
     {
         var id = Guid.NewGuid();
         await Seed(cs, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.Buses (Id, TenantId, BusNo, RouteId, Capacity) VALUES (@Id, @TenantId, @BusNo, @RouteId, @Capacity)",
+            "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\", \"Capacity\") VALUES (@Id, @TenantId, @BusNo, @RouteId, @Capacity)",
             new { Id = id, TenantId = tenantId, BusNo = busNo, RouteId = routeId, Capacity = capacity }));
         return id;
     }
@@ -103,7 +103,7 @@ public class StudentTransportServiceTests(PostgresFixture fx)
         var busId = await SeedBusOnRouteAsync(fx.ConnectionString, tenantId, routeId, "FULL-1", capacity: 1);
         var seated = await SeedStudentAsync(fx.ConnectionString, tenantId, "TS-SEAT");
         await Seed(fx.ConnectionString, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @S, @B)",
+            "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @S, @B)",
             new { Id = Guid.NewGuid(), TenantId = tenantId, S = seated, B = busId }));
 
         var res = await AdminClient(app, tenantId).PutAsJsonAsync($"/v1/students/{studentId}/transport",
@@ -142,7 +142,7 @@ public class StudentTransportServiceTests(PostgresFixture fx)
         var routeId = await SeedRouteAsync(fx.ConnectionString, tenantId, "Route FH");
         var feeHeadId = Guid.NewGuid();
         await Seed(fx.ConnectionString, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.FeeHeads (Id, TenantId, Name, IsTransportFeeHead) VALUES (@Id, @TenantId, 'Tuition', 0)",
+            "INSERT INTO \"dbo\".\"FeeHeads\" (\"Id\", \"TenantId\", \"Name\", \"IsTransportFeeHead\") VALUES (@Id, @TenantId, 'Tuition', false)",
             new { Id = feeHeadId, TenantId = tenantId }));
 
         var res = await AdminClient(app, tenantId).PutAsJsonAsync($"/v1/students/{studentId}/transport",
@@ -172,7 +172,7 @@ public class StudentTransportServiceTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         var count = await conn.QuerySingleAsync<int>(
-            "SELECT COUNT(*) FROM dbo.StudentBusAssignments WHERE StudentId = @studentId", new { studentId });
+            "SELECT COUNT(*) FROM \"dbo\".\"StudentBusAssignments\" WHERE \"StudentId\" = @studentId", new { studentId });
         count.Should().Be(0);
     }
 
@@ -199,7 +199,7 @@ public class StudentTransportServiceTests(PostgresFixture fx)
         // with only this student occupying its one seat.
         var stopId = Guid.NewGuid();
         await Seed(fx.ConnectionString, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.RouteStops (Id, TenantId, RouteId, Name, Seq) VALUES (@Id, @TenantId, @RouteId, 'Resave Stop', 1)",
+            "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\", \"TenantId\", \"RouteId\", \"Name\", \"Seq\") VALUES (@Id, @TenantId, @RouteId, 'Resave Stop', 1)",
             new { Id = stopId, TenantId = tenantId, RouteId = routeId }));
         var res = await client.PutAsJsonAsync($"/v1/students/{studentId}/transport",
             new { opted_in = true, route_id = routeId, stop_id = stopId });

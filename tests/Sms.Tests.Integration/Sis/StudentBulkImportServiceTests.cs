@@ -75,7 +75,7 @@ public class StudentBulkImportServiceTests(PostgresFixture fx)
     {
         var id = Guid.NewGuid();
         await Seed(cs, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, @Name)",
+            "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, @Name)",
             new { Id = id, TenantId = tenantId, Name = name }));
         return id;
     }
@@ -84,7 +84,7 @@ public class StudentBulkImportServiceTests(PostgresFixture fx)
     {
         var id = Guid.NewGuid();
         await Seed(cs, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.Buses (Id, TenantId, BusNo, RouteId, Capacity) VALUES (@Id, @TenantId, @BusNo, @RouteId, @Capacity)",
+            "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\", \"Capacity\") VALUES (@Id, @TenantId, @BusNo, @RouteId, @Capacity)",
             new { Id = id, TenantId = tenantId, BusNo = busNo, RouteId = routeId, Capacity = capacity }));
         return id;
     }
@@ -93,10 +93,10 @@ public class StudentBulkImportServiceTests(PostgresFixture fx)
     {
         var studentId = Guid.NewGuid();
         await Seed(cs, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @Adm, 'Seat Filler')",
+            "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @Adm, 'Seat Filler')",
             new { Id = studentId, TenantId = tenantId, Adm = $"SEAT-{studentId:N}" }));
         await Seed(cs, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @S, @B)",
+            "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @S, @B)",
             new { Id = Guid.NewGuid(), TenantId = tenantId, S = studentId, B = busId }));
         return studentId;
     }

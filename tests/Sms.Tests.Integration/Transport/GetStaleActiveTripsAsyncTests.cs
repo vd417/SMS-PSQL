@@ -29,11 +29,11 @@ public class GetStaleActiveTripsAsyncTests(PostgresFixture fx)
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
-        await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+        await conn.ExecuteAsync("INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
             new { Id = busId, TenantId = tenantId });
         await conn.ExecuteAsync(
-            @"INSERT INTO dbo.Trips (Id, TenantId, BusId, Direction, Status, StartedAt, DriverLastPingAt, ConductorLastPingAt)
-              VALUES (@Id, @TenantId, @BusId, 'pickup', 'live', SYSUTCDATETIME(), @DriverLastPingAt, @ConductorLastPingAt)",
+            @"INSERT INTO ""dbo"".""Trips"" (""Id"", ""TenantId"", ""BusId"", ""Direction"", ""Status"", ""StartedAt"", ""DriverLastPingAt"", ""ConductorLastPingAt"")
+              VALUES (@Id, @TenantId, @BusId, 'pickup', 'live', now(), @DriverLastPingAt, @ConductorLastPingAt)",
             new { Id = tripId, TenantId = tenantId, BusId = busId, DriverLastPingAt = driverLastPingAt, ConductorLastPingAt = conductorLastPingAt });
         return tripId;
     }

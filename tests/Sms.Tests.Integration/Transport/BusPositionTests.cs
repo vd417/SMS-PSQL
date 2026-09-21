@@ -89,15 +89,15 @@ public class BusPositionTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, @BusNo)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.BusAssignments (TenantId, TeacherUserId, BusId) VALUES (@TenantId, @TeacherUserId, @BusId)",
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@TenantId, @TeacherUserId, @BusId)",
                 new { TenantId = tenantId, TeacherUserId = userId, BusId = busId });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.BusStops (Id, TenantId, BusId, Name, Seq, Lat, Lng) VALUES (@Id, @TenantId, @BusId, @Name, @Seq, @Lat, @Lng)",
+                "INSERT INTO \"dbo\".\"BusStops\" (\"Id\", \"TenantId\", \"BusId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES (@Id, @TenantId, @BusId, @Name, @Seq, @Lat, @Lng)",
                 new object[]
                 {
                     new { Id = stop1Id, TenantId = tenantId, BusId = busId, Name = "Station A", Seq = 1, Lat = 12.9700, Lng = 77.5900 },
@@ -106,11 +106,11 @@ public class BusPositionTests(PostgresFixture fx)
                 });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.Trips (Id, TenantId, BusId, BusNo, Status, StartedAt) VALUES (@Id, @TenantId, @BusId, @BusNo, 'live', @StartedAt)",
+                "INSERT INTO \"dbo\".\"Trips\" (\"Id\", \"TenantId\", \"BusId\", \"BusNo\", \"Status\", \"StartedAt\") VALUES (@Id, @TenantId, @BusId, @BusNo, 'live', @StartedAt)",
                 new { Id = tripId, TenantId = tenantId, BusId = busId, BusNo = busNo, StartedAt = DateTime.UtcNow });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.TripPings (Id, TenantId, TripId, Lat, Lng, SpeedKmh, Heading, At) VALUES (@Id, @TenantId, @TripId, @Lat, @Lng, @SpeedKmh, @Heading, @At)",
+                "INSERT INTO \"dbo\".\"TripPings\" (\"Id\", \"TenantId\", \"TripId\", \"Lat\", \"Lng\", \"SpeedKmh\", \"Heading\", \"At\") VALUES (@Id, @TenantId, @TripId, @Lat, @Lng, @SpeedKmh, @Heading, @At)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, TripId = tripId, Lat = pingLat, Lng = pingLng, SpeedKmh = 20.0, Heading = 0.0, At = DateTime.UtcNow });
         });
 
@@ -143,11 +143,11 @@ public class BusPositionTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, @BusNo)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.BusAssignments (TenantId, TeacherUserId, BusId) VALUES (@TenantId, @TeacherUserId, @BusId)",
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@TenantId, @TeacherUserId, @BusId)",
                 new { TenantId = tenantId, TeacherUserId = userId, BusId = busId });
         });
 
@@ -189,11 +189,11 @@ public class BusPositionTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, @BusNo)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.BusAssignments (TenantId, TeacherUserId, BusId) VALUES (@TenantId, @TeacherUserId, @BusId)",
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@TenantId, @TeacherUserId, @BusId)",
                 new { TenantId = tenantId, TeacherUserId = userId, BusId = busId });
         });
 

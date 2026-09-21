@@ -41,7 +41,7 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Name) VALUES (@userId, @tenantId, @name)",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@userId, @tenantId, @name)",
             new { userId, tenantId, name });
     }
 
@@ -49,7 +49,7 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
     {
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, @role)", new { userId, role });
+        await conn.ExecuteAsync("INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, @role)", new { userId, role });
     }
 
     private static async Task<Guid> SeedBusAsync(PostgresFixture fx, Guid tenantId, string busNo)
@@ -59,7 +59,7 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@busId, @tenantId, @busNo)",
+            "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@busId, @tenantId, @busNo)",
             new { busId, tenantId, busNo });
         return busId;
     }
@@ -76,13 +76,14 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
         // dbo.Staff.UserId is unique, so re-use the same staff row for a userId already linked to
         // one bus (e.g. assigned to two buses in the same test) rather than inserting a second one.
         var staffId = (await conn.QueryFirstOrDefaultAsync<Guid?>(
-            "SELECT Id FROM dbo.Staff WHERE UserId = @userId", new { userId })) ?? Guid.NewGuid();
+            "SELECT \"Id\" FROM \"dbo\".\"Staff\" WHERE \"UserId\" = @userId", new { userId })) ?? Guid.NewGuid();
         await conn.ExecuteAsync(
-            @"IF NOT EXISTS (SELECT 1 FROM dbo.Staff WHERE UserId = @userId)
-              INSERT dbo.Staff (Id, TenantId, Name, Role, UserId) VALUES (@staffId, @tenantId, @name, @dutyRole, @userId)",
+            @"INSERT INTO ""dbo"".""Staff"" (""Id"", ""TenantId"", ""Name"", ""Role"", ""UserId"")
+              SELECT @staffId, @tenantId, @name, @dutyRole, @userId
+              WHERE NOT EXISTS (SELECT 1 FROM ""dbo"".""Staff"" WHERE ""UserId"" = @userId)",
             new { staffId, tenantId, name = $"Staff {dutyRole}", dutyRole, userId });
         var column = dutyRole == "Driver" ? "DriverStaffId" : "ConductorStaffId";
-        await conn.ExecuteAsync($"UPDATE dbo.Buses SET {column} = @staffId WHERE Id = @busId", new { staffId, busId });
+        await conn.ExecuteAsync($"UPDATE \"dbo\".\"Buses\" SET \"{column}\" = @staffId WHERE \"Id\" = @busId", new { staffId, busId });
     }
 
     private static object InspectionBody(Guid busId, bool allOk = true, string? remarks = null) => new

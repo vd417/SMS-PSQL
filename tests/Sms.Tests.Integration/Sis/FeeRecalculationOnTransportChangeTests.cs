@@ -56,7 +56,7 @@ public class FeeRecalculationOnTransportChangeTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, @Name)",
+            "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, @Name)",
             new { Id = id, TenantId = tenantId, Name = name });
         return id;
     }
@@ -139,7 +139,7 @@ public class FeeRecalculationOnTransportChangeTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         return (await conn.QueryAsync<InvoiceRow>(
-            "SELECT Id, StudentId, Period, Amount, PaidAmount FROM dbo.FeeInvoices WHERE StudentId = @studentId",
+            "SELECT \"Id\", \"StudentId\", \"Period\", \"Amount\", \"PaidAmount\" FROM \"dbo\".\"FeeInvoices\" WHERE \"StudentId\" = @studentId",
             new { studentId })).Single();
     }
 
@@ -149,7 +149,7 @@ public class FeeRecalculationOnTransportChangeTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         var rows = await conn.QueryAsync<LineRow>(
-            "SELECT InvoiceId, FeeHeadName AS HeadName, Amount FROM dbo.FeeInvoiceLines WHERE InvoiceId = @invoiceId",
+            "SELECT \"InvoiceId\", \"FeeHeadName\" AS HeadName, \"Amount\" FROM \"dbo\".\"FeeInvoiceLines\" WHERE \"InvoiceId\" = @invoiceId",
             new { invoiceId });
         return rows.ToList();
     }

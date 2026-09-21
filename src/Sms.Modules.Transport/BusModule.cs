@@ -83,15 +83,16 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     private sealed record RouteStopRow(Guid Id, Guid RouteId, string Name, int Seq, double Lat, double Lng);
 
     private const string StopCountSql =
-        "CASE WHEN b.RouteId IS NOT NULL THEN (SELECT COUNT(*) FROM dbo.RouteStops rs WHERE rs.RouteId = b.RouteId) " +
-        "ELSE (SELECT COUNT(*) FROM dbo.BusStops bs WHERE bs.BusId = b.Id) END";
+        "CASE WHEN b.\"RouteId\" IS NOT NULL THEN (SELECT COUNT(*) FROM \"dbo\".\"RouteStops\" rs WHERE rs.\"RouteId\" = b.\"RouteId\") " +
+        "ELSE (SELECT COUNT(*) FROM \"dbo\".\"BusStops\" bs WHERE bs.\"BusId\" = b.\"Id\") END";
 
     public async Task<BusResponse?> GetAssignedAsync(Guid teacherUserId, CancellationToken ct = default)
     {
         var bus = (await QueryInlineAsync<BusRow>(
-            @"SELECT TOP 1 b.Id, b.BusNo, b.RouteName, b.Driver, b.DriverPhone
-              FROM dbo.Buses b JOIN dbo.BusAssignments a ON a.BusId = b.Id
-              WHERE a.TeacherUserId = @teacherUserId", new { teacherUserId }, ct)).FirstOrDefault();
+            @"SELECT b.""Id"", b.""BusNo"", b.""RouteName"", b.""Driver"", b.""DriverPhone""
+              FROM ""dbo"".""Buses"" b JOIN ""dbo"".""BusAssignments"" a ON a.""BusId"" = b.""Id""
+              WHERE a.""TeacherUserId"" = @teacherUserId
+              LIMIT 1", new { teacherUserId }, ct)).FirstOrDefault();
         if (bus is null) return null;
         var stops = await QueryStopsForBusAsync(bus.Id, ct);
         return new BusResponse(bus.Id, bus.BusNo, bus.RouteName, bus.Driver, bus.DriverPhone, stops);
@@ -104,7 +105,7 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     public async Task<bool> IsDutyTeacherForBusAsync(Guid teacherUserId, Guid busId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<int>(
-            "SELECT COUNT(1) FROM dbo.BusAssignments WHERE TeacherUserId = @teacherUserId AND BusId = @busId",
+            "SELECT COUNT(1) FROM \"dbo\".\"BusAssignments\" WHERE \"TeacherUserId\" = @teacherUserId AND \"BusId\" = @busId",
             new { teacherUserId, busId }, ct);
         return rows.FirstOrDefault() > 0;
     }
@@ -115,7 +116,7 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     public async Task<bool> IsTravelingTeacherForBusAsync(Guid teacherUserId, Guid busId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<int>(
-            "SELECT COUNT(1) FROM dbo.BusTravelingTeachers WHERE TeacherUserId = @teacherUserId AND BusId = @busId",
+            "SELECT COUNT(1) FROM \"dbo\".\"BusTravelingTeachers\" WHERE \"TeacherUserId\" = @teacherUserId AND \"BusId\" = @busId",
             new { teacherUserId, busId }, ct);
         return rows.FirstOrDefault() > 0;
     }
@@ -130,21 +131,21 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     // Teachers.Name), so fall back to the linked Teachers row's name rather than showing blank.
     public Task<IReadOnlyList<TravelingTeacherResponse>> ListTravelingTeachersAsync(Guid busId, CancellationToken ct = default) =>
         QueryInlineAsync<TravelingTeacherResponse>(
-            @"SELECT tt.TeacherUserId, COALESCE(u.Name, tch.Name) AS TeacherName
-              FROM dbo.BusTravelingTeachers tt
-              JOIN dbo.Users u ON u.Id = tt.TeacherUserId
-              LEFT JOIN dbo.Teachers tch ON tch.UserId = tt.TeacherUserId
-              WHERE tt.BusId = @busId
-              ORDER BY COALESCE(u.Name, tch.Name)", new { busId }, ct);
+            @"SELECT tt.""TeacherUserId"", COALESCE(u.""Name"", tch.""Name"") AS ""TeacherName""
+              FROM ""dbo"".""BusTravelingTeachers"" tt
+              JOIN ""dbo"".""Users"" u ON u.""Id"" = tt.""TeacherUserId""
+              LEFT JOIN ""dbo"".""Teachers"" tch ON tch.""UserId"" = tt.""TeacherUserId""
+              WHERE tt.""BusId"" = @busId
+              ORDER BY COALESCE(u.""Name"", tch.""Name"")", new { busId }, ct);
 
     /// Every bus a teacher can live-track as a traveling teacher (not their duty bus).
     public async Task<IReadOnlyList<BusResponse>> ListTravelingBusesForTeacherAsync(Guid teacherUserId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<BusRow>(
-            @"SELECT b.Id, b.BusNo, b.RouteName, b.Driver, b.DriverPhone
-              FROM dbo.Buses b JOIN dbo.BusTravelingTeachers tt ON tt.BusId = b.Id
-              WHERE tt.TeacherUserId = @teacherUserId
-              ORDER BY b.BusNo", new { teacherUserId }, ct);
+            @"SELECT b.""Id"", b.""BusNo"", b.""RouteName"", b.""Driver"", b.""DriverPhone""
+              FROM ""dbo"".""Buses"" b JOIN ""dbo"".""BusTravelingTeachers"" tt ON tt.""BusId"" = b.""Id""
+              WHERE tt.""TeacherUserId"" = @teacherUserId
+              ORDER BY b.""BusNo""", new { teacherUserId }, ct);
         var result = new List<BusResponse>();
         foreach (var bus in rows)
             result.Add(new BusResponse(bus.Id, bus.BusNo, bus.RouteName, bus.Driver, bus.DriverPhone, await QueryStopsForBusAsync(bus.Id, ct)));
@@ -154,15 +155,15 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     private async Task<IReadOnlyList<BusStopResponse>> QueryStopsForBusAsync(Guid busId, CancellationToken ct = default)
     {
         var routeId = (await QueryInlineAsync<Guid?>(
-            "SELECT RouteId FROM dbo.Buses WHERE Id = @busId", new { busId }, ct)).FirstOrDefault();
+            "SELECT \"RouteId\" FROM \"dbo\".\"Buses\" WHERE \"Id\" = @busId", new { busId }, ct)).FirstOrDefault();
         if (routeId is Guid rid)
         {
             return await QueryInlineAsync<BusStopResponse>(
-                "SELECT Id, Name, CAST(NULL AS nvarchar(10)) AS Time, Seq, Lat, Lng FROM dbo.RouteStops WHERE RouteId = @routeId ORDER BY Seq",
+                "SELECT \"Id\", \"Name\", CAST(NULL AS varchar(10)) AS \"Time\", \"Seq\", \"Lat\", \"Lng\" FROM \"dbo\".\"RouteStops\" WHERE \"RouteId\" = @routeId ORDER BY \"Seq\"",
                 new { routeId = rid }, ct);
         }
         return await QueryInlineAsync<BusStopResponse>(
-            "SELECT Id, Name, Time, Seq, Lat, Lng FROM dbo.BusStops WHERE BusId = @busId ORDER BY Seq",
+            "SELECT \"Id\", \"Name\", \"Time\", \"Seq\", \"Lat\", \"Lng\" FROM \"dbo\".\"BusStops\" WHERE \"BusId\" = @busId ORDER BY \"Seq\"",
             new { busId }, ct);
     }
 
@@ -171,7 +172,7 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
 
     public Task<IReadOnlyList<BusStopResponse>> ListStopsForRouteAsync(Guid routeId, CancellationToken ct = default) =>
         QueryInlineAsync<BusStopResponse>(
-            "SELECT Id, Name, CAST(NULL AS nvarchar(10)) AS Time, Seq, Lat, Lng FROM dbo.RouteStops WHERE RouteId = @routeId ORDER BY Seq",
+            "SELECT \"Id\", \"Name\", CAST(NULL AS varchar(10)) AS \"Time\", \"Seq\", \"Lat\", \"Lng\" FROM \"dbo\".\"RouteStops\" WHERE \"RouteId\" = @routeId ORDER BY \"Seq\"",
             new { routeId }, ct);
 
     public async Task<Guid?> GetLiveTripIdForBusAsync(Guid busId, CancellationToken ct = default) =>
@@ -179,7 +180,7 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
 
     public async Task<BusTripContext?> GetBusTripContextAsync(Guid busId, CancellationToken ct = default) =>
         (await QueryInlineAsync<BusTripContext>(
-            "SELECT Id AS BusId, BusNo, RouteId FROM dbo.Buses WHERE Id = @busId", new { busId }, ct)).FirstOrDefault();
+            "SELECT \"Id\" AS \"BusId\", \"BusNo\", \"RouteId\" FROM \"dbo\".\"Buses\" WHERE \"Id\" = @busId", new { busId }, ct)).FirstOrDefault();
 
     public async Task<CreatedBusRow?> CreateBusAsync(
         Guid tenantId, string busNo, string? routeName, Guid? routeId, string? driver, string? driverPhone,
@@ -210,19 +211,19 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     public async Task<(int? Capacity, int Occupied)> GetCapacityAndOccupancyAsync(Guid busId, CancellationToken ct = default)
     {
         var capacity = (await QueryInlineAsync<int?>(
-            "SELECT Capacity FROM dbo.Buses WHERE Id = @busId", new { busId }, ct)).FirstOrDefault();
+            "SELECT \"Capacity\" FROM \"dbo\".\"Buses\" WHERE \"Id\" = @busId", new { busId }, ct)).FirstOrDefault();
         var occupied = (await QueryInlineAsync<int>(
-            "SELECT COUNT(*) FROM dbo.StudentBusAssignments WHERE BusId = @busId", new { busId }, ct)).First();
+            "SELECT COUNT(*) FROM \"dbo\".\"StudentBusAssignments\" WHERE \"BusId\" = @busId", new { busId }, ct)).First();
         return (capacity, occupied);
     }
 
     public async Task<IReadOnlyList<RouteBusCandidate>> ListBusesForRouteAsync(Guid routeId, CancellationToken ct = default) =>
         await QueryInlineAsync<RouteBusCandidate>(
-            @"SELECT b.Id AS BusId, b.Capacity,
-                     (SELECT COUNT(*) FROM dbo.StudentBusAssignments sba WHERE sba.BusId = b.Id) AS Occupied
-              FROM dbo.Buses b
-              WHERE b.RouteId = @routeId
-              ORDER BY b.Id", new { routeId }, ct);
+            @"SELECT b.""Id"" AS ""BusId"", b.""Capacity"",
+                     CAST((SELECT COUNT(*) FROM ""dbo"".""StudentBusAssignments"" sba WHERE sba.""BusId"" = b.""Id"") AS int) AS ""Occupied""
+              FROM ""dbo"".""Buses"" b
+              WHERE b.""RouteId"" = @routeId
+              ORDER BY b.""Id""", new { routeId }, ct);
 
     // RLS-scoped existence guard: stops can live in either the route-based RouteStops table or the
     // legacy per-bus BusStops table (see StudentBusModule.ListMappedAsync's dual
@@ -242,14 +243,14 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
 
     public async Task<bool> StaffExistsAsync(Guid staffId, CancellationToken ct = default) =>
         (await QueryInlineAsync<int>(
-            "SELECT COUNT(1) FROM dbo.Staff WHERE Id = @staffId", new { staffId }, ct)).First() > 0;
+            "SELECT COUNT(1) FROM \"dbo\".\"Staff\" WHERE \"Id\" = @staffId", new { staffId }, ct)).First() > 0;
 
     public async Task<IReadOnlyList<TransportRouteListItem>> ListRoutesAsync(CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<RouteRow>(
-            @"SELECT r.Id, r.Name,
-                (SELECT COUNT(*) FROM dbo.RouteStops s WHERE s.RouteId = r.Id) AS Stops
-              FROM dbo.TransportRoutes r ORDER BY r.Name", null, ct);
+            @"SELECT r.""Id"", r.""Name"",
+                CAST((SELECT COUNT(*) FROM ""dbo"".""RouteStops"" s WHERE s.""RouteId"" = r.""Id"") AS int) AS ""Stops""
+              FROM ""dbo"".""TransportRoutes"" r ORDER BY r.""Name""", null, ct);
         return rows.Select(r => new TransportRouteListItem(r.Id, r.Name, r.Stops)).ToList();
     }
 
@@ -263,22 +264,22 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     public async Task<IReadOnlyList<RouteStopListItem>> ListRouteStopsAsync(Guid routeId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<RouteStopRow>(
-            "SELECT Id, RouteId, Name, Seq, Lat, Lng FROM dbo.RouteStops WHERE RouteId = @routeId ORDER BY Seq",
+            "SELECT \"Id\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\" FROM \"dbo\".\"RouteStops\" WHERE \"RouteId\" = @routeId ORDER BY \"Seq\"",
             new { routeId }, ct);
         return rows.Select(s => new RouteStopListItem(s.Id, s.RouteId, s.Name, s.Seq, s.Lat, s.Lng)).ToList();
     }
 
     public async Task<bool> RouteStopExistsAsync(Guid stopId, CancellationToken ct = default) =>
-        (await QueryInlineAsync<int>("SELECT COUNT(1) FROM dbo.RouteStops WHERE Id = @stopId", new { stopId }, ct)).First() > 0;
+        (await QueryInlineAsync<int>("SELECT COUNT(1) FROM \"dbo\".\"RouteStops\" WHERE \"Id\" = @stopId", new { stopId }, ct)).First() > 0;
 
     public async Task<RouteStopListItem?> CreateRouteStopAsync(
         Guid tenantId, Guid routeId, string name, double lat, double lng, CancellationToken ct = default)
     {
         var seq = (await QueryInlineAsync<int>(
-            "SELECT ISNULL(MAX(Seq), 0) + 1 FROM dbo.RouteStops WHERE RouteId = @routeId", new { routeId }, ct)).First();
+            "SELECT CAST(COALESCE(MAX(\"Seq\"), 0) + 1 AS int) FROM \"dbo\".\"RouteStops\" WHERE \"RouteId\" = @routeId", new { routeId }, ct)).First();
         var id = Guid.NewGuid();
         await ExecuteInlineAsync(
-            "INSERT INTO dbo.RouteStops (Id, TenantId, RouteId, Name, Seq, Lat, Lng) VALUES (@id, @tenantId, @routeId, @name, @seq, @lat, @lng)",
+            "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\", \"TenantId\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES (@id, @tenantId, @routeId, @name, @seq, @lat, @lng)",
             new { id, tenantId, routeId, name, seq, lat, lng }, ct);
         return new RouteStopListItem(id, routeId, name, seq, lat, lng);
     }
@@ -287,10 +288,10 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
         Guid stopId, string name, double lat, double lng, CancellationToken ct = default)
     {
         var row = (await QueryInlineAsync<RouteStopRow>(
-            "SELECT Id, RouteId, Name, Seq, Lat, Lng FROM dbo.RouteStops WHERE Id = @stopId", new { stopId }, ct)).FirstOrDefault();
+            "SELECT \"Id\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\" FROM \"dbo\".\"RouteStops\" WHERE \"Id\" = @stopId", new { stopId }, ct)).FirstOrDefault();
         if (row is null) return null;
         await ExecuteInlineAsync(
-            "UPDATE dbo.RouteStops SET Name = @name, Lat = @lat, Lng = @lng WHERE Id = @stopId",
+            "UPDATE \"dbo\".\"RouteStops\" SET \"Name\" = @name, \"Lat\" = @lat, \"Lng\" = @lng WHERE \"Id\" = @stopId",
             new { stopId, name, lat, lng }, ct);
         return new RouteStopListItem(row.Id, row.RouteId, name, row.Seq, lat, lng);
     }
@@ -298,7 +299,7 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     public async Task<bool> DeleteRouteStopAsync(Guid routeId, Guid stopId, CancellationToken ct = default)
     {
         var n = await ExecuteInlineAsync(
-            "DELETE FROM dbo.RouteStops WHERE Id = @stopId AND RouteId = @routeId",
+            "DELETE FROM \"dbo\".\"RouteStops\" WHERE \"Id\" = @stopId AND \"RouteId\" = @routeId",
             new { stopId, routeId }, ct);
         return n > 0;
     }
@@ -307,7 +308,7 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     {
         for (var i = 0; i < stopIds.Count; i++)
             await ExecuteInlineAsync(
-                "UPDATE dbo.RouteStops SET Seq = @seq WHERE Id = @id AND RouteId = @routeId",
+                "UPDATE \"dbo\".\"RouteStops\" SET \"Seq\" = @seq WHERE \"Id\" = @id AND \"RouteId\" = @routeId",
                 new { seq = i + 1, id = stopIds[i], routeId }, ct);
     }
     // 'arrived' counts as this bus's current trip alongside 'live': a trip that has reached
@@ -316,8 +317,9 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     // it as if no trip were running.
     private async Task<Guid?> CurrentTripIdAsync(Guid busId, CancellationToken ct) =>
         (await QueryInlineAsync<Guid>(
-            @"SELECT TOP 1 t.Id FROM dbo.Trips t
-              WHERE t.BusId = @busId AND t.Status IN ('live', 'arrived') ORDER BY t.StartedAt DESC",
+            @"SELECT t.""Id"" FROM ""dbo"".""Trips"" t
+              WHERE t.""BusId"" = @busId AND t.""Status"" IN ('live', 'arrived') ORDER BY t.""StartedAt"" DESC
+              LIMIT 1",
             new { busId }, ct)).Cast<Guid?>().FirstOrDefault();
 
     public async Task<IReadOnlyList<BusRosterEntry>> GetRosterAsync(Guid busId, CancellationToken ct = default)
@@ -327,28 +329,28 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
         if (tripId is null)
         {
             rows = await QueryInlineAsync<RosterRow>(
-                @"SELECT sba.StudentId, s.Name AS StudentName, sba.StopId, 'pending' AS Status
-                  FROM dbo.StudentBusAssignments sba
-                  JOIN dbo.Students s ON s.Id = sba.StudentId
-                  WHERE sba.BusId = @busId
+                @"SELECT sba.""StudentId"", s.""Name"" AS ""StudentName"", sba.""StopId"", 'pending' AS ""Status""
+                  FROM ""dbo"".""StudentBusAssignments"" sba
+                  JOIN ""dbo"".""Students"" s ON s.""Id"" = sba.""StudentId""
+                  WHERE sba.""BusId"" = @busId
                     AND NOT EXISTS (
-                      SELECT 1 FROM dbo.StudentTransportOptOut o
-                      WHERE o.StudentId = sba.StudentId AND o.TenantId = sba.TenantId)
-                  ORDER BY s.Name", new { busId }, ct);
+                      SELECT 1 FROM ""dbo"".""StudentTransportOptOut"" o
+                      WHERE o.""StudentId"" = sba.""StudentId"" AND o.""TenantId"" = sba.""TenantId"")
+                  ORDER BY s.""Name""", new { busId }, ct);
         }
         else
         {
             rows = await QueryInlineAsync<RosterRow>(
-                @"SELECT sba.StudentId, s.Name AS StudentName, sba.StopId,
-                         COALESCE(bo.State, 'pending') AS Status
-                  FROM dbo.StudentBusAssignments sba
-                  JOIN dbo.Students s ON s.Id = sba.StudentId
-                  LEFT JOIN dbo.Boardings bo ON bo.TripId = @tripId AND bo.StudentId = sba.StudentId
-                  WHERE sba.BusId = @busId
+                @"SELECT sba.""StudentId"", s.""Name"" AS ""StudentName"", sba.""StopId"",
+                         COALESCE(bo.""State"", 'pending') AS ""Status""
+                  FROM ""dbo"".""StudentBusAssignments"" sba
+                  JOIN ""dbo"".""Students"" s ON s.""Id"" = sba.""StudentId""
+                  LEFT JOIN ""dbo"".""Boardings"" bo ON bo.""TripId"" = @tripId AND bo.""StudentId"" = sba.""StudentId""
+                  WHERE sba.""BusId"" = @busId
                     AND NOT EXISTS (
-                      SELECT 1 FROM dbo.StudentTransportOptOut o
-                      WHERE o.StudentId = sba.StudentId AND o.TenantId = sba.TenantId)
-                  ORDER BY s.Name", new { busId, tripId }, ct);
+                      SELECT 1 FROM ""dbo"".""StudentTransportOptOut"" o
+                      WHERE o.""StudentId"" = sba.""StudentId"" AND o.""TenantId"" = sba.""TenantId"")
+                  ORDER BY s.""Name""", new { busId, tripId }, ct);
         }
 
         return rows.Select(r => new BusRosterEntry(r.StudentId, r.StudentName, Initials(r.StudentName), r.StopId, r.Status)).ToList();
@@ -357,15 +359,15 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     public async Task<IReadOnlyList<TransportBusResponse>> ListBusesAsync(CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<BusListRow>(
-            $@"SELECT b.Id AS BusId, b.BusNo, b.RouteId, b.RouteName, b.DriverStaffId, b.Driver, b.DriverPhone,
-                {StopCountSql} AS StopCount,
-                (SELECT COUNT(*) FROM dbo.StudentBusAssignments sba WHERE sba.BusId = b.Id) AS StudentsAssigned,
-                a.TeacherUserId, COALESCE(u.Name, tch.Name) AS TeacherName, b.Capacity, b.ConductorStaffId
-              FROM dbo.Buses b
-              LEFT JOIN dbo.BusAssignments a ON a.BusId = b.Id
-              LEFT JOIN dbo.Users u ON u.Id = a.TeacherUserId
-              LEFT JOIN dbo.Teachers tch ON tch.UserId = a.TeacherUserId
-              ORDER BY b.BusNo", null, ct);
+            $@"SELECT b.""Id"" AS ""BusId"", b.""BusNo"", b.""RouteId"", b.""RouteName"", b.""DriverStaffId"", b.""Driver"", b.""DriverPhone"",
+                CAST({StopCountSql} AS int) AS ""StopCount"",
+                CAST((SELECT COUNT(*) FROM ""dbo"".""StudentBusAssignments"" sba WHERE sba.""BusId"" = b.""Id"") AS int) AS ""StudentsAssigned"",
+                a.""TeacherUserId"", COALESCE(u.""Name"", tch.""Name"") AS ""TeacherName"", b.""Capacity"", b.""ConductorStaffId""
+              FROM ""dbo"".""Buses"" b
+              LEFT JOIN ""dbo"".""BusAssignments"" a ON a.""BusId"" = b.""Id""
+              LEFT JOIN ""dbo"".""Users"" u ON u.""Id"" = a.""TeacherUserId""
+              LEFT JOIN ""dbo"".""Teachers"" tch ON tch.""UserId"" = a.""TeacherUserId""
+              ORDER BY b.""BusNo""", null, ct);
         return rows.Select(r => new TransportBusResponse(
             r.BusId, r.BusNo, r.RouteId, r.RouteName, r.DriverStaffId, r.Driver, r.DriverPhone,
             r.StopCount, r.StudentsAssigned, r.TeacherUserId, r.TeacherName,
@@ -375,15 +377,15 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     public async Task<BusTeacherAssignmentResponse?> GetTeacherAssignmentAsync(Guid busId, CancellationToken ct = default)
     {
         var row = (await QueryInlineAsync<BusListRow>(
-            $@"SELECT b.Id AS BusId, b.BusNo, b.RouteId, b.RouteName, b.DriverStaffId, b.Driver, b.DriverPhone,
-                {StopCountSql} AS StopCount,
-                (SELECT COUNT(*) FROM dbo.StudentBusAssignments sba WHERE sba.BusId = b.Id) AS StudentsAssigned,
-                a.TeacherUserId, COALESCE(u.Name, tch.Name) AS TeacherName, b.Capacity
-              FROM dbo.Buses b
-              LEFT JOIN dbo.BusAssignments a ON a.BusId = b.Id
-              LEFT JOIN dbo.Users u ON u.Id = a.TeacherUserId
-              LEFT JOIN dbo.Teachers tch ON tch.UserId = a.TeacherUserId
-              WHERE b.Id = @busId", new { busId }, ct)).FirstOrDefault();
+            $@"SELECT b.""Id"" AS ""BusId"", b.""BusNo"", b.""RouteId"", b.""RouteName"", b.""DriverStaffId"", b.""Driver"", b.""DriverPhone"",
+                CAST({StopCountSql} AS int) AS ""StopCount"",
+                CAST((SELECT COUNT(*) FROM ""dbo"".""StudentBusAssignments"" sba WHERE sba.""BusId"" = b.""Id"") AS int) AS ""StudentsAssigned"",
+                a.""TeacherUserId"", COALESCE(u.""Name"", tch.""Name"") AS ""TeacherName"", b.""Capacity""
+              FROM ""dbo"".""Buses"" b
+              LEFT JOIN ""dbo"".""BusAssignments"" a ON a.""BusId"" = b.""Id""
+              LEFT JOIN ""dbo"".""Users"" u ON u.""Id"" = a.""TeacherUserId""
+              LEFT JOIN ""dbo"".""Teachers"" tch ON tch.""UserId"" = a.""TeacherUserId""
+              WHERE b.""Id"" = @busId", new { busId }, ct)).FirstOrDefault();
         return row is null ? null : new BusTeacherAssignmentResponse(row.BusId, row.BusNo, row.TeacherUserId, row.TeacherName);
     }
 
@@ -394,15 +396,15 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
         ExecuteProcAsync("dbo.BusAssignment_Unassign", new { TenantId = tenantId, BusId = busId }, ct);
 
     public async Task<bool> BusExistsAsync(Guid busId, CancellationToken ct = default) =>
-        (await QueryInlineAsync<int>("SELECT COUNT(1) FROM dbo.Buses WHERE Id = @busId", new { busId }, ct)).First() > 0;
+        (await QueryInlineAsync<int>("SELECT COUNT(1) FROM \"dbo\".\"Buses\" WHERE \"Id\" = @busId", new { busId }, ct)).First() > 0;
 
     public async Task<int> BusCountForRouteAsync(Guid routeId, CancellationToken ct = default) =>
-        (await QueryInlineAsync<int>("SELECT COUNT(1) FROM dbo.Buses WHERE RouteId = @routeId", new { routeId }, ct)).First();
+        (await QueryInlineAsync<int>("SELECT COUNT(1) FROM \"dbo\".\"Buses\" WHERE \"RouteId\" = @routeId", new { routeId }, ct)).First();
 
     public async Task<bool> DeleteRouteAsync(Guid routeId, CancellationToken ct = default)
     {
-        await ExecuteInlineAsync("DELETE FROM dbo.RouteStops WHERE RouteId = @routeId", new { routeId }, ct);
-        var n = await ExecuteInlineAsync("DELETE FROM dbo.TransportRoutes WHERE Id = @routeId", new { routeId }, ct);
+        await ExecuteInlineAsync("DELETE FROM \"dbo\".\"RouteStops\" WHERE \"RouteId\" = @routeId", new { routeId }, ct);
+        var n = await ExecuteInlineAsync("DELETE FROM \"dbo\".\"TransportRoutes\" WHERE \"Id\" = @routeId", new { routeId }, ct);
         return n > 0;
     }
 
@@ -414,37 +416,40 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     /// existing per-bus visibility check across all buses on the route, rather than duplicating
     /// role-checking logic at the route level.
     public Task<IReadOnlyList<Guid>> ListBusIdsForRouteAsync(Guid routeId, CancellationToken ct = default) =>
-        QueryInlineAsync<Guid>("SELECT Id FROM dbo.Buses WHERE RouteId = @routeId", new { routeId }, ct);
+        QueryInlineAsync<Guid>("SELECT \"Id\" FROM \"dbo\".\"Buses\" WHERE \"RouteId\" = @routeId", new { routeId }, ct);
 
     /// Every bus with its current live trip (matched by BusNo), latest GPS ping and boarded count.
     public Task<IReadOnlyList<FleetBusRow>> FleetAsync(CancellationToken ct = default) =>
         QueryInlineAsync<FleetBusRow>(
-            $@"SELECT b.Id AS BusId, b.RouteId, b.BusNo, b.RouteName, b.Driver, b.DriverPhone,
-                {StopCountSql} AS StopCount,
-                t.Id AS TripId, p.Lat, p.Lng, p.SpeedKmh, p.At AS LastPingAt,
-                ISNULL(bd.Cnt, 0) AS StudentsRiding, b.Capacity, p.Heading
-              FROM dbo.Buses b
-              OUTER APPLY (
-                SELECT TOP 1 tt.Id, tt.StartedAt FROM dbo.Trips tt
-                WHERE tt.BusId = b.Id AND tt.Status IN ('live', 'arrived') ORDER BY tt.StartedAt DESC) t
-              OUTER APPLY (
-                SELECT TOP 1 pp.Lat, pp.Lng, pp.SpeedKmh, pp.At, pp.Heading FROM dbo.TripPings pp
-                WHERE pp.TripId = t.Id ORDER BY pp.At DESC) p
-              OUTER APPLY (
-                SELECT COUNT(*) AS Cnt FROM dbo.Boardings bo
-                WHERE bo.TripId = t.Id AND bo.State = 'boarded') bd
-              ORDER BY b.BusNo", null, ct);
+            $@"SELECT b.""Id"" AS ""BusId"", b.""RouteId"", b.""BusNo"", b.""RouteName"", b.""Driver"", b.""DriverPhone"",
+                CAST({StopCountSql} AS int) AS ""StopCount"",
+                t.""Id"" AS ""TripId"", p.""Lat"", p.""Lng"", p.""SpeedKmh"", p.""At"" AS ""LastPingAt"",
+                CAST(COALESCE(bd.""Cnt"", 0) AS int) AS ""StudentsRiding"", b.""Capacity"", p.""Heading""
+              FROM ""dbo"".""Buses"" b
+              LEFT JOIN LATERAL (
+                SELECT tt.""Id"", tt.""StartedAt"" FROM ""dbo"".""Trips"" tt
+                WHERE tt.""BusId"" = b.""Id"" AND tt.""Status"" IN ('live', 'arrived') ORDER BY tt.""StartedAt"" DESC LIMIT 1
+              ) t ON true
+              LEFT JOIN LATERAL (
+                SELECT pp.""Lat"", pp.""Lng"", pp.""SpeedKmh"", pp.""At"", pp.""Heading"" FROM ""dbo"".""TripPings"" pp
+                WHERE pp.""TripId"" = t.""Id"" ORDER BY pp.""At"" DESC LIMIT 1
+              ) p ON true
+              LEFT JOIN LATERAL (
+                SELECT CAST(COUNT(*) AS int) AS ""Cnt"" FROM ""dbo"".""Boardings"" bo
+                WHERE bo.""TripId"" = t.""Id"" AND bo.""State"" = 'boarded'
+              ) bd ON true
+              ORDER BY b.""BusNo""", null, ct);
 
     /// Vehicles/Stops = row counts; Routes = distinct named routes; Students = distinct pupils who have boarded.
     public async Task<TransportSummaryResponse> SummaryAsync(CancellationToken ct = default) =>
         (await QueryInlineAsync<TransportSummaryResponse>(
             @"SELECT
-                (SELECT COUNT(*) FROM dbo.Buses) AS Vehicles,
-                (SELECT COUNT(*) FROM dbo.TransportRoutes) AS Routes,
-                (SELECT COUNT(DISTINCT sba.StudentId) FROM dbo.StudentBusAssignments sba) AS Students,
-                (SELECT COUNT(*) FROM dbo.RouteStops) +
-                (SELECT COUNT(*) FROM dbo.BusStops bs
-                   WHERE NOT EXISTS (SELECT 1 FROM dbo.Buses bx WHERE bx.Id = bs.BusId AND bx.RouteId IS NOT NULL)) AS Stops",
+                CAST((SELECT COUNT(*) FROM ""dbo"".""Buses"") AS int) AS ""Vehicles"",
+                CAST((SELECT COUNT(*) FROM ""dbo"".""TransportRoutes"") AS int) AS ""Routes"",
+                CAST((SELECT COUNT(DISTINCT sba.""StudentId"") FROM ""dbo"".""StudentBusAssignments"" sba) AS int) AS ""Students"",
+                CAST((SELECT COUNT(*) FROM ""dbo"".""RouteStops"") +
+                (SELECT COUNT(*) FROM ""dbo"".""BusStops"" bs
+                   WHERE NOT EXISTS (SELECT 1 FROM ""dbo"".""Buses"" bx WHERE bx.""Id"" = bs.""BusId"" AND bx.""RouteId"" IS NOT NULL)) AS int) AS ""Stops""",
             null, ct)).First();
 
     public async Task<bool> UpsertBoardingAsync(
@@ -472,18 +477,18 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     public async Task<BusPositionResponse> GetPositionAsync(Guid busId, CancellationToken ct = default)
     {
         var stops = await QueryInlineAsync<StopRow>(
-            @"SELECT Name, Seq, Lat, Lng FROM (
-                SELECT rs.Name, rs.Seq, rs.Lat, rs.Lng
-                FROM dbo.Buses b INNER JOIN dbo.RouteStops rs ON rs.RouteId = b.RouteId
-                WHERE b.Id = @busId AND b.RouteId IS NOT NULL
+            @"SELECT ""Name"", ""Seq"", ""Lat"", ""Lng"" FROM (
+                SELECT rs.""Name"", rs.""Seq"", rs.""Lat"", rs.""Lng""
+                FROM ""dbo"".""Buses"" b INNER JOIN ""dbo"".""RouteStops"" rs ON rs.""RouteId"" = b.""RouteId""
+                WHERE b.""Id"" = @busId AND b.""RouteId"" IS NOT NULL
                 UNION ALL
-                SELECT bs.Name, bs.Seq, bs.Lat, bs.Lng
-                FROM dbo.BusStops bs INNER JOIN dbo.Buses b ON b.Id = bs.BusId
-                WHERE bs.BusId = @busId AND b.RouteId IS NULL
-              ) s ORDER BY Seq", new { busId }, ct);
+                SELECT bs.""Name"", bs.""Seq"", bs.""Lat"", bs.""Lng""
+                FROM ""dbo"".""BusStops"" bs INNER JOIN ""dbo"".""Buses"" b ON b.""Id"" = bs.""BusId""
+                WHERE bs.""BusId"" = @busId AND b.""RouteId"" IS NULL
+              ) s ORDER BY ""Seq""", new { busId }, ct);
         var tripId = await CurrentTripIdAsync(busId, ct);
         PingRow2? ping = tripId is null ? null : (await QueryInlineAsync<PingRow2>(
-            "SELECT TOP 1 Lat, Lng, SpeedKmh FROM dbo.TripPings WHERE TripId = @tripId ORDER BY At DESC",
+            "SELECT \"Lat\", \"Lng\", \"SpeedKmh\" FROM \"dbo\".\"TripPings\" WHERE \"TripId\" = @tripId ORDER BY \"At\" DESC LIMIT 1",
             new { tripId }, ct)).FirstOrDefault();
 
         if (ping is null || stops.Count == 0)
@@ -520,7 +525,7 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     {
         var tripId = await CurrentTripIdAsync(busId, ct);
         var ping = tripId is null ? null : (await QueryInlineAsync<LiveSnapshotPingRow>(
-            "SELECT TOP 1 Lat, Lng, SpeedKmh, Heading, At, Accuracy FROM dbo.TripPings WHERE TripId = @tripId ORDER BY At DESC",
+            "SELECT \"Lat\", \"Lng\", \"SpeedKmh\", \"Heading\", \"At\", \"Accuracy\" FROM \"dbo\".\"TripPings\" WHERE \"TripId\" = @tripId ORDER BY \"At\" DESC LIMIT 1",
             new { tripId }, ct)).FirstOrDefault();
 
         var position = await GetPositionAsync(busId, ct);

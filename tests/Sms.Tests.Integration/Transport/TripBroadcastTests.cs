@@ -151,10 +151,10 @@ public class TripBroadcastTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Staff (Id, TenantId, Name, UserId) VALUES (@Id, @TenantId, @Name, @UserId)",
+                "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@Id, @TenantId, @Name, @UserId)",
                 new { Id = conductorStaffId, TenantId = tenantId, Name = "Priya Rao", UserId = conductorUserId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo, ConductorStaffId) VALUES (@Id, @TenantId, @BusNo, @ConductorStaffId)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"ConductorStaffId\") VALUES (@Id, @TenantId, @BusNo, @ConductorStaffId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, BusNo = busNo, ConductorStaffId = conductorStaffId });
         }
 
@@ -191,7 +191,7 @@ public class TripBroadcastTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, @BusNo)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
         }
 
@@ -244,7 +244,7 @@ public class TripBroadcastTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, @BusNo)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
         }
 
@@ -283,10 +283,10 @@ public class TripBroadcastTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo, RouteId) VALUES (@Id, @TenantId, @BusNo, @RouteId)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\") VALUES (@Id, @TenantId, @BusNo, @RouteId)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo, RouteId = routeId });
             await conn.ExecuteAsync(
-                "INSERT dbo.RouteStops (Id, TenantId, RouteId, Name, Seq, Lat, Lng) VALUES (@Id, @TenantId, @RouteId, 'Stop A', 1, @Lat, @Lng)",
+                "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\", \"TenantId\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES (@Id, @TenantId, @RouteId, 'Stop A', 1, @Lat, @Lng)",
                 new { Id = stopId, TenantId = tenantId, RouteId = routeId, Lat = stopLat, Lng = stopLng });
         }
 
@@ -332,7 +332,7 @@ public class TripBroadcastTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, @BusNo)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
         }
 

@@ -37,13 +37,13 @@ public class TransportAuthorizationRepositoryTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Students (Id, TenantId, Name, AdmissionNo) VALUES (@Id, @TenantId, 'Test Student', @AdmissionNo)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"Name\", \"AdmissionNo\") VALUES (@Id, @TenantId, 'Test Student', @AdmissionNo)",
                 new { Id = studentId, TenantId = tenantId, AdmissionNo = admissionNo });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
                 new { Id = busId, OtherId = otherBusId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @StudentId, @BusId)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @StudentId, @BusId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = studentId, BusId = busId });
         }
 
@@ -72,10 +72,10 @@ public class TransportAuthorizationRepositoryTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
                 new { Id = busId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.BusAssignments (Id, TenantId, TeacherUserId, BusId) VALUES (@Id, @TenantId, @TeacherUserId, @BusId)",
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"Id\", \"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@Id, @TenantId, @TeacherUserId, @BusId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, TeacherUserId = teacherId, BusId = busId });
         }
 
@@ -103,7 +103,7 @@ public class TransportAuthorizationRepositoryTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
                 new { Id = busId, TenantId = tenantId });
         }
 
@@ -142,11 +142,11 @@ public class TransportAuthorizationRepositoryTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
                 new { Id = busId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                @"INSERT INTO dbo.Trips (Id, TenantId, BusId, DriverId, ConductorId, Direction, Status, StartedAt)
-                  VALUES (@Id, @TenantId, @BusId, @DriverId, @ConductorId, 'pickup', 'live', SYSUTCDATETIME())",
+                @"INSERT INTO ""dbo"".""Trips"" (""Id"", ""TenantId"", ""BusId"", ""DriverId"", ""ConductorId"", ""Direction"", ""Status"", ""StartedAt"")
+                  VALUES (@Id, @TenantId, @BusId, @DriverId, @ConductorId, 'pickup', 'live', now())",
                 new { Id = tripId, TenantId = tenantId, BusId = busId, DriverId = driverId, ConductorId = conductorId });
         }
 

@@ -89,10 +89,10 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'ROUTE-GEO-1')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-GEO-1')",
                 new { Id = routeId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.RouteStops (Id, TenantId, RouteId, Name, Seq, Lat, Lng) VALUES " +
+                "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\", \"TenantId\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES " +
                 "(@Id1, @TenantId, @RouteId, 'Stop A', 1, 12.9716, 77.5946), " +
                 "(@Id2, @TenantId, @RouteId, 'Stop B', 2, 12.9816, 77.6046)",
                 new { Id1 = Guid.NewGuid(), Id2 = Guid.NewGuid(), TenantId = tenantId, RouteId = routeId });
@@ -125,10 +125,10 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'ROUTE-GEO-2')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-GEO-2')",
                 new { Id = routeId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo, RouteId) VALUES (@Id, @TenantId, 'BUS-GEO-1', @RouteId)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\") VALUES (@Id, @TenantId, 'BUS-GEO-1', @RouteId)",
                 new { Id = busId, TenantId = tenantId, RouteId = routeId });
             // Deliberately no BusAssignments/BusTravelingTeachers/Trips row links this teacher to
             // the bus on the route — they must be denied.
@@ -155,7 +155,7 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantA, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'ROUTE-GEO-3')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-GEO-3')",
                 new { Id = routeId, TenantId = tenantA });
         });
 
@@ -180,7 +180,7 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'ROUTE-GEO-4')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-GEO-4')",
                 new { Id = routeId, TenantId = tenantId });
             // Deliberately zero RouteStops rows — the service short-circuits to Unavailable
             // before ever calling IGoogleRoutesClient.
@@ -217,10 +217,10 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'ROUTE-GEO-5')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-GEO-5')",
                 new { Id = routeId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.RouteStops (Id, TenantId, RouteId, Name, Seq, Lat, Lng) VALUES " +
+                "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\", \"TenantId\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES " +
                 "(@Id1, @TenantId, @RouteId, 'Stop A', 1, 12.9716, 77.5946), " +
                 "(@Id2, @TenantId, @RouteId, 'Stop B', 2, 12.9816, 77.6046)",
                 new { Id1 = stopAId, Id2 = stopBId, TenantId = tenantId, RouteId = routeId });
@@ -244,7 +244,7 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
         // Mutate the route's actual stops: add a third stop, changing the stop sequence and
         // therefore the hash RouteGeometryHasher computes over it.
         await Seed(fx.ConnectionString, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.RouteStops (Id, TenantId, RouteId, Name, Seq, Lat, Lng) VALUES " +
+            "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\", \"TenantId\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES " +
             "(@Id, @TenantId, @RouteId, 'Stop C', 3, 12.9900, 77.6200)",
             new { Id = Guid.NewGuid(), TenantId = tenantId, RouteId = routeId }));
 

@@ -58,22 +58,22 @@ public class TransportStudentsListTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'List Route')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'List Route')",
                 new { Id = routeId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo, RouteId, Capacity) VALUES (@Id, @TenantId, 'LIST-1', @RouteId, 10)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\", \"Capacity\") VALUES (@Id, @TenantId, 'LIST-1', @RouteId, 10)",
                 new { Id = busId, TenantId = tenantId, RouteId = routeId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade) VALUES (@Id, @TenantId, 'M-1', 'Mapped Kid', '5')",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Grade\") VALUES (@Id, @TenantId, 'M-1', 'Mapped Kid', '5')",
                 new { Id = mappedStudent, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade) VALUES (@Id, @TenantId, 'P-1', 'Pending Kid', '6')",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Grade\") VALUES (@Id, @TenantId, 'P-1', 'Pending Kid', '6')",
                 new { Id = pendingStudent, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, RouteId, BusId) VALUES (@Id, @TenantId, @S, @R, @B)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"RouteId\", \"BusId\") VALUES (@Id, @TenantId, @S, @R, @B)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, S = mappedStudent, R = routeId, B = busId });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, RouteId, BusId) VALUES (@Id, @TenantId, @S, @R, NULL)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"RouteId\", \"BusId\") VALUES (@Id, @TenantId, @S, @R, NULL)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, S = pendingStudent, R = routeId });
         });
 

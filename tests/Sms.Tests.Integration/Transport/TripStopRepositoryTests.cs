@@ -33,13 +33,13 @@ public class TripStopRepositoryTests(PostgresFixture fx)
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
-        await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+        await conn.ExecuteAsync("INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
             new { Id = busId, TenantId = tenantId });
         await conn.ExecuteAsync(
-            "INSERT INTO dbo.Trips (Id, TenantId, BusId, RouteId, Direction, Status, StartedAt) VALUES (@Id, @TenantId, @BusId, @RouteId, 'pickup', 'live', SYSUTCDATETIME())",
+            "INSERT INTO \"dbo\".\"Trips\" (\"Id\", \"TenantId\", \"BusId\", \"RouteId\", \"Direction\", \"Status\", \"StartedAt\") VALUES (@Id, @TenantId, @BusId, @RouteId, 'pickup', 'live', now())",
             new { Id = tripId, TenantId = tenantId, BusId = busId, RouteId = routeId });
         await conn.ExecuteAsync(
-            @"INSERT INTO dbo.RouteStops (Id, TenantId, RouteId, Name, Seq, Lat, Lng) VALUES
+            @"INSERT INTO ""dbo"".""RouteStops"" (""Id"", ""TenantId"", ""RouteId"", ""Name"", ""Seq"", ""Lat"", ""Lng"") VALUES
               (@S1, @TenantId, @RouteId, 'Stop A', 1, 12.1, 77.1),
               (@S2, @TenantId, @RouteId, 'Stop B', 2, 12.2, 77.2)",
             new { S1 = stop1, S2 = stop2, TenantId = tenantId, RouteId = routeId });

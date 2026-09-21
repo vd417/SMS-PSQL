@@ -36,21 +36,21 @@ public class BusEtaTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@busId, @tenantId, 'B1')", new { busId, tenantId });
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@busId, @tenantId, 'B1')", new { busId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.BusAssignments (TenantId, TeacherUserId, BusId) VALUES (@tenantId, @teacherUserId, @busId)",
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@tenantId, @teacherUserId, @busId)",
                 new { tenantId, teacherUserId, busId });
             await conn.ExecuteAsync(
-                "INSERT dbo.BusStops (TenantId, BusId, Name, Seq, Lat, Lng) VALUES (@tenantId, @busId, 'Stop1', 0, 12.9716, 77.5946)",
+                "INSERT INTO \"dbo\".\"BusStops\" (\"TenantId\", \"BusId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES (@tenantId, @busId, 'Stop1', 0, 12.9716, 77.5946)",
                 new { tenantId, busId });
             await conn.ExecuteAsync(
-                "INSERT dbo.BusStops (TenantId, BusId, Name, Seq, Lat, Lng) VALUES (@tenantId, @busId, 'Stop2', 1, 12.9816, 77.6046)",
+                "INSERT INTO \"dbo\".\"BusStops\" (\"TenantId\", \"BusId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES (@tenantId, @busId, 'Stop2', 1, 12.9816, 77.6046)",
                 new { tenantId, busId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Trips (Id, TenantId, BusId, Status, StartedAt) VALUES (@tripId, @tenantId, @busId, 'live', SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Trips\" (\"Id\", \"TenantId\", \"BusId\", \"Status\", \"StartedAt\") VALUES (@tripId, @tenantId, @busId, 'live', now())",
                 new { tripId, tenantId, busId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TripPings (TenantId, TripId, Lat, Lng, SpeedKmh, At) VALUES (@tenantId, @tripId, 12.9716, 77.5946, 30, SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"TripPings\" (\"TenantId\", \"TripId\", \"Lat\", \"Lng\", \"SpeedKmh\", \"At\") VALUES (@tenantId, @tripId, 12.9716, 77.5946, 30, now())",
                 new { tenantId, tripId });
         }
 
@@ -89,19 +89,19 @@ public class BusEtaTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@busId, @tenantId, 'B2')", new { busId, tenantId });
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@busId, @tenantId, 'B2')", new { busId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.BusAssignments (TenantId, TeacherUserId, BusId) VALUES (@tenantId, @teacherUserId, @busId)",
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@tenantId, @teacherUserId, @busId)",
                 new { tenantId, teacherUserId, busId });
             await conn.ExecuteAsync(
-                "INSERT dbo.BusStops (TenantId, BusId, Name, Seq, Lat, Lng) VALUES (@tenantId, @busId, 'Stop1', 0, 12.9716, 77.5946)",
+                "INSERT INTO \"dbo\".\"BusStops\" (\"TenantId\", \"BusId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES (@tenantId, @busId, 'Stop1', 0, 12.9716, 77.5946)",
                 new { tenantId, busId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Trips (Id, TenantId, BusId, Status, StartedAt) VALUES (@tripId, @tenantId, @busId, 'live', SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Trips\" (\"Id\", \"TenantId\", \"BusId\", \"Status\", \"StartedAt\") VALUES (@tripId, @tenantId, @busId, 'live', now())",
                 new { tripId, tenantId, busId });
             // SpeedKmh is NOT NULL on dbo.TripPings (default 0) — 0 IS the "missing" sentinel.
             await conn.ExecuteAsync(
-                "INSERT dbo.TripPings (TenantId, TripId, Lat, Lng, SpeedKmh, At) VALUES (@tenantId, @tripId, 12.9716, 77.5946, 0, SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"TripPings\" (\"TenantId\", \"TripId\", \"Lat\", \"Lng\", \"SpeedKmh\", \"At\") VALUES (@tenantId, @tripId, 12.9716, 77.5946, 0, now())",
                 new { tenantId, tripId });
         }
 

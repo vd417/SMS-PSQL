@@ -54,10 +54,10 @@ public class TransportFleetHubTests(PostgresFixture fx)
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
-            await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+            await conn.ExecuteAsync("INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
                 new { Id = busId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.BusAssignments (Id, TenantId, TeacherUserId, BusId) VALUES (@Id, @TenantId, @TeacherUserId, @BusId)",
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"Id\", \"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@Id, @TenantId, @TeacherUserId, @BusId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, TeacherUserId = teacherId, BusId = busId });
         }
 
@@ -79,7 +79,7 @@ public class TransportFleetHubTests(PostgresFixture fx)
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
-            await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+            await conn.ExecuteAsync("INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
                 new { Id = busId, TenantId = tenantId });
         }
 
@@ -105,19 +105,19 @@ public class TransportFleetHubTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-A')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-A')",
                 new { Id = busId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-B')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-B')",
                 new { Id = otherBusId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Students (Id, TenantId, Name, AdmissionNo, Status) VALUES (@Id, @TenantId, 'Kid', 'ADM-X', 'active')",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"Name\", \"AdmissionNo\", \"Status\") VALUES (@Id, @TenantId, 'Kid', 'ADM-X', 'active')",
                 new { Id = childId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @StudentId, @BusId)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @StudentId, @BusId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = childId, BusId = busId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@ParentUserId, @StudentId, @TenantId)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@ParentUserId, @StudentId, @TenantId)",
                 new { ParentUserId = parentId, StudentId = childId, TenantId = tenantId });
         }
 

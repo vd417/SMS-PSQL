@@ -39,10 +39,10 @@ public sealed record CreateFuelLogRequest(Guid BusId, int OdometerKm, decimal Fu
 public sealed class VehicleCheckRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
     private const string InspectionCols =
-        "Id, TenantId, BusId, SubmittedByUserId, Brakes, Tyres, Lights, Horn, FirstAidKit, " +
-        "FireExtinguisher, EmergencyExit, FuelLevel, AllOk, Remarks, InspectionDate, CreatedAt";
+        "\"Id\", \"TenantId\", \"BusId\", \"SubmittedByUserId\", \"Brakes\", \"Tyres\", \"Lights\", \"Horn\", \"FirstAidKit\", " +
+        "\"FireExtinguisher\", \"EmergencyExit\", \"FuelLevel\", \"AllOk\", \"Remarks\", \"InspectionDate\", \"CreatedAt\"";
     private const string FuelLogCols =
-        "Id, TenantId, BusId, RecordedByUserId, OdometerKm, FuelAddedLiters, RecordedAt";
+        "\"Id\", \"TenantId\", \"BusId\", \"RecordedByUserId\", \"OdometerKm\", \"FuelAddedLiters\", \"RecordedAt\"";
 
     private sealed record UserIdRow(Guid Id);
 
@@ -73,7 +73,7 @@ public sealed class VehicleCheckRepository(IDbConnectionFactory factory) : BaseR
 
     public Task<IReadOnlyList<InspectionResponse>> ListInspectionsAsync(Guid busId, CancellationToken ct = default) =>
         QueryInlineAsync<InspectionResponse>(
-            $"SELECT {InspectionCols} FROM dbo.VehicleInspections WHERE BusId = @busId ORDER BY InspectionDate DESC",
+            $"SELECT {InspectionCols} FROM \"dbo\".\"VehicleInspections\" WHERE \"BusId\" = @busId ORDER BY \"InspectionDate\" DESC",
             new { busId }, ct);
 
     public Task<FuelLogResponse?> CreateFuelLogAsync(
@@ -89,14 +89,14 @@ public sealed class VehicleCheckRepository(IDbConnectionFactory factory) : BaseR
 
     public Task<IReadOnlyList<FuelLogResponse>> ListFuelLogsAsync(Guid busId, CancellationToken ct = default) =>
         QueryInlineAsync<FuelLogResponse>(
-            $"SELECT {FuelLogCols} FROM dbo.FuelLogs WHERE BusId = @busId ORDER BY RecordedAt DESC",
+            $"SELECT {FuelLogCols} FROM \"dbo\".\"FuelLogs\" WHERE \"BusId\" = @busId ORDER BY \"RecordedAt\" DESC",
             new { busId }, ct);
 
     /// True if busId resolves at all under the caller's session (RLS-scoped) — used to give a
     /// manager a real 404 for a cross-tenant/unknown bus id, distinct from the 403
     /// "not assigned" a driver/conductor gets for the same bad id.
     public async Task<bool> BusExistsAsync(Guid busId, CancellationToken ct = default) =>
-        (await QueryInlineAsync<int>("SELECT COUNT(1) FROM dbo.Buses WHERE Id = @busId", new { busId }, ct)).First() > 0;
+        (await QueryInlineAsync<int>("SELECT COUNT(1) FROM \"dbo\".\"Buses\" WHERE \"Id\" = @busId", new { busId }, ct)).First() > 0;
 
     /// Tenant's SchoolAdmin/SchoolOwner/Principal users — targets for the "failed inspection"
     /// notification. Deliberately duplicated from IssueRepository.GetManagerUserIdsAsync (same
@@ -106,10 +106,10 @@ public sealed class VehicleCheckRepository(IDbConnectionFactory factory) : BaseR
     public async Task<IReadOnlyList<Guid>> GetManagerUserIdsAsync(Guid tenantId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<UserIdRow>(@"
-SELECT DISTINCT u.Id
-FROM dbo.Users u
-INNER JOIN dbo.UserRoles ur ON ur.UserId = u.Id
-WHERE u.TenantId = @tenantId AND ur.Role IN (@admin, @owner, @principal)",
+SELECT DISTINCT u.""Id""
+FROM ""dbo"".""Users"" u
+INNER JOIN ""dbo"".""UserRoles"" ur ON ur.""UserId"" = u.""Id""
+WHERE u.""TenantId"" = @tenantId AND ur.""Role"" IN (@admin, @owner, @principal)",
             new { tenantId, admin = Policies.SchoolAdmin, owner = Policies.SchoolOwner, principal = Policies.Principal },
             ct);
         return rows.Select(r => r.Id).ToList();

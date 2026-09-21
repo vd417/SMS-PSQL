@@ -34,25 +34,25 @@ public class FleetEtaTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'Route A')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'Route A')",
                 new { Id = routeId, TenantId = tenantId });
             // Two stops ~1.11km apart (0.01 deg latitude) so a next-stop ETA is computable.
             await conn.ExecuteAsync(
-                @"INSERT INTO dbo.RouteStops (Id, TenantId, RouteId, Name, Seq, Lat, Lng) VALUES
+                @"INSERT INTO ""dbo"".""RouteStops"" (""Id"", ""TenantId"", ""RouteId"", ""Name"", ""Seq"", ""Lat"", ""Lng"") VALUES
                   (@S1, @TenantId, @RouteId, 'Stop 1', 1, 12.10, 77.10),
                   (@S2, @TenantId, @RouteId, 'Stop 2', 2, 12.11, 77.10)",
                 new { S1 = Guid.NewGuid(), S2 = Guid.NewGuid(), TenantId = tenantId, RouteId = routeId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo, RouteId) VALUES (@Id, @TenantId, 'BUS-1', @RouteId)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\") VALUES (@Id, @TenantId, 'BUS-1', @RouteId)",
                 new { Id = busId, TenantId = tenantId, RouteId = routeId });
             await conn.ExecuteAsync(
-                @"INSERT INTO dbo.Trips (Id, TenantId, BusId, Direction, Status, StartedAt)
-                  VALUES (@Id, @TenantId, @BusId, 'pickup', 'live', SYSUTCDATETIME())",
+                @"INSERT INTO ""dbo"".""Trips"" (""Id"", ""TenantId"", ""BusId"", ""Direction"", ""Status"", ""StartedAt"")
+                  VALUES (@Id, @TenantId, @BusId, 'pickup', 'live', now())",
                 new { Id = tripId, TenantId = tenantId, BusId = busId });
             // Bus sits exactly at Stop 1, moving at 33.3 km/h -> ETA to Stop 2 (~1.11km) is ~2 minutes.
             await conn.ExecuteAsync(
-                @"INSERT INTO dbo.TripPings (Id, TenantId, TripId, Lat, Lng, SpeedKmh, Heading, At)
-                  VALUES (@Id, @TenantId, @TripId, 12.10, 77.10, 33.3, 0, SYSUTCDATETIME())",
+                @"INSERT INTO ""dbo"".""TripPings"" (""Id"", ""TenantId"", ""TripId"", ""Lat"", ""Lng"", ""SpeedKmh"", ""Heading"", ""At"")
+                  VALUES (@Id, @TenantId, @TripId, 12.10, 77.10, 33.3, 0, now())",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, TripId = tripId });
         }
         await using var app = App();

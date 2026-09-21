@@ -27,15 +27,15 @@ public class TripStopProgressSchemaTests(PostgresFixture fx)
         await conn.OpenAsync();
 
         var tripStopProgressExists = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM sys.tables WHERE name = 'TripStopProgress'");
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'TripStopProgress'");
         tripStopProgressExists.Should().Be(1);
 
         var currentStopIdExists = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Trips') AND name = 'CurrentStopId'");
+            "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Trips' AND column_name = 'CurrentStopId'");
         currentStopIdExists.Should().Be(1);
 
         var accuracyExists = await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.TripPings') AND name = 'Accuracy'");
+            "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'TripPings' AND column_name = 'Accuracy'");
         accuracyExists.Should().Be(1);
     }
 
@@ -51,30 +51,33 @@ public class TripStopProgressSchemaTests(PostgresFixture fx)
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
-        await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+        await conn.ExecuteAsync("INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
             new { Id = busId, TenantId = tenantId });
         await conn.ExecuteAsync(
-            "INSERT INTO dbo.Trips (Id, TenantId, BusId, Direction, Status, StartedAt) VALUES (@Id, @TenantId, @BusId, 'pickup', 'live', SYSUTCDATETIME())",
+            "INSERT INTO \"dbo\".\"Trips\" (\"Id\", \"TenantId\", \"BusId\", \"Direction\", \"Status\", \"StartedAt\") VALUES (@Id, @TenantId, @BusId, 'pickup', 'live', now())",
             new { Id = tripId, TenantId = tenantId, BusId = busId });
 
-        await conn.ExecuteAsync("dbo.TripStopProgress_ConfirmArrival",
-            new { TenantId = tenantId, TripId = tripId, StopId = stopId, Seq = 1, ArrivedAt = DateTime.UtcNow, ConfirmedAt = DateTime.UtcNow },
-            commandType: System.Data.CommandType.StoredProcedure);
+        // CommandType.StoredProcedure has no Postgres equivalent (Npgsql has nothing analogous
+        // to SQL Server's EXEC shorthand) — call the function the same way BaseRepository's
+        // FunctionCallSql does: plain text "SELECT * FROM fn(name => @Param, ...)".
+        await conn.ExecuteAsync(
+            "SELECT * FROM dbo.tripstopprogress_confirmarrival(\"tenantid\" => @TenantId, \"tripid\" => @TripId, \"stopid\" => @StopId, \"seq\" => @Seq, \"arrivedat\" => @ArrivedAt, \"confirmedat\" => @ConfirmedAt)",
+            new { TenantId = tenantId, TripId = tripId, StopId = stopId, Seq = 1, ArrivedAt = DateTime.UtcNow, ConfirmedAt = DateTime.UtcNow });
 
         var currentStopId = await conn.ExecuteScalarAsync<Guid?>(
-            "SELECT CurrentStopId FROM dbo.Trips WHERE Id = @tripId", new { tripId });
+            "SELECT \"CurrentStopId\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId", new { tripId });
         currentStopId.Should().Be(stopId);
 
-        await conn.ExecuteAsync("dbo.TripStopProgress_Complete",
-            new { TenantId = tenantId, TripId = tripId, StopId = stopId, DepartedAt = DateTime.UtcNow },
-            commandType: System.Data.CommandType.StoredProcedure);
+        await conn.ExecuteAsync(
+            "SELECT * FROM dbo.tripstopprogress_complete(\"tenantid\" => @TenantId, \"tripid\" => @TripId, \"stopid\" => @StopId, \"departedat\" => @DepartedAt)",
+            new { TenantId = tenantId, TripId = tripId, StopId = stopId, DepartedAt = DateTime.UtcNow });
 
         var afterComplete = await conn.ExecuteScalarAsync<Guid?>(
-            "SELECT CurrentStopId FROM dbo.Trips WHERE Id = @tripId", new { tripId });
+            "SELECT \"CurrentStopId\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId", new { tripId });
         afterComplete.Should().BeNull();
 
         var departedAt = await conn.ExecuteScalarAsync<DateTime?>(
-            "SELECT DepartedAt FROM dbo.TripStopProgress WHERE TripId = @tripId AND StopId = @stopId", new { tripId, stopId });
+            "SELECT \"DepartedAt\" FROM \"dbo\".\"TripStopProgress\" WHERE \"TripId\" = @tripId AND \"StopId\" = @stopId", new { tripId, stopId });
         departedAt.Should().NotBeNull();
     }
 }

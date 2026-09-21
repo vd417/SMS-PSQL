@@ -28,23 +28,21 @@ public sealed class RouteGeometryRepository(IDbConnectionFactory factory) : Base
 {
     public async Task<RouteGeometryRow?> GetAsync(Guid routeId, CancellationToken ct = default) =>
         (await QueryInlineAsync<RouteGeometryRow>(
-            @"SELECT RouteId, StopSequenceHash, Format, EncodedPolyline, DistanceMeters, DurationSeconds, Provider, GeneratedAt
-              FROM dbo.RouteGeometries WHERE RouteId = @routeId",
+            @"SELECT ""RouteId"", ""StopSequenceHash"", ""Format"", ""EncodedPolyline"", ""DistanceMeters"", ""DurationSeconds"", ""Provider"", ""GeneratedAt""
+              FROM ""dbo"".""RouteGeometries"" WHERE ""RouteId"" = @routeId",
             new { routeId }, ct)).FirstOrDefault();
 
     public Task UpsertAsync(
         Guid tenantId, Guid routeId, string stopSequenceHash, string format, string encodedPolyline,
         int distanceMeters, int durationSeconds, string provider, DateTime generatedAt, CancellationToken ct = default) =>
         ExecuteInlineAsync(
-            @"MERGE dbo.RouteGeometries AS tgt
-              USING (SELECT @routeId AS RouteId) AS src ON tgt.RouteId = src.RouteId
-              WHEN MATCHED THEN UPDATE SET
-                  StopSequenceHash = @stopSequenceHash, Format = @format, EncodedPolyline = @encodedPolyline,
-                  DistanceMeters = @distanceMeters, DurationSeconds = @durationSeconds,
-                  Provider = @provider, GeneratedAt = @generatedAt
-              WHEN NOT MATCHED THEN INSERT
-                  (RouteId, TenantId, StopSequenceHash, Format, EncodedPolyline, DistanceMeters, DurationSeconds, Provider, GeneratedAt)
-                  VALUES (@routeId, @tenantId, @stopSequenceHash, @format, @encodedPolyline, @distanceMeters, @durationSeconds, @provider, @generatedAt);",
+            @"INSERT INTO ""dbo"".""RouteGeometries""
+                  (""RouteId"", ""TenantId"", ""StopSequenceHash"", ""Format"", ""EncodedPolyline"", ""DistanceMeters"", ""DurationSeconds"", ""Provider"", ""GeneratedAt"")
+                  VALUES (@routeId, @tenantId, @stopSequenceHash, @format, @encodedPolyline, @distanceMeters, @durationSeconds, @provider, @generatedAt)
+              ON CONFLICT (""RouteId"") DO UPDATE SET
+                  ""StopSequenceHash"" = @stopSequenceHash, ""Format"" = @format, ""EncodedPolyline"" = @encodedPolyline,
+                  ""DistanceMeters"" = @distanceMeters, ""DurationSeconds"" = @durationSeconds,
+                  ""Provider"" = @provider, ""GeneratedAt"" = @generatedAt",
             new { routeId, tenantId, stopSequenceHash, format, encodedPolyline, distanceMeters, durationSeconds, provider, generatedAt },
             ct);
 }

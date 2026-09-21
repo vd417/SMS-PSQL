@@ -114,7 +114,7 @@ public sealed class CommsRepository(IDbConnectionFactory factory) : BaseReposito
     private sealed record RoleLabelRow(string? RoleLabel);
 
     private const string ComplaintCols = "Id, TenantId, Subject, [From], Category, Priority, Status, Age, Assignee, Body";
-    private const string NotificationCols = "Id, TenantId, Icon, Tone, Title, Body, [Time], Unread";
+    private const string NotificationCols = "\"Id\", \"TenantId\", \"Icon\", \"Tone\", \"Title\", \"Body\", \"Time\", \"Unread\"";
 
     public Task<IReadOnlyList<ComplaintResponse>> ListComplaintsAsync(
         string? status, Guid? createdByUserId, CancellationToken ct = default) =>
@@ -146,12 +146,12 @@ public sealed class CommsRepository(IDbConnectionFactory factory) : BaseReposito
 
     public Task<IReadOnlyList<NotificationResponse>> ListNotificationsAsync(Guid? userId, CancellationToken ct = default) =>
         QueryInlineAsync<NotificationResponse>(
-            $"SELECT {NotificationCols} FROM dbo.Notifications WHERE UserId IS NULL OR UserId = @userId ORDER BY Unread DESC, [Time] DESC",
+            $"SELECT {NotificationCols} FROM \"dbo\".\"Notifications\" WHERE \"UserId\" IS NULL OR \"UserId\" = @userId ORDER BY \"Unread\" DESC, \"Time\" DESC",
             new { userId }, ct);
 
     public Task<int> MarkNotificationsReadAsync(Guid? userId, CancellationToken ct = default) =>
         ExecuteInlineAsync(
-            "UPDATE dbo.Notifications SET Unread = 0 WHERE Unread = 1 AND (UserId IS NULL OR UserId = @userId)",
+            "UPDATE \"dbo\".\"Notifications\" SET \"Unread\" = false WHERE \"Unread\" = true AND (\"UserId\" IS NULL OR \"UserId\" = @userId)",
             new { userId }, ct);
 
     public Task<NotificationResponse?> CreateNotificationAsync(Guid tenantId, CreateNotificationRequest r, CancellationToken ct = default) =>

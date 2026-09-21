@@ -35,7 +35,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
-            await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+            await conn.ExecuteAsync("INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
                 new { Id = busId, TenantId = tenantId });
         }
 
@@ -60,10 +60,10 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
                 new { Id = busId, OtherId = otherBusId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.BusAssignments (Id, TenantId, TeacherUserId, BusId) VALUES (@Id, @TenantId, @TeacherUserId, @BusId)",
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"Id\", \"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@Id, @TenantId, @TeacherUserId, @BusId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, TeacherUserId = teacherId, BusId = busId });
         }
 
@@ -88,12 +88,12 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
                 new { Id = busId, OtherId = otherBusId, TenantId = tenantId });
             // Deliberately NOT inserted into dbo.BusAssignments (no duty assignment) —
             // access here must come solely from the traveling-teacher grant.
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.BusTravelingTeachers (Id, TenantId, BusId, TeacherUserId) VALUES (@Id, @TenantId, @BusId, @TeacherUserId)",
+                "INSERT INTO \"dbo\".\"BusTravelingTeachers\" (\"Id\", \"TenantId\", \"BusId\", \"TeacherUserId\") VALUES (@Id, @TenantId, @BusId, @TeacherUserId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, BusId = busId, TeacherUserId = teacherId });
         }
 
@@ -118,11 +118,11 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
                 new { Id = busId, OtherId = otherBusId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                @"INSERT INTO dbo.Trips (Id, TenantId, BusId, DriverId, Direction, Status, StartedAt)
-                  VALUES (@Id, @TenantId, @BusId, @DriverId, 'pickup', 'live', SYSUTCDATETIME())",
+                @"INSERT INTO ""dbo"".""Trips"" (""Id"", ""TenantId"", ""BusId"", ""DriverId"", ""Direction"", ""Status"", ""StartedAt"")
+                  VALUES (@Id, @TenantId, @BusId, @DriverId, 'pickup', 'live', now())",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, BusId = busId, DriverId = driverId });
         }
 
@@ -149,13 +149,13 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
                 new { Id = busId, OtherId = otherBusId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Students (Id, TenantId, Name, AdmissionNo) VALUES (@Id, @TenantId, 'Kid', @AdmissionNo)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"Name\", \"AdmissionNo\") VALUES (@Id, @TenantId, 'Kid', @AdmissionNo)",
                 new { Id = studentId, TenantId = tenantId, AdmissionNo = admissionNo });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @StudentId, @BusId)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @StudentId, @BusId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = studentId, BusId = busId });
             // The parent's Users row is linked to their child via Users.StudentId = admission number
             // (see StudentBusService.GetMyChildrenBusAsync for this same pattern). dbo.Users (see
@@ -163,7 +163,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             // Status/CreatedAt, and no Role column at all (roles live in dbo.UserRoles) — so only
             // Id/TenantId/StudentId/Email need to be supplied here.
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Users (Id, TenantId, StudentId, Email) VALUES (@Id, @TenantId, @AdmissionNo, @Email)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"StudentId\", \"Email\") VALUES (@Id, @TenantId, @AdmissionNo, @Email)",
                 new { Id = parentId, TenantId = tenantId, AdmissionNo = admissionNo, Email = $"parent-{parentId}@test.local" });
         }
 
@@ -189,19 +189,19 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
                 new { Id = busId, OtherId = otherBusId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Students (Id, TenantId, Name, AdmissionNo) VALUES (@Id, @TenantId, 'Kid', 'ADM-LINK-001')",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"Name\", \"AdmissionNo\") VALUES (@Id, @TenantId, 'Kid', 'ADM-LINK-001')",
                 new { Id = studentId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @StudentId, @BusId)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @StudentId, @BusId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = studentId, BusId = busId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Users (Id, TenantId, Email) VALUES (@Id, @TenantId, @Email)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\") VALUES (@Id, @TenantId, @Email)",
                 new { Id = parentId, TenantId = tenantId, Email = $"link-parent-{parentId}@test.local" });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@ParentUserId, @StudentId, @TenantId)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@ParentUserId, @StudentId, @TenantId)",
                 new { ParentUserId = parentId, StudentId = studentId, TenantId = tenantId });
         }
 
@@ -239,19 +239,19 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@DutyBusId, @TenantId, 'BUS-1'), (@DrivenBusId, @TenantId, 'BUS-2'), (@UninvolvedBusId, @TenantId, 'BUS-3')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@DutyBusId, @TenantId, 'BUS-1'), (@DrivenBusId, @TenantId, 'BUS-2'), (@UninvolvedBusId, @TenantId, 'BUS-3')",
                 new { DutyBusId = dutyBusId, DrivenBusId = drivenBusId, UninvolvedBusId = uninvolvedBusId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.BusAssignments (Id, TenantId, TeacherUserId, BusId) VALUES (@Id, @TenantId, @TeacherUserId, @BusId)",
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"Id\", \"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@Id, @TenantId, @TeacherUserId, @BusId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, TeacherUserId = teacherStaffId, BusId = dutyBusId });
             await conn.ExecuteAsync(
-                @"INSERT INTO dbo.Trips (Id, TenantId, BusId, DriverId, Direction, Status, StartedAt)
-                  VALUES (@Id, @TenantId, @BusId, @DriverId, 'pickup', 'live', SYSUTCDATETIME())",
+                @"INSERT INTO ""dbo"".""Trips"" (""Id"", ""TenantId"", ""BusId"", ""DriverId"", ""Direction"", ""Status"", ""StartedAt"")
+                  VALUES (@Id, @TenantId, @BusId, @DriverId, 'pickup', 'live', now())",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, BusId = drivenBusId, DriverId = driverStaffId });
 
             // Mirror exactly what Staff_EnsureLogin.sql does: `INSERT dbo.UserRoles (UserId, Role) VALUES (@UserId, N'staff')`.
             foreach (var staffId in new[] { teacherStaffId, driverStaffId, uninvolvedStaffId })
-                await conn.ExecuteAsync("INSERT INTO dbo.UserRoles (UserId, Role) VALUES (@UserId, N'staff')", new { UserId = staffId });
+                await conn.ExecuteAsync("INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@UserId, 'staff')", new { UserId = staffId });
         }
 
         await using var app = App();
@@ -293,18 +293,18 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
                 new { Id = busId, OtherId = otherBusId, TenantId = tenantId });
             // Caller is deliberately NOT inserted into dbo.BusAssignments as duty teacher for `busId`
             // — the teacher branch's IsDutyTeacherForBusAsync check must fail for this caller.
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Students (Id, TenantId, Name, AdmissionNo) VALUES (@Id, @TenantId, 'Kid', @AdmissionNo)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"Name\", \"AdmissionNo\") VALUES (@Id, @TenantId, 'Kid', @AdmissionNo)",
                 new { Id = studentId, TenantId = tenantId, AdmissionNo = admissionNo });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @StudentId, @BusId)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @StudentId, @BusId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = studentId, BusId = busId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Users (Id, TenantId, StudentId, Email) VALUES (@Id, @TenantId, @AdmissionNo, @Email)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"StudentId\", \"Email\") VALUES (@Id, @TenantId, @AdmissionNo, @Email)",
                 new { Id = callerId, TenantId = tenantId, AdmissionNo = admissionNo, Email = $"multirole-{callerId}@test.local" });
         }
 
@@ -327,7 +327,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
-            await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+            await conn.ExecuteAsync("INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
                 new { Id = busId, TenantId = tenantId });
         }
         await using var app = App();
@@ -355,10 +355,10 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'ROUTE-1')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-1')",
                 new { Id = routeId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo, RouteId) VALUES (@Id, @TenantId, 'BUS-1', @RouteId)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\") VALUES (@Id, @TenantId, 'BUS-1', @RouteId)",
                 new { Id = busId, TenantId = tenantId, RouteId = routeId });
         }
 
@@ -385,13 +385,13 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'ROUTE-1'), (@OtherId, @TenantId, 'ROUTE-2')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-1'), (@OtherId, @TenantId, 'ROUTE-2')",
                 new { Id = routeId, OtherId = otherRouteId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo, RouteId) VALUES (@Id, @TenantId, 'BUS-1', @RouteId), (@OtherId, @TenantId, 'BUS-2', @OtherRouteId)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\") VALUES (@Id, @TenantId, 'BUS-1', @RouteId), (@OtherId, @TenantId, 'BUS-2', @OtherRouteId)",
                 new { Id = busId, OtherId = otherBusId, TenantId = tenantId, RouteId = routeId, OtherRouteId = otherRouteId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.BusAssignments (Id, TenantId, TeacherUserId, BusId) VALUES (@Id, @TenantId, @TeacherUserId, @BusId)",
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"Id\", \"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@Id, @TenantId, @TeacherUserId, @BusId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, TeacherUserId = teacherId, BusId = busId });
         }
 
@@ -416,10 +416,10 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'ROUTE-1')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-1')",
                 new { Id = routeId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.Buses (Id, TenantId, BusNo, RouteId) VALUES (@Id, @TenantId, 'BUS-1', @RouteId)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\") VALUES (@Id, @TenantId, 'BUS-1', @RouteId)",
                 new { Id = busId, TenantId = tenantId, RouteId = routeId });
             // Deliberately no BusAssignments/BusTravelingTeachers/Trips/StudentBusAssignments row
             // links this teacher to the one bus on the route — they must be denied.
@@ -443,7 +443,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'ROUTE-1')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-1')",
                 new { Id = routeId, TenantId = tenantId });
         }
 
@@ -472,7 +472,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT INTO dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'ROUTE-1')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-1')",
                 new { Id = routeId, TenantId = tenantId });
         }
 

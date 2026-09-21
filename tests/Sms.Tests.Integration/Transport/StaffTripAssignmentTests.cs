@@ -67,15 +67,15 @@ public class StaffTripAssignmentTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Staff (Id, TenantId, Name, Shift, UserId) VALUES (@Id, @TenantId, @Name, '7:00 AM - 4:00 PM', @UserId)",
+                "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\", \"Shift\", \"UserId\") VALUES (@Id, @TenantId, @Name, '7:00 AM - 4:00 PM', @UserId)",
                 new { Id = driverStaffId, TenantId = tenantId, Name = "Ram Kumar", UserId = userId });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, @Name)",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, @Name)",
                 new { Id = routeId, TenantId = tenantId, Name = "North Route" });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.RouteStops (Id, TenantId, RouteId, Name, Seq, Lat, Lng) VALUES (@Id, @TenantId, @RouteId, @Name, @Seq, @Lat, @Lng)",
+                "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\", \"TenantId\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES (@Id, @TenantId, @RouteId, @Name, @Seq, @Lat, @Lng)",
                 new[]
                 {
                     new { Id = Guid.NewGuid(), TenantId = tenantId, RouteId = routeId, Name = "Stop B", Seq = 2, Lat = 12.98, Lng = 77.60 },
@@ -83,11 +83,11 @@ public class StaffTripAssignmentTests(PostgresFixture fx)
                 });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo, RouteId, DriverStaffId) VALUES (@Id, @TenantId, @BusNo, @RouteId, @DriverStaffId)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\", \"DriverStaffId\") VALUES (@Id, @TenantId, @BusNo, @RouteId, @DriverStaffId)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo, RouteId = routeId, DriverStaffId = driverStaffId });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, BusId, StudentId) VALUES (NEWID(), @TenantId, @BusId, NEWID())",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"BusId\", \"StudentId\") VALUES (gen_random_uuid(), @TenantId, @BusId, gen_random_uuid())",
                 new { TenantId = tenantId, BusId = busId });
         });
 
@@ -133,13 +133,13 @@ public class StaffTripAssignmentTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, @BusNo)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @AdmissionNo, @Name)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @AdmissionNo, @Name)",
                 new { Id = studentId, TenantId = tenantId, AdmissionNo = "S001", Name = "Alice Smith" });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId, StopId) VALUES (@Id, @TenantId, @StudentId, @BusId, @StopId)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\", \"StopId\") VALUES (@Id, @TenantId, @StudentId, @BusId, @StopId)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = studentId, BusId = busId, StopId = stopId });
         });
 

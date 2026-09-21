@@ -68,14 +68,14 @@ public class StudentBusTests(PostgresFixture fx)
         var busNo = $"KA-{Guid.NewGuid():N}"[..12];
         var tripId = Guid.NewGuid();
         await conn.ExecuteAsync(
-            "INSERT dbo.Buses (Id, TenantId, BusNo, RouteName) VALUES (@Id, @TenantId, @BusNo, @RouteName)",
+            "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteName\") VALUES (@Id, @TenantId, @BusNo, @RouteName)",
             new { Id = busId, TenantId = tenantId, BusNo = busNo, RouteName = routeName });
         await conn.ExecuteAsync(
-            "INSERT dbo.Trips (Id, TenantId, BusId, BusNo, Status, StartedAt) " +
+            "INSERT INTO \"dbo\".\"Trips\" (\"Id\", \"TenantId\", \"BusId\", \"BusNo\", \"Status\", \"StartedAt\") " +
             "VALUES (@Id, @TenantId, @BusId, @BusNo, 'live', @StartedAt)",
             new { Id = tripId, TenantId = tenantId, BusId = busId, BusNo = busNo, StartedAt = DateTime.UtcNow });
         await conn.ExecuteAsync(
-            "INSERT dbo.TripPings (Id, TenantId, TripId, Lat, Lng, SpeedKmh, Heading, At) " +
+            "INSERT INTO \"dbo\".\"TripPings\" (\"Id\", \"TenantId\", \"TripId\", \"Lat\", \"Lng\", \"SpeedKmh\", \"Heading\", \"At\") " +
             "VALUES (@Id, @TenantId, @TripId, @Lat, @Lng, 30, 45, @At)",
             new { Id = Guid.NewGuid(), TenantId = tenantId, TripId = tripId, Lat = lat, Lng = lng, At = DateTime.UtcNow });
         return (busId, busNo);
@@ -94,7 +94,7 @@ public class StudentBusTests(PostgresFixture fx)
         {
             (busId, _) = await SeedLiveBus(conn, tenantId, "Route A", 12.97, 77.59);
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
                 new { Id = studentId, TenantId = tenantId, A = "ADM-1", N = "Alice Smith" });
         });
 
@@ -124,7 +124,7 @@ public class StudentBusTests(PostgresFixture fx)
             (bus1, _) = await SeedLiveBus(conn, tenantId, "Route 1", 12.90, 77.50);
             (bus2, _) = await SeedLiveBus(conn, tenantId, "Route 2", 12.91, 77.51);
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
                 new { Id = studentId, TenantId = tenantId, A = "ADM-2", N = "Bob Jones" });
         });
 
@@ -148,7 +148,7 @@ public class StudentBusTests(PostgresFixture fx)
         var studentId = Guid.NewGuid();
 
         await Seed(fx.ConnectionString, tenantId, conn => conn.ExecuteAsync(
-            "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+            "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
             new { Id = studentId, TenantId = tenantId, A = "ADM-3", N = "Cara Lee" }));
 
         var admin = AdminClient(app, tenantId);
@@ -183,14 +183,14 @@ public class StudentBusTests(PostgresFixture fx)
             busNoA = busNo;
             var studentId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
                 new { Id = studentId, TenantId = tenantA, A = sharedAdmission, N = "Child A" });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @S, @B)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @S, @B)",
                 new { Id = Guid.NewGuid(), TenantId = tenantA, S = studentId, B = busId });
             // The parent account, linked to the child via Users.StudentId (= admission number).
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, StudentId, IsPlatform, Status) VALUES (@Id, @TenantId, @Adm, 0, 'active')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"StudentId\", \"IsPlatform\", \"Status\") VALUES (@Id, @TenantId, @Adm, false, 'active')",
                 new { Id = parentAUserId, TenantId = tenantA, Adm = sharedAdmission });
         });
 
@@ -200,10 +200,10 @@ public class StudentBusTests(PostgresFixture fx)
             busNoB = busNo;
             var studentId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
                 new { Id = studentId, TenantId = tenantB, A = sharedAdmission, N = "Child B" });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @S, @B)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @S, @B)",
                 new { Id = Guid.NewGuid(), TenantId = tenantB, S = studentId, B = busId });
         });
 
@@ -235,25 +235,25 @@ public class StudentBusTests(PostgresFixture fx)
             var (busId, no) = await SeedLiveBus(conn, tenantId, "Morning Route", 12.97, 77.59);
             busNo = no;
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, @Name)",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, @Name)",
                 new { Id = routeId, TenantId = tenantId, Name = "Morning Route" });
             await conn.ExecuteAsync(
-                "UPDATE dbo.Buses SET RouteId = @RouteId WHERE Id = @BusId",
+                "UPDATE \"dbo\".\"Buses\" SET \"RouteId\" = @RouteId WHERE \"Id\" = @BusId",
                 new { RouteId = routeId, BusId = busId });
             await conn.ExecuteAsync(
-                "INSERT dbo.RouteStops (Id, TenantId, RouteId, Name, Seq, Lat, Lng) VALUES (@Id, @TenantId, @RouteId, @Name, @Seq, @Lat, @Lng)",
+                "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\", \"TenantId\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES (@Id, @TenantId, @RouteId, @Name, @Seq, @Lat, @Lng)",
                 new { Id = stopA, TenantId = tenantId, RouteId = routeId, Name = "Oak Gate", Seq = 1, Lat = 12.96, Lng = 77.58 });
             await conn.ExecuteAsync(
-                "INSERT dbo.RouteStops (Id, TenantId, RouteId, Name, Seq, Lat, Lng) VALUES (@Id, @TenantId, @RouteId, @Name, @Seq, @Lat, @Lng)",
+                "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\", \"TenantId\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES (@Id, @TenantId, @RouteId, @Name, @Seq, @Lat, @Lng)",
                 new { Id = stopB, TenantId = tenantId, RouteId = routeId, Name = "Maple Stop", Seq = 2, Lat = 12.971, Lng = 77.591 });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
                 new { Id = studentId, TenantId = tenantId, A = "ADM-STOP", N = "Rahul Sharma" });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId, RouteId, StopId) VALUES (@Id, @TenantId, @S, @B, @R, @Stop)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\", \"RouteId\", \"StopId\") VALUES (@Id, @TenantId, @S, @B, @R, @Stop)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, S = studentId, B = busId, R = routeId, Stop = stopB });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, StudentId, IsPlatform, Status) VALUES (@Id, @TenantId, @Adm, 0, 'active')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"StudentId\", \"IsPlatform\", \"Status\") VALUES (@Id, @TenantId, @Adm, false, 'active')",
                 new { Id = parentUserId, TenantId = tenantId, Adm = "ADM-STOP" });
         });
 
@@ -278,10 +278,10 @@ public class StudentBusTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, A = "S777", N = "Lonely Child" });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, StudentId, IsPlatform, Status) VALUES (@Id, @TenantId, @Adm, 0, 'active')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"StudentId\", \"IsPlatform\", \"Status\") VALUES (@Id, @TenantId, @Adm, false, 'active')",
                 new { Id = parentUserId, TenantId = tenantId, Adm = "S777" });
         });
 
@@ -312,27 +312,27 @@ public class StudentBusTests(PostgresFixture fx)
             busNoA = noA;
             busNoB = noB;
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section) VALUES (@Id, @TenantId, @A, @N, @G, @S)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Grade\", \"Section\") VALUES (@Id, @TenantId, @A, @N, @G, @S)",
                 new { Id = childA, TenantId = tenantId, A = "ADM-A", N = "Aarav Sharma", G = "I", S = "A" });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section) VALUES (@Id, @TenantId, @A, @N, @G, @S)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Grade\", \"Section\") VALUES (@Id, @TenantId, @A, @N, @G, @S)",
                 new { Id = childB, TenantId = tenantId, A = "ADM-B", N = "Ananya Sharma", G = "VI", S = "B" });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @S, @B)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @S, @B)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, S = childA, B = busA });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @S, @B)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @S, @B)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, S = childB, B = busB });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, IsPlatform, Status) VALUES (@Id, @TenantId, @Email, 0, 'active')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"IsPlatform\", \"Status\") VALUES (@Id, @TenantId, @Email, false, 'active')",
                 new { Id = parentUserId, TenantId = tenantId, Email = $"p-{parentUserId:N}@test.local" });
             await conn.ExecuteAsync(
-                "INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@P, @S, @T)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@P, @S, @T)",
                 new { P = parentUserId, S = childA, T = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@P, @S, @T)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@P, @S, @T)",
                 new { P = parentUserId, S = childB, T = tenantId });
-            await conn.ExecuteAsync("UPDATE dbo.Buses SET Driver = N'Raj Kumar' WHERE Id = @Id", new { Id = busA });
+            await conn.ExecuteAsync("UPDATE \"dbo\".\"Buses\" SET \"Driver\" = 'Raj Kumar' WHERE \"Id\" = @Id", new { Id = busA });
         });
 
         var parent = ParentClient(app, tenantId, parentUserId);
@@ -365,19 +365,19 @@ public class StudentBusTests(PostgresFixture fx)
         {
             var (busId, _) = await SeedLiveBus(conn, tenantId, "Secret Route", 12.9, 77.5);
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
                 new { Id = childB, TenantId = tenantId, A = "ADM-B-ONLY", N = "Other Kid" });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @S, @B)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @S, @B)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, S = childB, B = busId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, IsPlatform, Status) VALUES (@Id, @TenantId, @Email, 0, 'active')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"IsPlatform\", \"Status\") VALUES (@Id, @TenantId, @Email, false, 'active')",
                 new { Id = parentA, TenantId = tenantId, Email = $"a-{parentA:N}@test.local" });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, IsPlatform, Status) VALUES (@Id, @TenantId, @Email, 0, 'active')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"IsPlatform\", \"Status\") VALUES (@Id, @TenantId, @Email, false, 'active')",
                 new { Id = parentB, TenantId = tenantId, Email = $"b-{parentB:N}@test.local" });
             await conn.ExecuteAsync(
-                "INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@P, @S, @T)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@P, @S, @T)",
                 new { P = parentB, S = childB, T = tenantId });
         });
 
@@ -405,32 +405,32 @@ public class StudentBusTests(PostgresFixture fx)
             var (sibBus, _) = await SeedLiveBus(conn, tenantId, "Sibling Route", 13.01, 77.61);
             myBusNo = no;
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
                 new { Id = me, TenantId = tenantId, A = "STU-ME", N = "Cube" });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
                 new { Id = sibling, TenantId = tenantId, A = "STU-SIB", N = "Sibling" });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @S, @B)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @S, @B)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, S = me, B = myBus });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId) VALUES (@Id, @TenantId, @S, @B)",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"StudentId\", \"BusId\") VALUES (@Id, @TenantId, @S, @B)",
                 new { Id = Guid.NewGuid(), TenantId = tenantId, S = sibling, B = sibBus });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, StudentId, Email, IsPlatform, Status) VALUES (@Id, @TenantId, @Adm, @Email, 0, 'active')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"StudentId\", \"Email\", \"IsPlatform\", \"Status\") VALUES (@Id, @TenantId, @Adm, @Email, false, 'active')",
                 new { Id = studentUserId, TenantId = tenantId, Adm = "STU-ME", Email = $"stu-{studentUserId:N}@test.local" });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, IsPlatform, Status) VALUES (@Id, @TenantId, @Email, 0, 'active')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"IsPlatform\", \"Status\") VALUES (@Id, @TenantId, @Email, false, 'active')",
                 new { Id = parentUserId, TenantId = tenantId, Email = $"p-{parentUserId:N}@test.local" });
             await conn.ExecuteAsync(
-                "INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@P, @S, @T)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@P, @S, @T)",
                 new { P = parentUserId, S = me, T = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@P, @S, @T)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@P, @S, @T)",
                 new { P = parentUserId, S = sibling, T = tenantId });
             // Even if this student user id is wrongly linked to a sibling, selfOnly must pin to STU-ME.
             await conn.ExecuteAsync(
-                "INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@P, @S, @T)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@P, @S, @T)",
                 new { P = studentUserId, S = sibling, T = tenantId });
         });
 

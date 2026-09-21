@@ -69,10 +69,10 @@ public class BusTravelingTeacherTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1')",
                 new { Id = busId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name, Email) VALUES (@Id, @TenantId, @Name, @Email)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\", \"Email\") VALUES (@Id, @TenantId, @Name, @Email)",
                 new[]
                 {
                     new { Id = teacher1, TenantId = tenantId, Name = "Asha Rao", Email = $"asha-{teacher1}@test.local" },
@@ -117,7 +117,7 @@ public class BusTravelingTeacherTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, 'BUS-1'), (@OtherId, @TenantId, 'BUS-2')",
                 new { Id = busId, OtherId = otherBusId, TenantId = tenantId });
         }
 

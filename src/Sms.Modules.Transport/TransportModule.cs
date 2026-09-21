@@ -1,5 +1,4 @@
-using System.Data;
-using Dapper;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Shared.Kernel.Data;
 
@@ -33,8 +32,8 @@ public sealed record StaleTripRow(Guid TripId, Guid BusId, Guid TenantId, DateTi
 public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
     private const string TripCols =
-        "Id, TenantId, RouteId, BusNo, DriverId, ConductorId, Direction, Status, StartedAt, EndedAt, " +
-        "DriverLastPingAt, ConductorLastPingAt";
+        "\"Id\", \"TenantId\", \"RouteId\", \"BusNo\", \"DriverId\", \"ConductorId\", \"Direction\", \"Status\", \"StartedAt\", \"EndedAt\", " +
+        "\"DriverLastPingAt\", \"ConductorLastPingAt\"";
     private sealed record PingRow(double Lat, double Lng);
 
     public Task<TripResponse?> StartAsync(Guid tenantId, Guid driverId, StartTripRequest r, CancellationToken ct = default) =>
@@ -46,7 +45,7 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
             // 'arrived' is still an active trip — it has reached school but not yet ended (a
             // return/drop leg may follow) — so it must stay visible here or the driver's own
             // app could never see the trip again in order to end it.
-            $"SELECT TOP 1 {TripCols} FROM dbo.Trips WHERE (DriverId = @userId OR ConductorId = @userId) AND Status IN ('live', 'arrived') ORDER BY StartedAt DESC",
+            $"SELECT {TripCols} FROM \"dbo\".\"Trips\" WHERE (\"DriverId\" = @userId OR \"ConductorId\" = @userId) AND \"Status\" IN ('live', 'arrived') ORDER BY \"StartedAt\" DESC LIMIT 1",
             new { userId }, ct)).FirstOrDefault();
 
     private sealed record TripParticipantsRow(Guid? DriverId, Guid? ConductorId);
@@ -57,7 +56,7 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
     public async Task<string?> GetParticipantRoleAsync(Guid tenantId, Guid tripId, Guid userId, CancellationToken ct = default)
     {
         var row = (await QueryInlineAsync<TripParticipantsRow>(
-            "SELECT DriverId, ConductorId FROM dbo.Trips WHERE Id = @tripId AND TenantId = @tenantId",
+            "SELECT \"DriverId\", \"ConductorId\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId AND \"TenantId\" = @tenantId",
             new { tripId, tenantId }, ct)).FirstOrDefault();
         if (row is null) return null;
         if (row.DriverId == userId) return "driver";
@@ -76,7 +75,7 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
         var row = (await QueryInlineAsync<ActiveTripParticipantsRow>(
             // Include 'arrived': a trip that reached school but hasn't ended is still this
             // bus's active trip, and its driver/conductor still own it.
-            "SELECT TOP 1 DriverId, ConductorId FROM dbo.Trips WHERE BusId = @busId AND Status IN ('live', 'arrived') ORDER BY StartedAt DESC",
+            "SELECT \"DriverId\", \"ConductorId\" FROM \"dbo\".\"Trips\" WHERE \"BusId\" = @busId AND \"Status\" IN ('live', 'arrived') ORDER BY \"StartedAt\" DESC LIMIT 1",
             new { busId }, ct)).FirstOrDefault();
         if (row is null) return null;
         if (row.DriverId == userId) return "driver";
@@ -87,45 +86,42 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
     /// The bus a trip belongs to — used to know which SignalR bus-group to
     /// broadcast a position/lifecycle event to after a trip mutation.
     public async Task<Guid?> GetBusIdAsync(Guid tripId, CancellationToken ct = default) =>
-        (await QueryInlineAsync<Guid?>("SELECT BusId FROM dbo.Trips WHERE Id = @tripId", new { tripId }, ct)).FirstOrDefault();
+        (await QueryInlineAsync<Guid?>("SELECT \"BusId\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId", new { tripId }, ct)).FirstOrDefault();
 
     /// 'arrived' still counts as active (matches GetCurrentAsync) — only a trip that has actually
     /// ended should reject further mutations (pings, boarding, stop confirm/complete).
     public async Task<bool> IsActiveAsync(Guid tripId, CancellationToken ct = default) =>
         (await QueryInlineAsync<string>(
-            "SELECT Status FROM dbo.Trips WHERE Id = @tripId AND Status IN ('live', 'arrived')",
+            "SELECT \"Status\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId AND \"Status\" IN ('live', 'arrived')",
             new { tripId }, ct)).Any();
 
+    // TripPingTvp (SQL Server table-valued parameter) has no 1:1 Postgres equivalent -- pings are
+    // JSON-serialized and decomposed server-side via jsonb_to_recordset(), same strategy as
+    // 08_sample_procedure_conversions.sql's worked TripPing_BulkInsert example (that example used
+    // a differently-punctuated function name that the real call site's naming convention would
+    // never resolve to -- dbo.tripping_bulkinsert, in 14_transport_procs.sql, is the one actually
+    // wired up here).
     public Task IngestPingsAsync(Guid tenantId, Guid tripId, IReadOnlyList<PingItem> pings, CancellationToken ct = default)
     {
-        var table = new DataTable();
-        table.Columns.Add("Lat", typeof(double));
-        table.Columns.Add("Lng", typeof(double));
-        table.Columns.Add("SpeedKmh", typeof(double));
-        table.Columns.Add("Heading", typeof(double));
-        table.Columns.Add("At", typeof(DateTime));
-        table.Columns.Add("Accuracy", typeof(double));
-        foreach (var p in pings) table.Rows.Add(p.Lat, p.Lng, p.SpeedKmh, p.Heading, p.At, (object?)p.Accuracy ?? DBNull.Value);
-
-        var args = new DynamicParameters();
-        args.Add("@TenantId", tenantId);
-        args.Add("@TripId", tripId);
-        args.Add("@Rows", table.AsTableValuedParameter("dbo.TripPingTvp"));
-        return ExecuteProcAsync("dbo.TripPing_BulkInsert", args, ct);
+        var rowsJson = JsonSerializer.Serialize(pings.Select(p => new
+        {
+            p.Lat, p.Lng, p.SpeedKmh, p.Heading, p.At, p.Accuracy
+        }));
+        return ExecuteProcAsync("dbo.TripPing_BulkInsert", new { TenantId = tenantId, TripId = tripId, Rows = rowsJson }, ct);
     }
 
     public Task MarkPingAsync(Guid tripId, string role, CancellationToken ct = default)
     {
         var column = role == "driver" ? "DriverLastPingAt" : "ConductorLastPingAt";
         return ExecuteInlineAsync(
-            $"UPDATE dbo.Trips SET {column} = SYSUTCDATETIME() WHERE Id = @tripId", new { tripId }, ct);
+            $"UPDATE \"dbo\".\"Trips\" SET \"{column}\" = now() WHERE \"Id\" = @tripId", new { tripId }, ct);
     }
 
     public async Task<TripSummaryResponse> EndAsync(Guid tenantId, Guid tripId, CancellationToken ct = default)
     {
         var trip = await QuerySingleProcAsync<TripResponse>("dbo.Trip_End", new { Id = tripId, TenantId = tenantId }, ct);
         var pings = await QueryInlineAsync<PingRow>(
-            "SELECT Lat, Lng FROM dbo.TripPings WHERE TripId = @tripId ORDER BY At", new { tripId }, ct);
+            "SELECT \"Lat\", \"Lng\" FROM \"dbo\".\"TripPings\" WHERE \"TripId\" = @tripId ORDER BY \"At\"", new { tripId }, ct);
 
         double metres = 0;
         for (var i = 1; i < pings.Count; i++)
@@ -134,7 +130,7 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
         var durationMin = trip is { StartedAt: { } s, EndedAt: { } e } ? (int)(e - s).TotalMinutes : 0;
         var boarded = await CountBoardedAsync(tripId, ct);
         var stops = (await QueryInlineAsync<int>(
-            "SELECT COUNT(DISTINCT StopId) FROM dbo.Boardings WHERE TripId = @tripId AND StopId IS NOT NULL",
+            "SELECT CAST(COUNT(DISTINCT \"StopId\") AS int) FROM \"dbo\".\"Boardings\" WHERE \"TripId\" = @tripId AND \"StopId\" IS NOT NULL",
             new { tripId }, ct)).First();
 
         return new TripSummaryResponse(tripId, durationMin, Math.Round(metres / 1000, 2), stops, boarded);
@@ -148,23 +144,23 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
     public async Task<StaffTripAssignmentResponse?> GetAssignmentAsync(Guid driverUserId, CancellationToken ct = default)
     {
         var bus = (await QueryInlineAsync<AssignedBusRow>(
-            @"SELECT b.Id AS BusId, b.BusNo, b.RouteId, cs.Name AS ConductorName, s.Shift
-              FROM dbo.Buses b
-              JOIN dbo.Staff s ON s.Id = b.DriverStaffId
-              LEFT JOIN dbo.Staff cs ON cs.Id = b.ConductorStaffId
-              WHERE s.UserId = @driverUserId", new { driverUserId }, ct)).FirstOrDefault();
+            @"SELECT b.""Id"" AS ""BusId"", b.""BusNo"", b.""RouteId"", cs.""Name"" AS ""ConductorName"", s.""Shift""
+              FROM ""dbo"".""Buses"" b
+              JOIN ""dbo"".""Staff"" s ON s.""Id"" = b.""DriverStaffId""
+              LEFT JOIN ""dbo"".""Staff"" cs ON cs.""Id"" = b.""ConductorStaffId""
+              WHERE s.""UserId"" = @driverUserId", new { driverUserId }, ct)).FirstOrDefault();
         if (bus?.RouteId is not { } routeId) return null;
 
         var route = (await QueryInlineAsync<RouteRow>(
-            "SELECT Id, Name FROM dbo.TransportRoutes WHERE Id = @routeId", new { routeId }, ct)).FirstOrDefault();
+            "SELECT \"Id\", \"Name\" FROM \"dbo\".\"TransportRoutes\" WHERE \"Id\" = @routeId", new { routeId }, ct)).FirstOrDefault();
         if (route is null) return null;
 
         var stops = await QueryInlineAsync<StaffStopResponse>(
-            "SELECT Id, Name, Lat, Lng, Seq, CAST(NULL AS int) AS EtaMin FROM dbo.RouteStops WHERE RouteId = @routeId ORDER BY Seq",
+            "SELECT \"Id\", \"Name\", \"Lat\", \"Lng\", \"Seq\", CAST(NULL AS int) AS \"EtaMin\" FROM \"dbo\".\"RouteStops\" WHERE \"RouteId\" = @routeId ORDER BY \"Seq\"",
             new { routeId }, ct);
 
         var studentsAssigned = (await QueryInlineAsync<int>(
-            "SELECT COUNT(*) FROM dbo.StudentBusAssignments WHERE BusId = @busId", new { busId = bus.BusId }, ct)).First();
+            "SELECT CAST(COUNT(*) AS int) FROM \"dbo\".\"StudentBusAssignments\" WHERE \"BusId\" = @busId", new { busId = bus.BusId }, ct)).First();
 
         return new StaffTripAssignmentResponse(
             new StaffRouteResponse(route.Id, route.Name, bus.BusNo, stops), bus.BusId, bus.BusNo, bus.ConductorName, bus.Shift, studentsAssigned);
@@ -192,11 +188,11 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
     /// bus instead of trusting a client-supplied busId.
     public async Task<bool> IsDriverOrConductorAssignedToBusAsync(Guid userId, Guid busId, CancellationToken ct = default) =>
         (await QueryInlineAsync<int>(
-            @"SELECT COUNT(1) FROM dbo.Buses b
-              WHERE b.Id = @busId
+            @"SELECT COUNT(1) FROM ""dbo"".""Buses"" b
+              WHERE b.""Id"" = @busId
                 AND EXISTS (
-                  SELECT 1 FROM dbo.Staff s
-                  WHERE s.UserId = @userId AND (s.Id = b.DriverStaffId OR s.Id = b.ConductorStaffId))",
+                  SELECT 1 FROM ""dbo"".""Staff"" s
+                  WHERE s.""UserId"" = @userId AND (s.""Id"" = b.""DriverStaffId"" OR s.""Id"" = b.""ConductorStaffId""))",
             new { userId, busId }, ct)).First() > 0;
 
     public async Task<StaffBusRouteSummaryResponse?> GetConductorBusRouteAsync(Guid conductorUserId, CancellationToken ct = default) =>
@@ -211,20 +207,20 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
     public async Task<IReadOnlyList<StaffRosterStudentResponse>> GetRosterAsync(Guid tripId, CancellationToken ct = default)
     {
         var busId = (await QueryInlineAsync<Guid?>(
-            "SELECT BusId FROM dbo.Trips WHERE Id = @tripId", new { tripId }, ct)).FirstOrDefault();
+            "SELECT \"BusId\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId", new { tripId }, ct)).FirstOrDefault();
         if (busId is null) return [];
 
         return await QueryInlineAsync<StaffRosterStudentResponse>(
-            @"SELECT s.Id, s.Name, sba.StopId, s.PhotoUrl
-              FROM dbo.StudentBusAssignments sba
-              JOIN dbo.Students s ON s.Id = sba.StudentId
-              WHERE sba.BusId = @busId
-              ORDER BY s.Name", new { busId }, ct);
+            @"SELECT s.""Id"", s.""Name"", sba.""StopId"", s.""PhotoUrl""
+              FROM ""dbo"".""StudentBusAssignments"" sba
+              JOIN ""dbo"".""Students"" s ON s.""Id"" = sba.""StudentId""
+              WHERE sba.""BusId"" = @busId
+              ORDER BY s.""Name""", new { busId }, ct);
     }
 
     public Task<IReadOnlyList<BoardingResponse>> ListBoardingAsync(Guid tripId, CancellationToken ct = default) =>
         QueryInlineAsync<BoardingResponse>(
-            "SELECT TripId, StudentId, StopId, State, At FROM dbo.Boardings WHERE TripId = @tripId ORDER BY At",
+            "SELECT \"TripId\", \"StudentId\", \"StopId\", \"State\", \"At\" FROM \"dbo\".\"Boardings\" WHERE \"TripId\" = @tripId ORDER BY \"At\"",
             new { tripId }, ct);
 
     public Task UpsertBoardingAsync(Guid tenantId, Guid tripId, BoardingRequest r, CancellationToken ct = default) =>
@@ -241,10 +237,10 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
     public async Task<IReadOnlyList<StaleTripRow>> GetStaleActiveTripsAsync(TimeSpan staleAfter, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<StaleTripRow>(
-            @"SELECT Id AS TripId, BusId, TenantId,
-                     (SELECT MAX(v) FROM (VALUES (DriverLastPingAt), (ConductorLastPingAt)) AS x(v)) AS LastPingAt
-              FROM dbo.Trips
-              WHERE Status = 'live' AND BusId IS NOT NULL", null, ct);
+            @"SELECT ""Id"" AS ""TripId"", ""BusId"", ""TenantId"",
+                     (SELECT MAX(v) FROM (VALUES (""DriverLastPingAt""), (""ConductorLastPingAt"")) AS x(v)) AS ""LastPingAt""
+              FROM ""dbo"".""Trips""
+              WHERE ""Status"" = 'live' AND ""BusId"" IS NOT NULL", null, ct);
         var cutoff = DateTime.UtcNow - staleAfter;
         return rows.Where(r => r.LastPingAt is null || r.LastPingAt < cutoff).ToList();
     }
@@ -257,13 +253,14 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
     /// order; the confirm-arrival endpoint (Task 5) rejects out-of-order calls.
     public async Task<NextStopRow?> GetNextIncompleteStopAsync(Guid tripId, Guid routeId, CancellationToken ct = default) =>
         (await QueryInlineAsync<NextStopRow>(
-            @"SELECT TOP 1 rs.Id, rs.Name, rs.Lat, rs.Lng, rs.Seq
-              FROM dbo.RouteStops rs
-              WHERE rs.RouteId = @routeId
+            @"SELECT rs.""Id"", rs.""Name"", rs.""Lat"", rs.""Lng"", rs.""Seq""
+              FROM ""dbo"".""RouteStops"" rs
+              WHERE rs.""RouteId"" = @routeId
                 AND NOT EXISTS (
-                    SELECT 1 FROM dbo.TripStopProgress tsp
-                    WHERE tsp.TripId = @tripId AND tsp.StopId = rs.Id AND tsp.DepartedAt IS NOT NULL)
-              ORDER BY rs.Seq",
+                    SELECT 1 FROM ""dbo"".""TripStopProgress"" tsp
+                    WHERE tsp.""TripId"" = @tripId AND tsp.""StopId"" = rs.""Id"" AND tsp.""DepartedAt"" IS NOT NULL)
+              ORDER BY rs.""Seq""
+              LIMIT 1",
             new { routeId, tripId }, ct)).FirstOrDefault();
 
     public Task ConfirmStopArrivalAsync(Guid tenantId, Guid tripId, Guid stopId, int seq, DateTime arrivedAt, DateTime confirmedAt, CancellationToken ct = default) =>
@@ -275,13 +272,13 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
             new { TenantId = tenantId, TripId = tripId, StopId = stopId, DepartedAt = departedAt }, ct);
 
     public async Task<Guid?> GetCurrentStopIdAsync(Guid tripId, CancellationToken ct = default) =>
-        (await QueryInlineAsync<Guid?>("SELECT CurrentStopId FROM dbo.Trips WHERE Id = @tripId", new { tripId }, ct)).FirstOrDefault();
+        (await QueryInlineAsync<Guid?>("SELECT \"CurrentStopId\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId", new { tripId }, ct)).FirstOrDefault();
 
     /// True when this trip is a still-live pickup trip — the only state a driver may mark
     /// "school-arrived" from (a drop trip, or a trip already ended/arrived, is rejected).
     public async Task<bool> IsPickupTripInProgressAsync(Guid tripId, CancellationToken ct = default) =>
         (await QueryInlineAsync<int>(
-            "SELECT COUNT(1) FROM dbo.Trips WHERE Id = @tripId AND Direction = 'pickup' AND Status = 'live'",
+            "SELECT COUNT(1) FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId AND \"Direction\" = 'pickup' AND \"Status\" = 'live'",
             new { tripId }, ct)).First() > 0;
 
     /// Marks the school-arrival milestone without closing the trip — EndAsync remains the only
@@ -291,22 +288,22 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
     /// IngestPingsAsync/ConfirmStopArrivalAsync already resolve "where is this trip right now").
     public Task MarkSchoolArrivedAsync(Guid tenantId, Guid tripId, DateTime at, double? lat, double? lng, CancellationToken ct = default) =>
         ExecuteInlineAsync(
-            @"UPDATE dbo.Trips
-              SET Status = 'arrived', SchoolArrivedAt = @at, SchoolArrivedLat = @lat, SchoolArrivedLng = @lng
-              WHERE Id = @tripId AND TenantId = @tenantId",
+            @"UPDATE ""dbo"".""Trips""
+              SET ""Status"" = 'arrived', ""SchoolArrivedAt"" = @at, ""SchoolArrivedLat"" = @lat, ""SchoolArrivedLng"" = @lng
+              WHERE ""Id"" = @tripId AND ""TenantId"" = @tenantId",
             new { tripId, tenantId, at, lat, lng }, ct);
 
     /// Shared by EndAsync's trip-summary and MarkSchoolArrivedAsync's broadcast payload — kept as
     /// one named query so both call sites can't drift on what counts as "boarded".
     public async Task<int> CountBoardedAsync(Guid tripId, CancellationToken ct = default) =>
         (await QueryInlineAsync<int>(
-            "SELECT COUNT(*) FROM dbo.Boardings WHERE TripId = @tripId AND State = 'boarded'", new { tripId }, ct)).First();
+            "SELECT CAST(COUNT(*) AS int) FROM \"dbo\".\"Boardings\" WHERE \"TripId\" = @tripId AND \"State\" = 'boarded'", new { tripId }, ct)).First();
 
     /// No existing method already returns a trip's RouteId on its own (TripResponse carries it,
     /// but only as part of the full row); TripService.IngestPingsAsync needs it in isolation to
     /// call GetNextIncompleteStopAsync without re-fetching the whole trip.
     public async Task<Guid?> GetTripRouteIdAsync(Guid tripId, CancellationToken ct = default) =>
-        (await QueryInlineAsync<Guid?>("SELECT RouteId FROM dbo.Trips WHERE Id = @tripId", new { tripId }, ct)).FirstOrDefault();
+        (await QueryInlineAsync<Guid?>("SELECT \"RouteId\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId", new { tripId }, ct)).FirstOrDefault();
 
     /// Public (not private) so TripService's stop-arrival-radius computation (Task 4) can reuse
     /// the same distance formula instead of duplicating a fourth Haversine implementation

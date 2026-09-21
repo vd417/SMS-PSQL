@@ -27,22 +27,22 @@ public class StudentTransportMappingTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name) VALUES (@Id, @TenantId, @A, @N)",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\") VALUES (@Id, @TenantId, @A, @N)",
                 new { Id = studentId, TenantId = tenantId, A = "T-001", N = "Test Student" });
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, @Name)",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, @Name)",
                 new { Id = routeId, TenantId = tenantId, Name = "Route Pending" });
 
-            await conn.ExecuteAsync("dbo.StudentTransport_Upsert",
-                new { TenantId = tenantId, StudentId = studentId, RouteId = routeId, StopId = (Guid?)null, FeeHeadId = (Guid?)null, BusId = (Guid?)null },
-                commandType: System.Data.CommandType.StoredProcedure);
+            await conn.ExecuteAsync(
+                "SELECT * FROM dbo.studenttransport_upsert(\"tenantid\" => @TenantId, \"studentid\" => @StudentId, \"routeid\" => @RouteId, \"stopid\" => @StopId, \"feeheadid\" => @FeeHeadId, \"busid\" => @BusId)",
+                new { TenantId = tenantId, StudentId = studentId, RouteId = routeId, StopId = (Guid?)null, FeeHeadId = (Guid?)null, BusId = (Guid?)null });
         });
 
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         var row = await conn.QuerySingleAsync<(Guid? BusId, Guid RouteId)>(
-            "SELECT BusId, RouteId FROM dbo.StudentBusAssignments WHERE StudentId = @studentId", new { studentId });
+            "SELECT \"BusId\", \"RouteId\" FROM \"dbo\".\"StudentBusAssignments\" WHERE \"StudentId\" = @studentId", new { studentId });
 
         row.BusId.Should().BeNull();
         row.RouteId.Should().Be(routeId);
