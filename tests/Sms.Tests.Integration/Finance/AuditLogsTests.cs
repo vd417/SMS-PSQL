@@ -27,8 +27,8 @@ public class AuditLogsTests(PostgresFixture fx)
     /// filter/block predicate (rls.fn_tenant_predicate) matches this tenant.</summary>
     private static async Task StampTenantAsync(NpgsqlConnection conn, Guid tenantId)
     {
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@v", new { v = tenantId });
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=@v", new { v = 0 });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @v::text, false)", new { v = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', @v::text, false)", new { v = 0 });
     }
 
     [Fact]

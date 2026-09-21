@@ -99,7 +99,7 @@ public class TripOwnershipTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Staff (Id, TenantId, Name, UserId) VALUES (@Id, @TenantId, @Name, @UserId)",
                 new { Id = conductorStaffId, TenantId = tenantId, Name = "Priya Rao", UserId = conductorUserId });

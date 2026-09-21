@@ -39,7 +39,7 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
     {
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
             "INSERT dbo.Users (Id, TenantId, Name) VALUES (@userId, @tenantId, @name)",
             new { userId, tenantId, name });
@@ -57,7 +57,7 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
         var busId = Guid.NewGuid();
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
             "INSERT dbo.Buses (Id, TenantId, BusNo) VALUES (@busId, @tenantId, @busNo)",
             new { busId, tenantId, busNo });
@@ -72,7 +72,7 @@ public class VehicleCheckEndpointTests(PostgresFixture fx)
     {
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         // dbo.Staff.UserId is unique, so re-use the same staff row for a userId already linked to
         // one bus (e.g. assigned to two buses in the same test) rather than inserting a second one.
         var staffId = (await conn.QueryFirstOrDefaultAsync<Guid?>(

@@ -33,7 +33,7 @@ public class ClassNextPeriodTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Classes (Id, TenantId, Name, StudentCount) VALUES (@classId, @tenantId, 'C1', 0)",
                 new { classId, tenantId });

@@ -65,7 +65,7 @@ public class ClassesScopingTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             var teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
                 "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, 'T1', @teacherUserId)",

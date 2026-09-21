@@ -47,7 +47,7 @@ public class TenantPaymentCredentialServiceTests(PostgresFixture fx)
         await conn.OpenAsync();
         // dbo.TenantPaymentCredentials is tenant-RLS-scoped (M0190) — a bare connection has no
         // session context, so stamp the tenant explicitly for this raw read.
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var storedSecret = await conn.QuerySingleAsync<string>(
             "SELECT KeySecretEncrypted FROM dbo.TenantPaymentCredentials WHERE TenantId = @tenantId", new { tenantId });
         storedSecret.Should().NotBe("top-secret-value"); // must be encrypted at rest, not plaintext
@@ -110,7 +110,7 @@ public class TenantPaymentCredentialServiceTests(PostgresFixture fx)
 
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var (keySecret, webhookSecret) = (await conn.QuerySingleAsync<(string? KeySecretEncrypted, string? WebhookSecretEncrypted)>(
             "SELECT KeySecretEncrypted, WebhookSecretEncrypted FROM dbo.TenantPaymentCredentials WHERE TenantId = @tenantId",
             new { tenantId }));
@@ -225,7 +225,7 @@ public class TenantPaymentCredentialServiceTests(PostgresFixture fx)
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.TenantPaymentCredentials (TenantId, Provider, KeyId, KeySecretEncrypted, WebhookSecretEncrypted, Mode, IsEnabled) " +
                 "VALUES (@tenantId, 'razorpay', 'rzp_test_corrupt', @undecryptableSecret, @undecryptableSecret, 'test', 1)",

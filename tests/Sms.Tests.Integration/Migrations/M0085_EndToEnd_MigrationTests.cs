@@ -76,8 +76,8 @@ public sealed class M0085_EndToEnd_MigrationTests : IAsyncLifetime
         // Insert as a normal, non-elevated app connection would: one SESSION_CONTEXT per tenant,
         // IsPlatform always 0. This is the pre-existing cross-tenant data the migration must see
         // once IT elevates itself -- exactly the scenario code review flagged as unverified.
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@v", new { v = tenantA });
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=0");
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @v::text, false)", new { v = tenantA });
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', '0', false)");
         var userA = Guid.NewGuid();
         var teacherA = Guid.NewGuid();
         await conn.ExecuteAsync(
@@ -89,7 +89,7 @@ public sealed class M0085_EndToEnd_MigrationTests : IAsyncLifetime
 
         // Tenant B: a Users row with the SAME email as tenant A's teacher must NOT be able to
         // link across tenants (defence-in-depth check that scoping survived the restructure).
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@v", new { v = tenantB });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @v::text, false)", new { v = tenantB });
         var userBSameEmail = Guid.NewGuid();
         await conn.ExecuteAsync(
             "INSERT dbo.Users (Id, TenantId, Email) VALUES (@userBSameEmail, @tenantB, 'clean@x.com')",
@@ -121,7 +121,7 @@ public sealed class M0085_EndToEnd_MigrationTests : IAsyncLifetime
 
         // Assertions below read across both tenants (teacherA in tenantA, teacherAmbig/teacherNoMatch
         // in tenantB), so elevate this session's own SESSION_CONTEXT for the read-back queries.
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
 
         // -- Clean match: linked and Users.Name copied. This is the crux of issue #1: it only
         // passes if the elevated SESSION_CONTEXT genuinely took effect for the migration's

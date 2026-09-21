@@ -62,7 +62,7 @@ public class FeeAutoApplyOnCreateTests(PostgresFixture fx)
     {
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         var rows = await conn.QueryAsync<InvoiceRow>(
             "SELECT Id, StudentId, Period, Amount FROM dbo.FeeInvoices WHERE StudentId IN @ids",
             new { ids = studentIds });
@@ -74,7 +74,7 @@ public class FeeAutoApplyOnCreateTests(PostgresFixture fx)
         var id = Guid.NewGuid();
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync(
             "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, @Name)",
             new { Id = id, TenantId = tenantId, Name = name });

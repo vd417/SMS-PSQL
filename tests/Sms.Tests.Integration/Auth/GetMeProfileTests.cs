@@ -28,7 +28,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Jane Teacher')",
                 new { userId, tenantId, email = $"t{Guid.NewGuid():N}@x.com", hash = hasher.Hash("Pass123!") });
@@ -64,7 +64,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Priya Principal')",
                 new { userId, tenantId, email = $"p{Guid.NewGuid():N}@x.com", hash = hasher.Hash("Pass123!") });
@@ -95,7 +95,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Tenants (Id, Name, Slug, Status, Tier, PlanName) VALUES (@tenantId, 'Gold Academy', @slug, 'active', 'gold', 'Gold')",
                 new { tenantId, slug = $"t{tenantId:N}" });
@@ -133,7 +133,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name, Phone) VALUES (@userId, @tenantId, @email, @hash, 'Jane Teacher', '9000000001')",
                 new { userId, tenantId, email, hash = hasher.Hash("Pass123!") });
@@ -173,7 +173,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Priya Principal')",
                 new { userId, tenantId, email, hash = hasher.Hash("Pass123!") });
@@ -213,7 +213,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+            await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             await conn.ExecuteAsync(
                 "INSERT dbo.Tenants (Id, Name, Slug) VALUES (@tenantA, 'School A', @slugA), (@tenantB, 'School B', @slugB)",
                 new { tenantA, tenantB, slugA = $"a{tenantA:N}", slugB = $"b{tenantB:N}" });
@@ -257,7 +257,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+            await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             await conn.ExecuteAsync(
                 "INSERT dbo.Tenants (Id, Name, Slug) VALUES (@tenantA, 'School A', @slugA), (@tenantB, 'School B', @slugB)",
                 new { tenantA, tenantB, slugA = $"a{tenantA:N}", slugB = $"b{tenantB:N}" });
@@ -298,7 +298,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+            await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             var stored = await conn.QuerySingleAsync<string?>(
                 "SELECT Phone FROM dbo.Users WHERE Id = @userB", new { userB });
             stored.Should().Be(phone);

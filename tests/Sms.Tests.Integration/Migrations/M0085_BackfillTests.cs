@@ -17,8 +17,8 @@ public class M0085_BackfillTests(PostgresFixture fx)
 
         // Set SESSION_CONTEXT so RLS block predicates on Users/Teachers allow these inserts
         // (same pattern as M0084_IdentityLinkTests).
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@v", new { v = tenantId });
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=@v", new { v = 0 });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @v::text, false)", new { v = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', @v::text, false)", new { v = 0 });
 
         await conn.ExecuteAsync(
             "INSERT dbo.Users (Id, TenantId, Email) VALUES (@userId, @tenantId, 'match@x.com')",
@@ -58,8 +58,8 @@ WHERE u.Id = @userId AND u.Name IS NULL", new { userId });
         await conn.OpenAsync();
         var tenantId = Guid.NewGuid();
 
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@v", new { v = tenantId });
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=@v", new { v = 0 });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @v::text, false)", new { v = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', @v::text, false)", new { v = 0 });
 
         // Users.Email and Users.Phone are each unique per tenant (M0082), so two Users rows can't
         // share the same phone. Instead make the Teacher match two DIFFERENT Users rows via the
@@ -140,8 +140,8 @@ WHERE t.Id = @teacherId AND t.UserId IS NULL AND x.Cnt <> 1
         await conn.OpenAsync();
         var tenantId = Guid.NewGuid();
 
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@v", new { v = tenantId });
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=@v", new { v = 0 });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @v::text, false)", new { v = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', @v::text, false)", new { v = 0 });
 
         var teacherId = Guid.NewGuid();
         await conn.ExecuteAsync(

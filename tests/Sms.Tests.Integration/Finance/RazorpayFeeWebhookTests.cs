@@ -53,7 +53,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
             "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
             new { principalUserId, tenantId });
@@ -119,7 +119,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
 
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var status = await conn.QuerySingleAsync<string>(
             "SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceId", new { invoiceId });
         status.Should().Be("paid");
@@ -140,7 +140,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
 
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(
             "SELECT COUNT(*) FROM dbo.FeePayments WHERE InvoiceId = @invoiceId", new { invoiceId });
         paymentCount.Should().Be(1);
@@ -169,7 +169,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
 
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(
             "SELECT COUNT(*) FROM dbo.FeePayments WHERE InvoiceId = @invoiceId", new { invoiceId });
         paymentCount.Should().Be(1);
@@ -198,7 +198,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
 
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(
             "SELECT COUNT(*) FROM dbo.FeePayments WHERE InvoiceId = @invoiceId", new { invoiceId });
         paymentCount.Should().Be(1);
@@ -219,7 +219,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
 
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var status = await conn.QuerySingleAsync<string>(
             "SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceId", new { invoiceId });
         status.Should().Be("due");

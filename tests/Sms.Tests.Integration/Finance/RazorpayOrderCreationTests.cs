@@ -61,7 +61,7 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
             "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
             new { principalUserId, tenantId });
@@ -124,7 +124,7 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
         var (tenantId, principalUserId, studentId, invoiceId) = await SeedAsync(app, fx, invoiceAmount: 1000m);
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
             "UPDATE dbo.FeeInvoices SET PaidAmount = 1000, Status = 'paid' WHERE Id = @invoiceId", new { invoiceId });
         var client = AuthedClient(app, tenantId, principalUserId, "principal");
@@ -145,7 +145,7 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
                 new { principalUserId, tenantId });

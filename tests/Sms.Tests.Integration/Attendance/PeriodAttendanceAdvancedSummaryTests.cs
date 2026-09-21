@@ -185,7 +185,7 @@ public sealed class PeriodAttendanceAdvancedSummaryTests(PostgresFixture fx)
         await using var connection = new NpgsqlConnection(fx.ConnectionString);
         await connection.OpenAsync();
         await connection.ExecuteAsync(
-            "EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId",
+            "SELECT set_config('app.tenant_id', @tenantId::text, false)",
             new { tenantId });
         await connection.ExecuteAsync(
             """

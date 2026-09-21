@@ -54,7 +54,7 @@ public class FeeRecalculationOnTransportChangeTests(PostgresFixture fx)
         var id = Guid.NewGuid();
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync(
             "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, @Name)",
             new { Id = id, TenantId = tenantId, Name = name });
@@ -137,7 +137,7 @@ public class FeeRecalculationOnTransportChangeTests(PostgresFixture fx)
     {
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         return (await conn.QueryAsync<InvoiceRow>(
             "SELECT Id, StudentId, Period, Amount, PaidAmount FROM dbo.FeeInvoices WHERE StudentId = @studentId",
             new { studentId })).Single();
@@ -147,7 +147,7 @@ public class FeeRecalculationOnTransportChangeTests(PostgresFixture fx)
     {
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         var rows = await conn.QueryAsync<LineRow>(
             "SELECT InvoiceId, FeeHeadName AS HeadName, Amount FROM dbo.FeeInvoiceLines WHERE InvoiceId = @invoiceId",
             new { invoiceId });

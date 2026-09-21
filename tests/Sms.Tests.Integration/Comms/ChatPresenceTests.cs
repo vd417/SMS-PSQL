@@ -30,7 +30,7 @@ public class ChatPresenceTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId) VALUES (@userId, @tenantId)", new { userId, tenantId });
         }
@@ -46,7 +46,7 @@ public class ChatPresenceTests(PostgresFixture fx)
 
         await using var checkConn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await checkConn.OpenAsync();
-        await checkConn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await checkConn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var lastSeen = await checkConn.QuerySingleAsync<DateTime?>(
             "SELECT LastSeenAt FROM dbo.Users WHERE Id = @userId", new { userId });
         lastSeen.Should().NotBeNull();
@@ -67,7 +67,7 @@ public class ChatPresenceTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, Name, LastSeenAt) VALUES (@userId, @tenantId, 'Chat Contact', SYSUTCDATETIME())",
                 new { userId, tenantId });
@@ -117,7 +117,7 @@ public class ChatPresenceTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, Name) VALUES (@teacherUserId, @tenantId, 'Ms. Teacher')",
                 new { teacherUserId, tenantId });

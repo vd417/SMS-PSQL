@@ -62,7 +62,7 @@ public sealed class PeriodAttendanceAuditTests(PostgresFixture fx)
 
     private static async Task SetTenantAsync(NpgsqlConnection connection, Guid tenantId) =>
         await connection.ExecuteAsync(
-            "EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId",
+            "SELECT set_config('app.tenant_id', @tenantId::text, false)",
             new { tenantId });
 
     private static async Task<Guid> BulkUpsertAsync(

@@ -126,7 +126,7 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, Name) VALUES (@parentUserId, @tenantId, 'Two Kids Parent')",
                 new { parentUserId, tenantId });
@@ -164,7 +164,7 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
 
         await using var check = new NpgsqlConnection(fx.ConnectionString);
         await check.OpenAsync();
-        await check.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await check.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
 
         var statusA = await check.QuerySingleAsync<string>("SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceA", new { invoiceA });
         var statusB = await check.QuerySingleAsync<string>("SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceB", new { invoiceB });
@@ -206,13 +206,13 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
         {
             await conn.OpenAsync();
             // Tenant A: staff user only, no invoice of its own needed for this test.
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantAId", new { tenantAId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantAId::text, false)", new { tenantAId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, Name) VALUES (@staffAUserId, @tenantAId, 'Staff In Tenant A')",
                 new { staffAUserId, tenantAId });
 
             // Tenant B: the invoice tenant A's staff will try to guess.
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantBId", new { tenantBId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantBId::text, false)", new { tenantBId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade) " +
                 "VALUES (@studentBId, @tenantBId, 'B900', 'Tenant B Kid', 'active', '9')", new { studentBId, tenantBId });
@@ -236,7 +236,7 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
 
         await using var check = new NpgsqlConnection(fx.ConnectionString);
         await check.OpenAsync();
-        await check.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantBId", new { tenantBId });
+        await check.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantBId::text, false)", new { tenantBId });
         var status = await check.QuerySingleAsync<string>("SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceBId", new { invoiceBId });
         status.Should().Be("due");
         var payments = await check.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.FeePayments WHERE InvoiceId = @invoiceBId", new { invoiceBId });
@@ -264,7 +264,7 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
                 new { principalUserId, tenantId });

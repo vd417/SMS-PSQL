@@ -39,7 +39,7 @@ public class TaskSummaryEndpointTests(PostgresFixture fx)
     {
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
             "INSERT dbo.Users (Id, TenantId, Name) VALUES (@userId, @tenantId, @name)",
             new { userId, tenantId, name });
@@ -57,7 +57,7 @@ public class TaskSummaryEndpointTests(PostgresFixture fx)
     {
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
             "INSERT dbo.Staff (Id, TenantId, Name, Role, UserId) VALUES (NEWID(), @tenantId, @name, @role, @userId)",
             new { tenantId, name, role = designation, userId });
@@ -151,7 +151,7 @@ public class TaskSummaryEndpointTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Staff (Id, TenantId, Name, Role, UserId) VALUES (NEWID(), @tenantId, N'Unlinked Driver', N'Driver', NULL)",
                 new { tenantId });

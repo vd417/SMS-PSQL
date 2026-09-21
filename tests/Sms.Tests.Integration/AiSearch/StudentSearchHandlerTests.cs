@@ -47,7 +47,7 @@ public class StudentSearchHandlerTests(PostgresFixture fx)
     {
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         await work(conn);
     }
 
@@ -229,7 +229,7 @@ public class StudentDetailsHandlerTests(PostgresFixture fx)
     {
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         await work(conn);
     }
 

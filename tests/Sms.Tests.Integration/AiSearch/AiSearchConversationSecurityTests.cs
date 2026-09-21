@@ -103,7 +103,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
     {
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         await work(conn);
     }
 
@@ -111,7 +111,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
     {
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         return await work(conn);
     }
 
@@ -126,7 +126,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
         await Seed(async conn =>
         {
             await conn.ExecuteAsync(
-                "EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+                "SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId)",
@@ -327,7 +327,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
         Guid teacherId = default;
         await Seed(async conn =>
         {
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
                 "INSERT dbo.Teachers (Id, TenantId, Name, SubjectsCsv) VALUES (@teacherId, @tenantId, N'Rahul Sharma', N'Mathematics')",
@@ -375,7 +375,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
         Guid teacherIdInA = default;
         await Seed(async conn =>
         {
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantA", new { tenantA });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantA::text, false)", new { tenantA });
             teacherIdInA = Guid.NewGuid();
             await conn.ExecuteAsync(
                 "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@teacherIdInA, @tenantA, N'Rahul Sharma')",
@@ -417,7 +417,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
         Guid teacherRowId = default;
         await Seed(async conn =>
         {
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             teacherRowId = Guid.NewGuid();
             await conn.ExecuteAsync(
                 "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@teacherRowId, @tenantId, N'Rahul Sharma')",
@@ -488,7 +488,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
         await Seed(async conn =>
         {
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
                 "INSERT dbo.Teachers (Id, TenantId, Name, SubjectsCsv) VALUES (@teacherId, @tenantId, N'Rahul Sharma', N'Mathematics')",
@@ -550,7 +550,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
         Guid teacherId = default;
         await Seed(async conn =>
         {
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
                 "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@teacherId, @tenantId, N'Rahul Sharma')",

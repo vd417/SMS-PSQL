@@ -39,7 +39,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         var stop2 = Guid.NewGuid();
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo, DriverStaffId) VALUES (@Id, @TenantId, 'BUS-1', @DriverId)",
             new { Id = busId, TenantId = tenantId, DriverId = driverId });
         await conn.ExecuteAsync(
@@ -97,7 +97,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
     {
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync(
             "INSERT INTO dbo.TripPings (Id, TenantId, TripId, Lat, Lng, SpeedKmh, Heading, At) VALUES (NEWID(), @TenantId, @TripId, @Lat, @Lng, 0, 0, SYSUTCDATETIME())",
             new { TenantId = tenantId, TripId = tripId, Lat = lat, Lng = lng });
@@ -122,7 +122,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         // and EndedAt, not just that the HTTP call "succeeded".
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         var row = await conn.QuerySingleAsync<(string Status, DateTime? EndedAt)>(
             "SELECT Status, EndedAt FROM dbo.Trips WHERE Id = @tripId", new { tripId });
         row.Status.Should().Be("ended");
@@ -172,7 +172,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             // Stop A is at (12.10, 77.10); this ping is many kilometres away.
             await conn.ExecuteAsync(
                 "INSERT INTO dbo.TripPings (Id, TenantId, TripId, Lat, Lng, SpeedKmh, Heading, At) VALUES (NEWID(), @TenantId, @TripId, 20.0000, 90.0000, 0, 0, SYSUTCDATETIME())",
@@ -194,7 +194,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             // Stop A is at (12.10, 77.10); ping right on top of it so proximity passes.
             await conn.ExecuteAsync(
                 "INSERT INTO dbo.TripPings (Id, TenantId, TripId, Lat, Lng, SpeedKmh, Heading, At) VALUES (NEWID(), @TenantId, @TripId, 12.1000, 77.1000, 0, 0, SYSUTCDATETIME())",
@@ -219,7 +219,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
                 "INSERT INTO dbo.TripPings (Id, TenantId, TripId, Lat, Lng, SpeedKmh, Heading, At) VALUES (NEWID(), @TenantId, @TripId, 12.3456, 77.6543, 0, 0, SYSUTCDATETIME())",
                 new { TenantId = tenantId, TripId = tripId });
@@ -232,7 +232,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
 
         await using var check = new NpgsqlConnection(fx.ConnectionString);
         await check.OpenAsync();
-        await check.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await check.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         var row = await check.QuerySingleAsync<(DateTime? SchoolArrivedAt, double? SchoolArrivedLat, double? SchoolArrivedLng)>(
             "SELECT SchoolArrivedAt, SchoolArrivedLat, SchoolArrivedLng FROM dbo.Trips WHERE Id = @tripId", new { tripId });
         row.SchoolArrivedAt.Should().NotBeNull();
@@ -250,7 +250,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo, DriverStaffId) VALUES (@Id, @TenantId, 'BUS-1', @DriverId)",
                 new { Id = busId, TenantId = tenantId, DriverId = driverId });
             await conn.ExecuteAsync(

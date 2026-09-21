@@ -61,7 +61,7 @@ public class StudentSubjectsTests(PostgresFixture fx)
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
                 "INSERT dbo.Users (Id, TenantId, StudentId, IsPlatform, Status) VALUES (@studentUserId, @tenantId, N'sccrdtb/STU/26/0099', 0, 'active')",
                 new { studentUserId, tenantId });

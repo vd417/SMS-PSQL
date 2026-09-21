@@ -28,7 +28,7 @@ public class PlatformAdminSeedTests(PostgresFixture fx)
         await conn.OpenAsync();
         // Platform admins have TenantId = NULL; the RLS FILTER predicate on dbo.Users hides
         // them from a context-less connection. Stamp IsPlatform=1 so the row is visible.
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM dbo.Users WHERE IsPlatform = 1 AND Email = @email", new { email });
     }
@@ -39,7 +39,7 @@ public class PlatformAdminSeedTests(PostgresFixture fx)
         // Catre admin; the seeder's idempotency guard is existence-of-ANY-admin, so start clean.
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         await conn.ExecuteAsync("DELETE FROM dbo.Users WHERE IsPlatform = 1");
     }
 

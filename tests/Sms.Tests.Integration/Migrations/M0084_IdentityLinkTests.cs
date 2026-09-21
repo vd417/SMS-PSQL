@@ -36,8 +36,8 @@ public class M0084_IdentityLinkTests(PostgresFixture fx)
         var userId = Guid.NewGuid();
 
         // Set SESSION_CONTEXT for RLS
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@v", new { v = tenantId });
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=@v", new { v = 0 });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @v::text, false)", new { v = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', @v::text, false)", new { v = 0 });
 
         await conn.ExecuteAsync(
             "INSERT dbo.Users (Id, TenantId) VALUES (@userId, @tenantId)", new { userId, tenantId });
