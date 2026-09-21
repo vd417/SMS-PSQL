@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Dapper;
 using Sms.Application.Services.Transport;
@@ -29,7 +29,7 @@ public class FleetEtaTests(PostgresFixture fx)
         var busId = Guid.NewGuid();
         var routeId = Guid.NewGuid();
         var tripId = Guid.NewGuid();
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });

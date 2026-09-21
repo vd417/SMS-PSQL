@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Time;
 using Sms.Shared.Kernel.Tenancy;
@@ -50,7 +50,7 @@ public class CatreDashboardTests(PostgresFixture fx)
 
         // Seed a tenant over the 80% student limit, plus a recent audit row.
         var tid = Guid.NewGuid();
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.ExecuteAsync(
                 "INSERT dbo.Tenants (Id, Name, Slug, Tier, Status, Mrr, StudentsCount, LimitsStudents) " +
@@ -86,7 +86,7 @@ public class CatreDashboardTests(PostgresFixture fx)
 
         // Two prior-month snapshots: active 10 -> would compare against current month written at boot.
         // Insert an explicit previous month so the proc has a rn=2 row.
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             var lastMonth = DateTime.UtcNow.AddMonths(-1);
             var firstOfLast = new DateTime(lastMonth.Year, lastMonth.Month, 1);

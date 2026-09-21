@@ -3,7 +3,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Application.Services.Academics;
 using Sms.Shared.Kernel.Auth;
@@ -182,7 +182,7 @@ public sealed class PeriodAttendanceAdvancedSummaryTests(PostgresFixture fx)
         var studentBId = Guid.NewGuid();
 
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
-        await using var connection = new SqlConnection(fx.ConnectionString);
+        await using var connection = new NpgsqlConnection(fx.ConnectionString);
         await connection.OpenAsync();
         await connection.ExecuteAsync(
             "EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId",

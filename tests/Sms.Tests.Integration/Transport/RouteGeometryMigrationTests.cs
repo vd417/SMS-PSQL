@@ -1,5 +1,5 @@
 using Dapper;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Modules.Transport;
 using Sms.Shared.Kernel.Data;
 using Sms.Shared.Kernel.Tenancy;
@@ -15,7 +15,7 @@ public class RouteGeometryMigrationTests(PostgresFixture fx)
     [Fact]
     public async Task RouteGeometries_table_exists_with_expected_columns()
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         var columns = (await conn.QueryAsync<string>(
             "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RouteGeometries'")).ToHashSet();
@@ -38,7 +38,7 @@ public class RouteGeometryMigrationTests(PostgresFixture fx)
         // CREATE SECURITY POLICY statement actually applied, or whether it was later dropped.
         // Query sys.security_policies/sys.security_predicates directly, the same way SQL Server's
         // own catalog would be inspected to audit RLS coverage in production.
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
 
         var policy = await conn.QuerySingleOrDefaultAsync<(string Name, bool IsEnabled)?>(

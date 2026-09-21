@@ -6,7 +6,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Authz;
@@ -38,9 +38,9 @@ public class BusCapacityTests(PostgresFixture fx)
         return client;
     }
 
-    private static async Task Seed(string cs, Guid tenantId, Func<SqlConnection, Task> work)
+    private static async Task Seed(string cs, Guid tenantId, Func<NpgsqlConnection, Task> work)
     {
-        await using var conn = new SqlConnection(cs);
+        await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         await work(conn);

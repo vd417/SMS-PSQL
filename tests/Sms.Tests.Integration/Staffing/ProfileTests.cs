@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Dapper;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using FluentAssertions;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Time;
@@ -47,7 +47,7 @@ public class ProfileTests(PostgresFixture fx)
 
     private static async Task InsertStaffAsync(string cs, Guid staffId, Guid tenantId, Guid userId, string name)
     {
-        await using var conn = new SqlConnection(cs);
+        await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         await conn.ExecuteAsync(
@@ -58,7 +58,7 @@ public class ProfileTests(PostgresFixture fx)
     private static async Task InsertDocumentAsync(
         string cs, Guid tenantId, Guid staffId, string label, string value, bool? ok, DateTime createdAt)
     {
-        await using var conn = new SqlConnection(cs);
+        await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         await conn.ExecuteAsync(

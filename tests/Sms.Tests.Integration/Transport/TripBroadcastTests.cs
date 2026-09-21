@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dapper;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using FluentAssertions;
 using Sms.Application.Services.Realtime;
@@ -146,7 +146,7 @@ public class TripBroadcastTests(PostgresFixture fx)
         var conductorStaffId = Guid.NewGuid();
         var busNo = $"KA-{Guid.NewGuid():N}"[..12];
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -186,7 +186,7 @@ public class TripBroadcastTests(PostgresFixture fx)
         var busId = Guid.NewGuid();
         var busNo = $"KA-{Guid.NewGuid():N}"[..12];
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -239,7 +239,7 @@ public class TripBroadcastTests(PostgresFixture fx)
         var busId = Guid.NewGuid();
         var busNo = $"KA-{Guid.NewGuid():N}"[..12];
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -278,7 +278,7 @@ public class TripBroadcastTests(PostgresFixture fx)
         const double stopLat = 12.9716;
         const double stopLng = 77.5946;
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -327,7 +327,7 @@ public class TripBroadcastTests(PostgresFixture fx)
         var busNo = $"KA-{Guid.NewGuid():N}"[..12];
 
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });

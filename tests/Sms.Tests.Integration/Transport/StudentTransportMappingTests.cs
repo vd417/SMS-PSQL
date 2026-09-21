@@ -1,6 +1,6 @@
 using Dapper;
 using FluentAssertions;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Tests.Integration;
 
 namespace Sms.Tests.Integration.Transport;
@@ -8,9 +8,9 @@ namespace Sms.Tests.Integration.Transport;
 [Collection("sql")]
 public class StudentTransportMappingTests(PostgresFixture fx)
 {
-    private static async Task Seed(string cs, Guid tenantId, Func<SqlConnection, Task> work)
+    private static async Task Seed(string cs, Guid tenantId, Func<NpgsqlConnection, Task> work)
     {
-        await using var conn = new SqlConnection(cs);
+        await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         await work(conn);
@@ -38,7 +38,7 @@ public class StudentTransportMappingTests(PostgresFixture fx)
                 commandType: System.Data.CommandType.StoredProcedure);
         });
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         var row = await conn.QuerySingleAsync<(Guid? BusId, Guid RouteId)>(

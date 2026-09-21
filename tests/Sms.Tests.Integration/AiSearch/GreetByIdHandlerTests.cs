@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Application.Services.AiSearch;
 using Sms.Application.Services.AiSearch.Handlers;
@@ -56,9 +56,9 @@ public class GreetByIdHandlerTests(PostgresFixture fx)
         return doc.RootElement.GetProperty("data").Clone();
     }
 
-    private async Task Seed(Func<SqlConnection, Task> work)
+    private async Task Seed(Func<NpgsqlConnection, Task> work)
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
         await work(conn);
@@ -66,7 +66,7 @@ public class GreetByIdHandlerTests(PostgresFixture fx)
 
     private async Task<Guid> ParentUserId(string email, Guid tenantId)
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
         return await conn.QuerySingleAsync<Guid>(
@@ -176,7 +176,7 @@ public class GreetByIdHandlerTests(PostgresFixture fx)
     }
 
     private static async Task<Guid> InsertStudent(
-        SqlConnection conn, Guid tenantId, string admissionNo, string name, string classLabel)
+        NpgsqlConnection conn, Guid tenantId, string admissionNo, string name, string classLabel)
     {
         var id = Guid.NewGuid();
         await conn.ExecuteAsync(
@@ -189,13 +189,13 @@ public class GreetByIdHandlerTests(PostgresFixture fx)
     }
 
     private static async Task InsertTeacher(
-        SqlConnection conn, Guid tenantId, string name, string employeeCode) =>
+        NpgsqlConnection conn, Guid tenantId, string name, string employeeCode) =>
         await conn.ExecuteAsync(
             "INSERT dbo.Teachers (Id, TenantId, Name, EmployeeCode) VALUES (@id, @tenantId, @name, @employeeCode)",
             new { id = Guid.NewGuid(), tenantId, name, employeeCode });
 
     private static async Task InsertStaff(
-        SqlConnection conn, Guid tenantId, string name, string employeeCode) =>
+        NpgsqlConnection conn, Guid tenantId, string name, string employeeCode) =>
         await conn.ExecuteAsync(
             "INSERT dbo.Staff (Id, TenantId, Name, EmployeeCode) VALUES (@id, @tenantId, @name, @employeeCode)",
             new { id = Guid.NewGuid(), tenantId, name, employeeCode });

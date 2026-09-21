@@ -5,7 +5,7 @@ using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Application.Services.AiSearch;
@@ -99,17 +99,17 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
     private static string? ConversationId(JsonElement body) =>
         body.TryGetProperty("conversation_id", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
-    private async Task Seed(Func<SqlConnection, Task> work)
+    private async Task Seed(Func<NpgsqlConnection, Task> work)
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
         await work(conn);
     }
 
-    private async Task<T> Query<T>(Func<SqlConnection, Task<T>> work)
+    private async Task<T> Query<T>(Func<NpgsqlConnection, Task<T>> work)
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
         return await work(conn);

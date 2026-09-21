@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Dapper;
 using Xunit;
 using FluentAssertions;
@@ -23,7 +23,7 @@ public class TripStopProgressSchemaTests(PostgresFixture fx)
     public async Task Migration_creates_TripStopProgress_and_new_columns()
     {
         await using var app = App(); // forces migrations to have run via PostgresFixture.InitializeAsync
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
 
         var tripStopProgressExists = await conn.ExecuteScalarAsync<int>(
@@ -48,7 +48,7 @@ public class TripStopProgressSchemaTests(PostgresFixture fx)
         var stopId = Guid.NewGuid();
 
         await using var app = App();
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo) VALUES (@Id, @TenantId, 'BUS-1')",

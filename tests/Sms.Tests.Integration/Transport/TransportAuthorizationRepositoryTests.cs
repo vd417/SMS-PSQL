@@ -1,6 +1,6 @@
 using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Dapper;
 using FluentAssertions;
@@ -32,7 +32,7 @@ public class TransportAuthorizationRepositoryTests(PostgresFixture fx)
         var otherBusId = Guid.NewGuid();
         const string admissionNo = "ADM-TEST-001";
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -67,7 +67,7 @@ public class TransportAuthorizationRepositoryTests(PostgresFixture fx)
         var otherTeacherId = Guid.NewGuid();
         var busId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -98,7 +98,7 @@ public class TransportAuthorizationRepositoryTests(PostgresFixture fx)
         var secondTeacherId = Guid.NewGuid();
         var strangerId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -137,7 +137,7 @@ public class TransportAuthorizationRepositoryTests(PostgresFixture fx)
         var strangerId = Guid.NewGuid();
         var tripId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });

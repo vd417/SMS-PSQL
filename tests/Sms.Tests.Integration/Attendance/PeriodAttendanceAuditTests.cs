@@ -1,7 +1,7 @@
 using System.Data;
 using Dapper;
 using FluentAssertions;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Xunit;
 
 namespace Sms.Tests.Integration.Attendance;
@@ -19,7 +19,7 @@ public sealed class PeriodAttendanceAuditTests(PostgresFixture fx)
         var date = new DateTime(2026, 8, 12);
 
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
-        await using var connection = new SqlConnection(fx.ConnectionString);
+        await using var connection = new NpgsqlConnection(fx.ConnectionString);
         await connection.OpenAsync();
         await SetTenantAsync(connection, tenantId);
 
@@ -60,13 +60,13 @@ public sealed class PeriodAttendanceAuditTests(PostgresFixture fx)
         record.UpdatedBy.Should().Be(markerId);
     }
 
-    private static async Task SetTenantAsync(SqlConnection connection, Guid tenantId) =>
+    private static async Task SetTenantAsync(NpgsqlConnection connection, Guid tenantId) =>
         await connection.ExecuteAsync(
             "EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId",
             new { tenantId });
 
     private static async Task<Guid> BulkUpsertAsync(
-        SqlConnection connection, Guid tenantId, Guid classId, DateTime date, Guid markerId, string status)
+        NpgsqlConnection connection, Guid tenantId, Guid classId, DateTime date, Guid markerId, string status)
     {
         await SetTenantAsync(connection, tenantId);
         var table = new DataTable();
@@ -95,7 +95,7 @@ public sealed class PeriodAttendanceAuditTests(PostgresFixture fx)
             new { tenantId, classId, date });
     }
 
-    private static async Task<List<AuditRow>> ReadAuditAsync(SqlConnection connection, Guid recordId) =>
+    private static async Task<List<AuditRow>> ReadAuditAsync(NpgsqlConnection connection, Guid recordId) =>
         (await connection.QueryAsync<AuditRow>(
             "SELECT FromStatus, ToStatus, ActorId, ActorName, At FROM dbo.PeriodAttendanceAudit WHERE RecordId = @recordId",
             new { recordId })).AsList();

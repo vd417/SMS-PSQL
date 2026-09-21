@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Data;
 using Sms.Shared.Kernel.Tenancy;
@@ -50,7 +50,7 @@ public class StaffingPhotoTests(PostgresFixture fx)
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
         var userId = Guid.NewGuid();
         var teacherId = Guid.NewGuid();
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
         await conn.ExecuteAsync(
@@ -171,7 +171,7 @@ public class StaffingPhotoTests(PostgresFixture fx)
         var userA = Guid.NewGuid();
         var userB = Guid.NewGuid();
         var teacherId = Guid.NewGuid();
-        await using var c = new SqlConnection(fx.ConnectionString);
+        await using var c = new NpgsqlConnection(fx.ConnectionString);
         await c.OpenAsync();
         await c.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
         await c.ExecuteAsync(

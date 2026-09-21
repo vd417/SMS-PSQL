@@ -1,6 +1,6 @@
 using Dapper;
 using FluentAssertions;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Migrations;
 
 namespace Sms.Tests.Integration.Migrations;
@@ -15,7 +15,7 @@ public class MigrationIdempotenceTests(PostgresFixture fx)
         var act = () => MigrationRunner.Run(fx.ConnectionString);
         act.Should().NotThrow();
 
-        await using var c = new SqlConnection(fx.ConnectionString);
+        await using var c = new NpgsqlConnection(fx.ConnectionString);
         await c.OpenAsync();
         var procs = (await c.QueryAsync<string>(
             "SELECT name FROM sys.procedures WHERE name IN ('User_GetById','UserRoles_GetByUser')")).ToList();

@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Authz;
 using Sms.Shared.Kernel.Time;
@@ -63,7 +63,7 @@ public class StudentParentTests(PostgresFixture fx)
         var studentId = roster.GetProperty("id").GetGuid();
 
         var studentUserId = Guid.NewGuid();
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
@@ -116,7 +116,7 @@ public class StudentParentTests(PostgresFixture fx)
         var childId = roster.GetProperty("id").GetGuid();
 
         Guid parentUserId;
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");

@@ -1,7 +1,7 @@
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Application.Services.AiSearch;
 using Sms.Application.Services.AiSearch.Handlers;
@@ -40,16 +40,16 @@ public class UpcomingExamSearchHandlerTests(PostgresFixture fx)
         return await handler.HandleAsync(auth, "en", 1, 20);
     }
 
-    private async Task Seed(Func<SqlConnection, Task> work)
+    private async Task Seed(Func<NpgsqlConnection, Task> work)
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
         await work(conn);
     }
 
     private static async Task InsertExam(
-        SqlConnection conn, Guid id, Guid tenantId, string name, string? grades, DateTime? fromDate) =>
+        NpgsqlConnection conn, Guid id, Guid tenantId, string name, string? grades, DateTime? fromDate) =>
         await conn.ExecuteAsync(
             """
             INSERT dbo.Exams (Id, TenantId, Name, Type, Grades, FromDate, ToDate, SubjectCount, Status, MarksEnteredPct, Published)

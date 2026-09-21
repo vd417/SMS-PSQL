@@ -1,6 +1,6 @@
 using Dapper;
 using FluentAssertions;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Migrations;
 using Xunit;
 
@@ -28,19 +28,23 @@ public sealed class M0085_EndToEnd_MigrationTests : IAsyncLifetime
     private readonly string _dbName = "Sms_Test_M0085_" + Guid.NewGuid().ToString("N");
     private string _connectionString = "";
 
+    // NOTE: this test exercises the retired FluentMigrator/SQL-Server migration runner
+    // (Sms.Migrations.MigrationRunner, .AddSqlServer()) and cannot pass against Postgres as-is —
+    // left compiling only (type names fixed) pending the Migrations-module decision (see
+    // backend-api-postgresql-conversion-prompt.md section 6), not attempted here.
     private string MasterCs =>
         !string.IsNullOrEmpty(_overrideCs)
-            ? new SqlConnectionStringBuilder(_overrideCs) { InitialCatalog = "master" }.ConnectionString
+            ? new NpgsqlConnectionStringBuilder(_overrideCs) { Database = "postgres" }.ConnectionString
             : $"Server={_server};Database=master;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False";
 
     private string DbCs(string db) =>
         !string.IsNullOrEmpty(_overrideCs)
-            ? new SqlConnectionStringBuilder(_overrideCs) { InitialCatalog = db }.ConnectionString
+            ? new NpgsqlConnectionStringBuilder(_overrideCs) { Database = db }.ConnectionString
             : $"Server={_server};Database={db};Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False";
 
     public async Task InitializeAsync()
     {
-        await using (var master = new SqlConnection(MasterCs))
+        await using (var master = new NpgsqlConnection(MasterCs))
         {
             await master.OpenAsync();
             await master.ExecuteAsync($"CREATE DATABASE [{_dbName}];");
@@ -54,7 +58,7 @@ public sealed class M0085_EndToEnd_MigrationTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        await using var master = new SqlConnection(MasterCs);
+        await using var master = new NpgsqlConnection(MasterCs);
         await master.OpenAsync();
         await master.ExecuteAsync(
             $"ALTER DATABASE [{_dbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{_dbName}];");
@@ -66,7 +70,7 @@ public sealed class M0085_EndToEnd_MigrationTests : IAsyncLifetime
         var tenantA = Guid.NewGuid();
         var tenantB = Guid.NewGuid();
 
-        await using var conn = new SqlConnection(_connectionString);
+        await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
 
         // Insert as a normal, non-elevated app connection would: one SESSION_CONTEXT per tenant,

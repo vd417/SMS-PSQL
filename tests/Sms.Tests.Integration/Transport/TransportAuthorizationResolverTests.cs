@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Dapper;
 using Sms.Application.Interfaces.DAO;
@@ -31,7 +31,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var busId = Guid.NewGuid();
         var principalId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -55,7 +55,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var otherBusId = Guid.NewGuid();
         var teacherId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -83,7 +83,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var otherBusId = Guid.NewGuid();
         var teacherId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -113,7 +113,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var otherBusId = Guid.NewGuid();
         var driverId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -144,7 +144,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var studentId = Guid.NewGuid();
         const string admissionNo = "ADM-PARENT-001";
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -184,7 +184,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var parentId = Guid.NewGuid();
         var studentId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -234,7 +234,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var driverStaffId = Guid.NewGuid();
         var uninvolvedStaffId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -288,7 +288,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var studentId = Guid.NewGuid();
         const string admissionNo = "ADM-MULTIROLE-001";
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -323,7 +323,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
     {
         var tenantId = Guid.NewGuid();
         var busId = Guid.NewGuid();
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -350,7 +350,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var busId = Guid.NewGuid();
         var principalId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -380,7 +380,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var otherBusId = Guid.NewGuid();
         var teacherId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -411,7 +411,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var busId = Guid.NewGuid();
         var uninvolvedTeacherId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -438,7 +438,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var tenantId = Guid.NewGuid();
         var routeId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -467,7 +467,7 @@ public class TransportAuthorizationResolverTests(PostgresFixture fx)
         var routeId = Guid.NewGuid();
         var principalId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });

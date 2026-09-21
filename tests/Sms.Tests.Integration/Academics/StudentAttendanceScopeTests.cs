@@ -3,7 +3,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Authz;
 using Sms.Shared.Kernel.Time;
@@ -61,7 +61,7 @@ public class StudentAttendanceScopeTests(PostgresFixture fx)
         await using var app = App();
         var seed = await SeedAsync();
         var unlinkedParent = Guid.NewGuid();
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync(
@@ -134,7 +134,7 @@ public class StudentAttendanceScopeTests(PostgresFixture fx)
         var classId = Guid.NewGuid();
         const string admissionNo = "SCOPE/STU/0001";
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync(
             "EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId",

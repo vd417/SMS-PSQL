@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Time;
 using Sms.Tests.Integration;
@@ -52,7 +52,7 @@ public class FeeRecalculationOnTransportChangeTests(PostgresFixture fx)
     private static async Task<Guid> SeedRouteAsync(string cs, Guid tenantId, string name)
     {
         var id = Guid.NewGuid();
-        await using var conn = new SqlConnection(cs);
+        await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         await conn.ExecuteAsync(
@@ -135,7 +135,7 @@ public class FeeRecalculationOnTransportChangeTests(PostgresFixture fx)
 
     private static async Task<InvoiceRow> GetInvoiceAsync(string cs, Guid tenantId, Guid studentId)
     {
-        await using var conn = new SqlConnection(cs);
+        await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         return (await conn.QueryAsync<InvoiceRow>(
@@ -145,7 +145,7 @@ public class FeeRecalculationOnTransportChangeTests(PostgresFixture fx)
 
     private static async Task<IReadOnlyList<LineRow>> GetLinesAsync(string cs, Guid tenantId, Guid invoiceId)
     {
-        await using var conn = new SqlConnection(cs);
+        await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         var rows = await conn.QueryAsync<LineRow>(

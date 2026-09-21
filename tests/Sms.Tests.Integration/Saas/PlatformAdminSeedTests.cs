@@ -1,7 +1,7 @@
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 
 namespace Sms.Tests.Integration.Saas;
 
@@ -24,7 +24,7 @@ public class PlatformAdminSeedTests(PostgresFixture fx)
 
     private async Task<int> PlatformAdminCount(string email)
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         // Platform admins have TenantId = NULL; the RLS FILTER predicate on dbo.Users hides
         // them from a context-less connection. Stamp IsPlatform=1 so the row is visible.
@@ -37,7 +37,7 @@ public class PlatformAdminSeedTests(PostgresFixture fx)
     {
         // Other app-booting tests in the shared "sql" collection seed the appsettings
         // Catre admin; the seeder's idempotency guard is existence-of-ANY-admin, so start clean.
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
         await conn.ExecuteAsync("DELETE FROM dbo.Users WHERE IsPlatform = 1");

@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Dapper;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using FluentAssertions;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Time;
@@ -44,9 +44,9 @@ public class DashboardTests(PostgresFixture fx)
         return doc.RootElement.GetProperty("data").Clone();
     }
 
-    private async Task<SqlConnection> OpenAsync(Guid tenantId)
+    private async Task<NpgsqlConnection> OpenAsync(Guid tenantId)
     {
-        var conn = new SqlConnection(fx.ConnectionString);
+        var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         return conn;

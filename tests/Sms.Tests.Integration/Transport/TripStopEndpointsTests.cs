@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Dapper;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Authz;
@@ -37,7 +37,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         var tripId = Guid.NewGuid();
         var stop1 = Guid.NewGuid();
         var stop2 = Guid.NewGuid();
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         await conn.ExecuteAsync("INSERT INTO dbo.Buses (Id, TenantId, BusNo, DriverStaffId) VALUES (@Id, @TenantId, 'BUS-1', @DriverId)",
@@ -95,7 +95,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
 
     private async Task SeedPing(Guid tenantId, Guid tripId, double lat, double lng)
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         await conn.ExecuteAsync(
@@ -120,7 +120,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         // The old proc matched WHERE Status = 'live' only, so /end on an 'arrived' trip was a
         // silent no-op that still returned 200 — assert the DB actually recorded Status='ended'
         // and EndedAt, not just that the HTTP call "succeeded".
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         var row = await conn.QuerySingleAsync<(string Status, DateTime? EndedAt)>(
@@ -169,7 +169,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
     public async Task ConfirmArrival_far_from_the_stop_is_rejected_as_too_far()
     {
         var (tenantId, tripId, driverId, stop1, _) = await SeedLiveTripWithTwoStops();
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -191,7 +191,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
     public async Task ConfirmArrival_reconfirming_the_current_stop_is_rejected_as_already_at_stop()
     {
         var (tenantId, tripId, driverId, stop1, _) = await SeedLiveTripWithTwoStops();
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -216,7 +216,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
     public async Task SchoolArrived_persists_arrival_timestamp_and_gps_location()
     {
         var (tenantId, tripId, driverId, _, _) = await SeedLiveTripWithTwoStops();
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
@@ -230,7 +230,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         var res = await client.PostAsync($"/v1/staff/trips/{tripId}/school-arrived", null);
         res.IsSuccessStatusCode.Should().BeTrue();
 
-        await using var check = new SqlConnection(fx.ConnectionString);
+        await using var check = new NpgsqlConnection(fx.ConnectionString);
         await check.OpenAsync();
         await check.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         var row = await check.QuerySingleAsync<(DateTime? SchoolArrivedAt, double? SchoolArrivedLat, double? SchoolArrivedLng)>(
@@ -247,7 +247,7 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         var busId = Guid.NewGuid();
         var driverId = Guid.NewGuid();
         var tripId = Guid.NewGuid();
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });

@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Application.Services.AiSearch;
 using Sms.Application.Services.AiSearch.Handlers;
@@ -52,16 +52,16 @@ public class DailyAttendanceSummaryHandlerTests(PostgresFixture fx)
         return doc.RootElement.GetProperty("data").Clone();
     }
 
-    private async Task Seed(Func<SqlConnection, Task> work)
+    private async Task Seed(Func<NpgsqlConnection, Task> work)
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
         await work(conn);
     }
 
     private static async Task MarkPresent(
-        SqlConnection conn, Guid tenantId, Guid studentId, DateOnly date, string status)
+        NpgsqlConnection conn, Guid tenantId, Guid studentId, DateOnly date, string status)
     {
         await conn.ExecuteAsync(
             """

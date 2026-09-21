@@ -1,7 +1,7 @@
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Application.Services.AiSearch;
 using Sms.Application.Services.AiSearch.Handlers;
@@ -39,15 +39,15 @@ public class TeacherSearchHandlerTests(PostgresFixture fx)
         return await handler.HandleAsync(auth, language, 1, 20);
     }
 
-    private async Task Seed(Func<SqlConnection, Task> work)
+    private async Task Seed(Func<NpgsqlConnection, Task> work)
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
         await work(conn);
     }
 
-    private static async Task InsertTeacher(SqlConnection conn, Guid id, Guid tenantId, string name) =>
+    private static async Task InsertTeacher(NpgsqlConnection conn, Guid id, Guid tenantId, string name) =>
         await conn.ExecuteAsync(
             "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@id, @tenantId, @name)",
             new { id, tenantId, name });

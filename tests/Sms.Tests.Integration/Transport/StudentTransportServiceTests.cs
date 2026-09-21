@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Authz;
 using Sms.Shared.Kernel.Time;
@@ -36,9 +36,9 @@ public class StudentTransportServiceTests(PostgresFixture fx)
         return client;
     }
 
-    private static async Task Seed(string cs, Guid tenantId, Func<SqlConnection, Task> work)
+    private static async Task Seed(string cs, Guid tenantId, Func<NpgsqlConnection, Task> work)
     {
-        await using var conn = new SqlConnection(cs);
+        await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         await work(conn);
@@ -168,7 +168,7 @@ public class StudentTransportServiceTests(PostgresFixture fx)
         var res = await client.PutAsJsonAsync($"/v1/students/{studentId}/transport", new { opted_in = false });
 
         res.StatusCode.Should().Be(HttpStatusCode.OK);
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
         var count = await conn.QuerySingleAsync<int>(
