@@ -175,12 +175,12 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
     /// applies. Unlike GetAssignmentAsync, doesn't need stops or the peer's name.
     public async Task<StaffBusRouteSummaryResponse?> GetDriverBusRouteAsync(Guid driverUserId, CancellationToken ct = default) =>
         (await QueryInlineAsync<StaffBusRouteSummaryResponse>(
-            @"SELECT b.BusNo, r.Name AS RouteName, s.Shift,
-                (SELECT COUNT(*) FROM dbo.StudentBusAssignments sba WHERE sba.BusId = b.Id) AS StudentsAssigned
-              FROM dbo.Buses b
-              JOIN dbo.Staff s ON s.Id = b.DriverStaffId
-              JOIN dbo.TransportRoutes r ON r.Id = b.RouteId
-              WHERE s.UserId = @driverUserId", new { driverUserId }, ct)).FirstOrDefault();
+            @"SELECT b.""BusNo"" AS ""BusNo"", r.""Name"" AS ""RouteName"", s.""Shift"" AS ""Shift"",
+                (SELECT CAST(COUNT(*) AS int) FROM ""dbo"".""StudentBusAssignments"" sba WHERE sba.""BusId"" = b.""Id"") AS ""StudentsAssigned""
+              FROM ""dbo"".""Buses"" b
+              JOIN ""dbo"".""Staff"" s ON s.""Id"" = b.""DriverStaffId""
+              JOIN ""dbo"".""TransportRoutes"" r ON r.""Id"" = b.""RouteId""
+              WHERE s.""UserId"" = @driverUserId", new { driverUserId }, ct)).FirstOrDefault();
 
     /// True when userId is the driver or conductor currently structurally assigned to busId
     /// (dbo.Buses.DriverStaffId/ConductorStaffId, resolved via the caller's own dbo.Staff row) —
@@ -201,12 +201,12 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
 
     public async Task<StaffBusRouteSummaryResponse?> GetConductorBusRouteAsync(Guid conductorUserId, CancellationToken ct = default) =>
         (await QueryInlineAsync<StaffBusRouteSummaryResponse>(
-            @"SELECT b.BusNo, r.Name AS RouteName, s.Shift,
-                (SELECT COUNT(*) FROM dbo.StudentBusAssignments sba WHERE sba.BusId = b.Id) AS StudentsAssigned
-              FROM dbo.Buses b
-              JOIN dbo.Staff s ON s.Id = b.ConductorStaffId
-              JOIN dbo.TransportRoutes r ON r.Id = b.RouteId
-              WHERE s.UserId = @conductorUserId", new { conductorUserId }, ct)).FirstOrDefault();
+            @"SELECT b.""BusNo"" AS ""BusNo"", r.""Name"" AS ""RouteName"", s.""Shift"" AS ""Shift"",
+                (SELECT CAST(COUNT(*) AS int) FROM ""dbo"".""StudentBusAssignments"" sba WHERE sba.""BusId"" = b.""Id"") AS ""StudentsAssigned""
+              FROM ""dbo"".""Buses"" b
+              JOIN ""dbo"".""Staff"" s ON s.""Id"" = b.""ConductorStaffId""
+              JOIN ""dbo"".""TransportRoutes"" r ON r.""Id"" = b.""RouteId""
+              WHERE s.""UserId"" = @conductorUserId", new { conductorUserId }, ct)).FirstOrDefault();
 
     public async Task<IReadOnlyList<StaffRosterStudentResponse>> GetRosterAsync(Guid tripId, CancellationToken ct = default)
     {

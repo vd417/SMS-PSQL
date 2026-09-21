@@ -813,11 +813,11 @@ public sealed class PayrollRepository(IDbConnectionFactory factory) : BaseReposi
     public Task<IReadOnlyList<PayrollRunResponse>> ListApprovedRunsAsync(Guid tenantId, CancellationToken ct = default) =>
         QueryInlineAsync<PayrollRunResponse>(
             """
-            SELECT Id, TenantId, Period, Year, Month, Status, StaffCount, Gross, Deductions, Net,
-                   RunBy, RunAt, ApprovedBy, ApprovedAt
-            FROM dbo.PayrollRuns
-            WHERE TenantId = @tenantId AND Status IN ('run', 'approved')
-            ORDER BY Period DESC
+            SELECT "Id", "TenantId", "Period", "Year", "Month", "Status", "StaffCount", "Gross", "Deductions", "Net",
+                   "RunBy", "RunAt", "ApprovedBy", "ApprovedAt"
+            FROM "dbo"."PayrollRuns"
+            WHERE "TenantId" = @tenantId AND "Status" IN ('run', 'approved')
+            ORDER BY "Period" DESC
             """,
             new { tenantId }, ct);
 

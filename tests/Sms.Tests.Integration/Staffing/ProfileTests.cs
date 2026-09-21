@@ -49,9 +49,9 @@ public class ProfileTests(PostgresFixture fx)
     {
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Staff (Id, TenantId, Name, UserId) VALUES (@Id, @TenantId, @Name, @UserId)",
+            "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@Id, @TenantId, @Name, @UserId)",
             new { Id = staffId, TenantId = tenantId, Name = name, UserId = userId });
     }
 
@@ -60,10 +60,10 @@ public class ProfileTests(PostgresFixture fx)
     {
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.StaffDocuments (Id, TenantId, StaffId, Label, Value, Ok, CreatedAt) " +
-            "VALUES (NEWID(), @TenantId, @StaffId, @Label, @Value, @Ok, @CreatedAt)",
+            "INSERT INTO \"dbo\".\"StaffDocuments\" (\"Id\", \"TenantId\", \"StaffId\", \"Label\", \"Value\", \"Ok\", \"CreatedAt\") " +
+            "VALUES (gen_random_uuid(), @TenantId, @StaffId, @Label, @Value, @Ok, @CreatedAt)",
             new { TenantId = tenantId, StaffId = staffId, Label = label, Value = value, Ok = ok, CreatedAt = createdAt });
     }
 

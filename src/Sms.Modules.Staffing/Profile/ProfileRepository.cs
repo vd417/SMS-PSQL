@@ -15,14 +15,14 @@ public sealed class ProfileRepository(IDbConnectionFactory factory) : BaseReposi
     public async Task<Guid?> GetStaffIdByUserIdAsync(
         Guid tenantId, Guid userId, CancellationToken ct = default) =>
         (await QueryInlineAsync<Guid?>(
-            "SELECT Id FROM dbo.Staff WHERE UserId = @userId AND TenantId = @tenantId",
+            "SELECT \"Id\" FROM \"dbo\".\"Staff\" WHERE \"UserId\" = @userId AND \"TenantId\" = @tenantId",
             new { userId, tenantId }, ct)).FirstOrDefault();
 
     public Task<IReadOnlyList<StaffDocumentResponse>> ListForStaffAsync(
         Guid tenantId, Guid staffId, CancellationToken ct = default) =>
         QueryInlineAsync<StaffDocumentResponse>(
-            "SELECT Id, Label, Value, Ok FROM dbo.StaffDocuments " +
-            "WHERE TenantId = @tenantId AND StaffId = @staffId ORDER BY CreatedAt",
+            "SELECT \"Id\", \"Label\", \"Value\", \"Ok\" FROM \"dbo\".\"StaffDocuments\" " +
+            "WHERE \"TenantId\" = @tenantId AND \"StaffId\" = @staffId ORDER BY \"CreatedAt\"",
             new { tenantId, staffId }, ct);
 
     public Task<StaffDocumentResponse?> CreateAsync(
@@ -37,6 +37,6 @@ public sealed class ProfileRepository(IDbConnectionFactory factory) : BaseReposi
 
     public async Task<bool> DeleteAsync(Guid tenantId, Guid staffId, Guid docId, CancellationToken ct = default) =>
         await ExecuteInlineAsync(
-            "DELETE FROM dbo.StaffDocuments WHERE Id = @docId AND StaffId = @staffId AND TenantId = @tenantId",
+            "DELETE FROM \"dbo\".\"StaffDocuments\" WHERE \"Id\" = @docId AND \"StaffId\" = @staffId AND \"TenantId\" = @tenantId",
             new { docId, staffId, tenantId }, ct) > 0;
 }

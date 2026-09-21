@@ -52,13 +52,13 @@ public class StaffingPhotoTests(PostgresFixture fx)
         var teacherId = Guid.NewGuid();
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+        await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         await conn.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Email, IsPlatform) VALUES (@userId, @tenantId, @email, 0)",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"IsPlatform\") VALUES (@userId, @tenantId, @email, false)",
             new { userId, tenantId, email = $"teacher{Guid.NewGuid():N}@x.com" });
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, 'Linked Teacher', @userId)",
+            "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'Linked Teacher', @userId)",
             new { teacherId, tenantId, userId });
         return teacherId;
     }
@@ -69,7 +69,7 @@ public class StaffingPhotoTests(PostgresFixture fx)
         var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         return await c.QuerySingleAsync<string?>(
-            "SELECT u.PhotoUrl FROM dbo.Users u JOIN dbo.Teachers t ON t.UserId = u.Id WHERE t.Id = @teacherId",
+            "SELECT u.\"PhotoUrl\" FROM \"dbo\".\"Users\" u JOIN \"dbo\".\"Teachers\" t ON t.\"UserId\" = u.\"Id\" WHERE t.\"Id\" = @teacherId",
             new { teacherId });
     }
 
@@ -147,7 +147,7 @@ public class StaffingPhotoTests(PostgresFixture fx)
         var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         await c.ExecuteAsync(
-            "UPDATE u SET PhotoUrl = @photoUrl FROM dbo.Users u JOIN dbo.Teachers t ON t.UserId = u.Id WHERE t.Id = @teacherId",
+            "UPDATE \"dbo\".\"Users\" u SET \"PhotoUrl\" = @photoUrl FROM \"dbo\".\"Teachers\" t WHERE t.\"UserId\" = u.\"Id\" AND t.\"Id\" = @teacherId",
             new { photoUrl, teacherId });
 
         await using var app = App();
@@ -173,13 +173,13 @@ public class StaffingPhotoTests(PostgresFixture fx)
         var teacherId = Guid.NewGuid();
         await using var c = new NpgsqlConnection(fx.ConnectionString);
         await c.OpenAsync();
-        await c.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=1");
+        await c.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         await c.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Email, IsPlatform) VALUES (@userA, @tenantA, @email, 0), (@userB, @tenantB, @email, 0)",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"IsPlatform\") VALUES (@userA, @tenantA, @email, false), (@userB, @tenantB, @email, false)",
             new { userA, userB, tenantA, tenantB, email });
-        await c.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantA", new { tenantA });
+        await c.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantA::text, false)", new { tenantA });
         await c.ExecuteAsync(
-            "INSERT dbo.Teachers (Id, TenantId, Name, UserId, Email) VALUES (@teacherId, @tenantA, 'Multi School', @userA, @email)",
+            "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\", \"Email\") VALUES (@teacherId, @tenantA, 'Multi School', @userA, @email)",
             new { teacherId, tenantA, userA, email });
 
         await using var app = App();
@@ -188,7 +188,7 @@ public class StaffingPhotoTests(PostgresFixture fx)
             new { photo_url = "https://cdn.example.com/shared.png", set_photo = true }), HttpStatusCode.OK);
 
         var photoB = await c.QuerySingleAsync<string?>(
-            "SELECT PhotoUrl FROM dbo.Users WHERE Id = @userB", new { userB });
+            "SELECT \"PhotoUrl\" FROM \"dbo\".\"Users\" WHERE \"Id\" = @userB", new { userB });
         photoB.Should().Be("https://cdn.example.com/shared.png");
     }
 }

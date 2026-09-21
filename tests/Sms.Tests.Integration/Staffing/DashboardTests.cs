@@ -48,7 +48,7 @@ public class DashboardTests(PostgresFixture fx)
     {
         var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         return conn;
     }
 
@@ -76,7 +76,7 @@ public class DashboardTests(PostgresFixture fx)
         var userId = Guid.NewGuid();
         await using (var conn = await OpenAsync(tenantId))
             await conn.ExecuteAsync(
-                "INSERT dbo.Staff (Id, TenantId, Name, Category, UserId) VALUES (NEWID(), @TenantId, 'Guard Gopal', 'guard', @UserId)",
+                "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\", \"Category\", \"UserId\") VALUES (gen_random_uuid(), @TenantId, 'Guard Gopal', 'guard', @UserId)",
                 new { TenantId = tenantId, UserId = userId });
         var client = StaffClient(app, tenantId, userId);
 
@@ -94,7 +94,7 @@ public class DashboardTests(PostgresFixture fx)
         var userId = Guid.NewGuid();
         await using (var conn = await OpenAsync(tenantId))
             await conn.ExecuteAsync(
-                "INSERT dbo.Staff (Id, TenantId, Name, Category, UserId) VALUES (NEWID(), @TenantId, 'Driver Dan', 'driver', @UserId)",
+                "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\", \"Category\", \"UserId\") VALUES (gen_random_uuid(), @TenantId, 'Driver Dan', 'driver', @UserId)",
                 new { TenantId = tenantId, UserId = userId });
         var client = StaffClient(app, tenantId, userId);
 
@@ -115,17 +115,17 @@ public class DashboardTests(PostgresFixture fx)
         await using (var conn = await OpenAsync(tenantId))
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Staff (Id, TenantId, Name, Category, Shift, UserId) VALUES (@Id, @TenantId, 'Driver Dan', 'driver', '7:00 AM - 4:00 PM', @UserId)",
+                "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\", \"Category\", \"Shift\", \"UserId\") VALUES (@Id, @TenantId, 'Driver Dan', 'driver', '7:00 AM - 4:00 PM', @UserId)",
                 new { Id = staffId, TenantId = tenantId, UserId = userId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'Route 7')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'Route 7')",
                 new { Id = routeId, TenantId = tenantId });
             var busId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo, RouteId, DriverStaffId) VALUES (@BusId, @TenantId, 'KA-01-F-3301', @RouteId, @StaffId)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\", \"DriverStaffId\") VALUES (@BusId, @TenantId, 'KA-01-F-3301', @RouteId, @StaffId)",
                 new { BusId = busId, TenantId = tenantId, RouteId = routeId, StaffId = staffId });
             await conn.ExecuteAsync(
-                "INSERT dbo.StudentBusAssignments (Id, TenantId, BusId, StudentId) VALUES (NEWID(), @TenantId, @BusId, NEWID())",
+                "INSERT INTO \"dbo\".\"StudentBusAssignments\" (\"Id\", \"TenantId\", \"BusId\", \"StudentId\") VALUES (gen_random_uuid(), @TenantId, @BusId, gen_random_uuid())",
                 new { TenantId = tenantId, BusId = busId });
         }
         var client = StaffClient(app, tenantId, userId);
@@ -152,13 +152,13 @@ public class DashboardTests(PostgresFixture fx)
         await using (var conn = await OpenAsync(tenantId))
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Staff (Id, TenantId, Name, Category, UserId) VALUES (@Id, @TenantId, 'Conductor Cathy', 'conductor', @UserId)",
+                "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\", \"Category\", \"UserId\") VALUES (@Id, @TenantId, 'Conductor Cathy', 'conductor', @UserId)",
                 new { Id = staffId, TenantId = tenantId, UserId = userId });
             await conn.ExecuteAsync(
-                "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, 'Route 9')",
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'Route 9')",
                 new { Id = routeId, TenantId = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Buses (Id, TenantId, BusNo, RouteId, ConductorStaffId) VALUES (NEWID(), @TenantId, 'KA-02-G-1180', @RouteId, @StaffId)",
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\", \"ConductorStaffId\") VALUES (gen_random_uuid(), @TenantId, 'KA-02-G-1180', @RouteId, @StaffId)",
                 new { TenantId = tenantId, RouteId = routeId, StaffId = staffId });
         }
         var client = StaffClient(app, tenantId, userId);

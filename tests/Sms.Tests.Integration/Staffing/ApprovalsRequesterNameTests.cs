@@ -31,12 +31,12 @@ public class ApprovalsRequesterNameTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@requesterId, @tenantId, 'Sam Requester')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@requesterId, @tenantId, 'Sam Requester')",
                 new { requesterId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.LeaveRequests (TenantId, RequesterId, Type, Status) VALUES (@tenantId, @requesterId, 'casual', 'pending')",
+                "INSERT INTO \"dbo\".\"LeaveRequests\" (\"TenantId\", \"RequesterId\", \"Type\", \"Status\") VALUES (@tenantId, @requesterId, 'casual', 'pending')",
                 new { tenantId, requesterId });
         }
 
@@ -72,16 +72,16 @@ public class ApprovalsRequesterNameTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@requesterId, @tenantId, N'Sam Requester')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@requesterId, @tenantId, 'Sam Requester')",
                 new { requesterId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalId, @tenantId, N'Priya Principal')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@principalId, @tenantId, 'Priya Principal')",
                 new { principalId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.LeaveRequests (Id, TenantId, RequesterId, Type, Status, DecidedBy, DecidedNote) " +
-                "VALUES (@leaveId, @tenantId, @requesterId, 'casual', 'approved', @principalId, N'Covered')",
+                "INSERT INTO \"dbo\".\"LeaveRequests\" (\"Id\", \"TenantId\", \"RequesterId\", \"Type\", \"Status\", \"DecidedBy\", \"DecidedNote\") " +
+                "VALUES (@leaveId, @tenantId, @requesterId, 'casual', 'approved', @principalId, 'Covered')",
                 new { leaveId, tenantId, requesterId, principalId });
         }
 
@@ -119,15 +119,15 @@ public class ApprovalsRequesterNameTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@requesterId, @tenantId, N'Sam Requester')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@requesterId, @tenantId, 'Sam Requester')",
                 new { requesterId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalId, @tenantId, N'Priya Principal')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@principalId, @tenantId, 'Priya Principal')",
                 new { principalId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.LeaveRequests (Id, TenantId, RequesterId, Type, Status) " +
+                "INSERT INTO \"dbo\".\"LeaveRequests\" (\"Id\", \"TenantId\", \"RequesterId\", \"Type\", \"Status\") " +
                 "VALUES (@leaveId, @tenantId, @requesterId, 'casual', 'pending')",
                 new { leaveId, tenantId, requesterId });
         }

@@ -134,8 +134,8 @@ public sealed class CheckInRepository(IDbConnectionFactory factory) : BaseReposi
     {
         var (startUtc, endUtc) = LocalDayBoundsUtc(day, utcOffset);
         var rows = await QueryInlineAsync<CheckInRow>(
-            "SELECT Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified FROM dbo.CheckIns " +
-            "WHERE UserId = @userId AND At >= @startUtc AND At < @endUtc ORDER BY At",
+            "SELECT \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\" FROM \"dbo\".\"CheckIns\" " +
+            "WHERE \"UserId\" = @userId AND \"At\" >= @startUtc AND \"At\" < @endUtc ORDER BY \"At\"",
             new { userId, startUtc, endUtc }, ct);
         var ci = rows.Where(x => x.Kind == "in").Select(ToEvent).LastOrDefault();
         var co = rows.Where(x => x.Kind == "out").Select(ToEvent).LastOrDefault();
@@ -155,8 +155,8 @@ public sealed class CheckInRepository(IDbConnectionFactory factory) : BaseReposi
         if (userIds.Count == 0) return Array.Empty<TeacherAttendanceDayResponse>();
 
         var rows = await QueryInlineAsync<CheckInRow>(
-            "SELECT Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified FROM dbo.CheckIns " +
-            "WHERE UserId IN @userIds ORDER BY At DESC", new { userIds }, ct);
+            "SELECT \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\" FROM \"dbo\".\"CheckIns\" " +
+            "WHERE \"UserId\" = ANY(@userIds) ORDER BY \"At\" DESC", new { userIds = userIds.ToArray() }, ct);
 
         return rows.GroupBy(r => DateOnly.FromDateTime(r.At.Add(utcOffset)))
             .OrderByDescending(g => g.Key)
@@ -172,8 +172,8 @@ public sealed class CheckInRepository(IDbConnectionFactory factory) : BaseReposi
         Guid userId, int year, int month, TimeSpan utcOffset, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<CheckInRow>(
-            "SELECT Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified FROM dbo.CheckIns " +
-            "WHERE UserId = @userId", new { userId }, ct);
+            "SELECT \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\" FROM \"dbo\".\"CheckIns\" " +
+            "WHERE \"UserId\" = @userId", new { userId }, ct);
 
         var inMonth = rows.Where(r =>
         {
@@ -199,8 +199,8 @@ public sealed class CheckInRepository(IDbConnectionFactory factory) : BaseReposi
     public async Task<double> GetWeekSummaryAsync(Guid userId, TimeSpan utcOffset, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<CheckInRow>(
-            "SELECT Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified FROM dbo.CheckIns " +
-            "WHERE UserId = @userId", new { userId }, ct);
+            "SELECT \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\" FROM \"dbo\".\"CheckIns\" " +
+            "WHERE \"UserId\" = @userId", new { userId }, ct);
 
         var todayLocal = DateOnly.FromDateTime(DateTime.UtcNow.Add(utcOffset));
         var daysSinceMonday = ((int)todayLocal.DayOfWeek + 6) % 7;

@@ -90,11 +90,11 @@ public class StaffingTests(PostgresFixture fx)
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
-            await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name, Email) VALUES (@Id, @TenantId, 'Linked User', @Email)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\", \"Email\") VALUES (@Id, @TenantId, 'Linked User', @Email)",
                 new { Id = linkedUserId, TenantId = tenantId, Email = $"linked-{linkedUserId}@test.local" });
-            await conn.ExecuteAsync("UPDATE dbo.Teachers SET UserId = @UserId WHERE Id = @Id",
+            await conn.ExecuteAsync("UPDATE \"dbo\".\"Teachers\" SET \"UserId\" = @UserId WHERE \"Id\" = @Id",
                 new { UserId = linkedUserId, Id = id });
         }
 
