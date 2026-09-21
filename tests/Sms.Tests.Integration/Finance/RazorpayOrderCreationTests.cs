@@ -5,7 +5,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Application.Services.Finance;
@@ -59,7 +59,7 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
         var invoiceId = Guid.NewGuid();
 
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         await conn.ExecuteAsync(
@@ -122,7 +122,7 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
     {
         await using var app = App(fx);
         var (tenantId, principalUserId, studentId, invoiceId) = await SeedAsync(app, fx, invoiceAmount: 1000m);
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         await conn.ExecuteAsync(
@@ -142,7 +142,7 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
         var studentId = Guid.NewGuid();
         var invoiceId = Guid.NewGuid();
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

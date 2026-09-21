@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Dapper;
 using Sms.Application.Services.Finance;
@@ -43,7 +43,7 @@ public class TenantPaymentCredentialServiceTests(PostgresFixture fx)
         active.WebhookSecret.Should().Be("webhook-secret-value");
         active.Mode.Should().Be("test");
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         // dbo.TenantPaymentCredentials is tenant-RLS-scoped (M0190) — a bare connection has no
         // session context, so stamp the tenant explicitly for this raw read.
@@ -108,7 +108,7 @@ public class TenantPaymentCredentialServiceTests(PostgresFixture fx)
         status.KeySecretSet.Should().BeFalse();
         status.WebhookSecretSet.Should().BeFalse();
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         var (keySecret, webhookSecret) = (await conn.QuerySingleAsync<(string? KeySecretEncrypted, string? WebhookSecretEncrypted)>(
@@ -222,7 +222,7 @@ public class TenantPaymentCredentialServiceTests(PostgresFixture fx)
         var wrongPurposeProtector = provider.CreateProtector("Some.Unrelated.Purpose.v1");
         var undecryptableSecret = wrongPurposeProtector.Protect("irrelevant-payload");
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

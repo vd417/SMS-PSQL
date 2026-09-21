@@ -30,7 +30,7 @@ public sealed class IdempotencyKeyConflictException()
 public sealed class FeeRepository(IDbConnectionFactory factory, IAuditLogger auditLogger) : BaseRepository(factory)
 {
     private const string Cols =
-        "Id, TenantId, StudentId, StudentName, ClassLabel, FeeType, Amount, Method, Ref, [Date], InvoiceId, HeadId";
+        "\"Id\", \"TenantId\", \"StudentId\", \"StudentName\", \"ClassLabel\", \"FeeType\", \"Amount\", \"Method\", \"Ref\", \"Date\", \"InvoiceId\", \"HeadId\"";
 
     private sealed record FeePaymentCreateRow(
         Guid Id, Guid TenantId, Guid StudentId, string? StudentName, string? ClassLabel, string FeeType,
@@ -41,24 +41,25 @@ public sealed class FeeRepository(IDbConnectionFactory factory, IAuditLogger aud
     {
         await using var conn = await Factory.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
+        var args = new
+        {
+            TenantId = tenantId,
+            r.StudentId,
+            StudentName = r.StudentName,
+            ClassLabel = string.IsNullOrWhiteSpace(r.ClassLabel) ? r.Cls : r.ClassLabel,
+            FeeType = string.IsNullOrWhiteSpace(r.FeeType) ? r.HeadName : r.FeeType,
+            r.Amount,
+            Method = string.IsNullOrWhiteSpace(r.Method) ? r.Mode : r.Method,
+            r.Ref,
+            r.InvoiceId,
+            r.HeadId,
+            r.IdempotencyKey,
+        };
         var row = await conn.QuerySingleOrDefaultAsync<FeePaymentCreateRow>(new CommandDefinition(
-            "dbo.FeePayment_Create",
-            new
-            {
-                TenantId = tenantId,
-                r.StudentId,
-                StudentName = r.StudentName,
-                ClassLabel = string.IsNullOrWhiteSpace(r.ClassLabel) ? r.Cls : r.ClassLabel,
-                FeeType = string.IsNullOrWhiteSpace(r.FeeType) ? r.HeadName : r.FeeType,
-                r.Amount,
-                Method = string.IsNullOrWhiteSpace(r.Method) ? r.Mode : r.Method,
-                r.Ref,
-                r.InvoiceId,
-                r.HeadId,
-                r.IdempotencyKey,
-            },
+            FunctionCallSql("dbo.FeePayment_Create", args),
+            args,
             tx,
-            commandType: CommandType.StoredProcedure,
+            commandType: CommandType.Text,
             cancellationToken: ct));
 
         if (row is null)
@@ -91,12 +92,12 @@ public sealed class FeeRepository(IDbConnectionFactory factory, IAuditLogger aud
 
     public Task<IReadOnlyList<FeePaymentResponse>> ListAsync(Guid? studentId, CancellationToken ct = default) =>
         QueryInlineAsync<FeePaymentResponse>(
-            $"SELECT {Cols} FROM dbo.FeePayments WHERE (@studentId IS NULL OR StudentId = @studentId) ORDER BY [Date] DESC",
+            $"SELECT {Cols} FROM \"dbo\".\"FeePayments\" WHERE (@studentId::uuid IS NULL OR \"StudentId\" = @studentId::uuid) ORDER BY \"Date\" DESC",
             new { studentId }, ct);
 
     public async Task<FeePaymentResponse?> GetAsync(Guid id, CancellationToken ct = default) =>
         (await QueryInlineAsync<FeePaymentResponse>(
-            $"SELECT {Cols} FROM dbo.FeePayments WHERE Id = @id", new { id }, ct)).FirstOrDefault();
+            $"SELECT {Cols} FROM \"dbo\".\"FeePayments\" WHERE \"Id\" = @id", new { id }, ct)).FirstOrDefault();
 }
 
 // ---- Fee invoices (student/parent bills) ----
@@ -138,55 +139,58 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
     private static int _paidAmountReady;
 
     private const string InvoiceCols =
-        "i.Id, i.TenantId, i.StudentId, i.Period, i.DueDate, i.Amount, i.Status, i.PaidOn, i.Method, ISNULL(i.PaidAmount, 0) AS PaidAmount";
+        "i.\"Id\", i.\"TenantId\", i.\"StudentId\", i.\"Period\", i.\"DueDate\", i.\"Amount\", i.\"Status\", i.\"PaidOn\", i.\"Method\", COALESCE(i.\"PaidAmount\", 0) AS \"PaidAmount\"";
     private const string StudentJoinCols =
-        "s.Name AS StudentName, s.ClassLabel, s.AdmissionNo, s.Grade, s.AvatarHue, s.PhotoUrl";
+        "s.\"Name\" AS \"StudentName\", s.\"ClassLabel\", s.\"AdmissionNo\", s.\"Grade\", s.\"AvatarHue\", s.\"PhotoUrl\"";
     private const string SelectJoined =
-        $"SELECT {InvoiceCols}, {StudentJoinCols} FROM dbo.FeeInvoices i LEFT JOIN dbo.Students s ON s.Id = i.StudentId";
+        $"SELECT {InvoiceCols}, {StudentJoinCols} FROM \"dbo\".\"FeeInvoices\" i LEFT JOIN \"dbo\".\"Students\" s ON s.\"Id\" = i.\"StudentId\"";
 
+    // The COL_LENGTH/ALTER TABLE self-healing migration this method used to do on SQL Server is
+    // gone: db/postgres/04_tables.sql's "FeeInvoices" already has PaidAmount (decimal(18,2)
+    // DEFAULT 0 NOT NULL) from day one, so there's nothing to add. The one-time phantom-"paid"
+    // backfill below is real data correction (not a schema check), so it's kept.
     private async Task EnsurePaidAmountColumnAsync(CancellationToken ct)
     {
         if (Interlocked.CompareExchange(ref _paidAmountReady, 1, 0) != 0) return;
         try
         {
+            /* Reopen phantom "paid" with PaidAmount 0 (false full-pay from earlier bug). Uses a
+               LEFT JOIN in the FROM subquery (not a plain join) so invoices for students with
+               ZERO payment rows at all are still candidates for reopening -- an inner join here
+               would silently skip exactly those. */
             await ExecuteInlineAsync(
                 """
-                IF COL_LENGTH('dbo.FeeInvoices', 'PaidAmount') IS NULL
-                    ALTER TABLE dbo.FeeInvoices ADD PaidAmount decimal(18,2) NOT NULL
-                        CONSTRAINT DF_FeeInvoices_PaidAmount DEFAULT (0);
-                """,
-                null, ct);
-
-            /* Reopen phantom "paid" with PaidAmount 0 (false full-pay from earlier bug). */
-            await ExecuteInlineAsync(
-                """
-                ;WITH pay AS (
-                    SELECT StudentId, CAST(SUM(Amount) AS decimal(18,2)) AS Paid
-                    FROM dbo.FeePayments
-                    GROUP BY StudentId
+                WITH pay AS (
+                    SELECT "StudentId", CAST(sum("Amount") AS decimal(18,2)) AS "Paid"
+                    FROM "dbo"."FeePayments"
+                    GROUP BY "StudentId"
                 )
-                UPDATE i
+                UPDATE "dbo"."FeeInvoices" i
                 SET
-                    PaidAmount = CASE
-                        WHEN ISNULL(p.Paid, 0) > i.Amount THEN i.Amount
-                        ELSE ISNULL(p.Paid, 0)
+                    "PaidAmount" = CASE
+                        WHEN COALESCE(x."Paid", 0) > i."Amount" THEN i."Amount"
+                        ELSE COALESCE(x."Paid", 0)
                     END,
-                    Status = CASE
-                        WHEN ISNULL(p.Paid, 0) >= i.Amount AND i.Amount > 0 THEN N'paid'
-                        WHEN ISNULL(p.Paid, 0) > 0 THEN N'partial'
-                        ELSE N'due'
+                    "Status" = CASE
+                        WHEN COALESCE(x."Paid", 0) >= i."Amount" AND i."Amount" > 0 THEN 'paid'
+                        WHEN COALESCE(x."Paid", 0) > 0 THEN 'partial'
+                        ELSE 'due'
                     END,
-                    PaidOn = CASE
-                        WHEN ISNULL(p.Paid, 0) >= i.Amount AND i.Amount > 0
-                            THEN ISNULL(i.PaidOn, CAST(SYSUTCDATETIME() AS date))
+                    "PaidOn" = CASE
+                        WHEN COALESCE(x."Paid", 0) >= i."Amount" AND i."Amount" > 0
+                            THEN COALESCE(i."PaidOn", now()::date)
                         ELSE NULL
                     END,
-                    Method = CASE WHEN ISNULL(p.Paid, 0) > 0 THEN i.Method ELSE NULL END
-                FROM dbo.FeeInvoices i
-                LEFT JOIN pay p ON p.StudentId = i.StudentId
-                WHERE i.Status = N'paid'
-                  AND ISNULL(i.PaidAmount, 0) = 0
-                  AND i.Amount > 0;
+                    "Method" = CASE WHEN COALESCE(x."Paid", 0) > 0 THEN i."Method" ELSE NULL END
+                FROM (
+                    SELECT i2."Id", p."Paid"
+                    FROM "dbo"."FeeInvoices" i2
+                    LEFT JOIN pay p ON p."StudentId" = i2."StudentId"
+                ) x
+                WHERE x."Id" = i."Id"
+                  AND i."Status" = 'paid'
+                  AND COALESCE(i."PaidAmount", 0) = 0
+                  AND i."Amount" > 0
                 """,
                 null, ct);
         }
@@ -225,7 +229,7 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
         {
             await conn.ExecuteAsync(new CommandDefinition(
                 """
-                INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, DueDate, Amount)
+                INSERT INTO "dbo"."FeeInvoices" ("Id", "TenantId", "StudentId", "Period", "DueDate", "Amount")
                 VALUES (@invoiceId, @tenantId, @studentId, @period, @dueDate, @total)
                 """,
                 new { invoiceId, tenantId, studentId, period, dueDate, total }, tx, cancellationToken: ct));
@@ -234,7 +238,7 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
             {
                 await conn.ExecuteAsync(new CommandDefinition(
                     """
-                    INSERT dbo.FeeInvoiceLines (Id, TenantId, InvoiceId, FeeHeadId, FeeHeadName, Amount, FeeHeadDescription)
+                    INSERT INTO "dbo"."FeeInvoiceLines" ("Id", "TenantId", "InvoiceId", "FeeHeadId", "FeeHeadName", "Amount", "FeeHeadDescription")
                     VALUES (@id, @tenantId, @invoiceId, @headId, @headName, @amount, @description)
                     """,
                     new
@@ -262,7 +266,7 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
         var core = await QuerySingleProcAsync<FeeInvoiceCore>("dbo.FeeInvoice_MarkPaid", new { Id = id, Method = method }, ct);
         if (core is null) return null;
         await ExecuteInlineAsync(
-            "UPDATE dbo.FeeInvoices SET PaidAmount = Amount WHERE Id = @id",
+            """UPDATE "dbo"."FeeInvoices" SET "PaidAmount" = "Amount" WHERE "Id" = @id""",
             new { id }, ct);
         return await GetAsync(core.Id, ct);
     }
@@ -273,11 +277,11 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
         await EnsurePaidAmountColumnAsync(ct);
         await ExecuteInlineAsync(
             """
-            UPDATE dbo.FeeInvoices
-            SET Status = @status,
-                Method = COALESCE(@method, Method),
-                PaidOn = CASE WHEN @status = N'paid' THEN CAST(SYSUTCDATETIME() AS date) ELSE PaidOn END
-            WHERE Id = @id AND Status <> N'paid'
+            UPDATE "dbo"."FeeInvoices"
+            SET "Status" = @status,
+                "Method" = COALESCE(@method, "Method"),
+                "PaidOn" = CASE WHEN @status = 'paid' THEN now()::date ELSE "PaidOn" END
+            WHERE "Id" = @id AND "Status" <> 'paid'
             """,
             new { id, status, method }, ct);
         return await GetAsync(id, ct);
@@ -290,20 +294,20 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
         await EnsurePaidAmountColumnAsync(ct);
         await ExecuteInlineAsync(
             """
-            UPDATE dbo.FeeInvoices
+            UPDATE "dbo"."FeeInvoices"
             SET
-                PaidAmount = ISNULL(PaidAmount, 0) + @amount,
-                Method = @method,
-                Status = CASE
-                    WHEN ISNULL(PaidAmount, 0) + @amount >= Amount THEN N'paid'
-                    ELSE N'partial'
+                "PaidAmount" = COALESCE("PaidAmount", 0) + @amount,
+                "Method" = @method,
+                "Status" = CASE
+                    WHEN COALESCE("PaidAmount", 0) + @amount >= "Amount" THEN 'paid'
+                    ELSE 'partial'
                 END,
-                PaidOn = CASE
-                    WHEN ISNULL(PaidAmount, 0) + @amount >= Amount THEN CAST(SYSUTCDATETIME() AS date)
-                    ELSE PaidOn
+                "PaidOn" = CASE
+                    WHEN COALESCE("PaidAmount", 0) + @amount >= "Amount" THEN now()::date
+                    ELSE "PaidOn"
                 END
-            WHERE Id = @id
-              AND Status <> N'paid'
+            WHERE "Id" = @id
+              AND "Status" <> 'paid'
             """,
             new { id, amount, method }, ct);
         return await GetAsync(id, ct);
@@ -314,8 +318,8 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
         Guid tenantId, Guid key, CancellationToken ct = default) =>
         (await QueryInlineAsync<FeePaymentResponse>(
             """
-            SELECT Id, TenantId, StudentId, StudentName, ClassLabel, FeeType, Amount, Method, Ref, [Date], InvoiceId, HeadId
-            FROM dbo.FeePayments WHERE TenantId = @tenantId AND IdempotencyKey = @key
+            SELECT "Id", "TenantId", "StudentId", "StudentName", "ClassLabel", "FeeType", "Amount", "Method", "Ref", "Date", "InvoiceId", "HeadId"
+            FROM "dbo"."FeePayments" WHERE "TenantId" = @tenantId AND "IdempotencyKey" = @key
             """,
             new { tenantId, key }, ct)).FirstOrDefault();
 
@@ -340,8 +344,8 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
             {
                 var existing = await conn.QuerySingleOrDefaultAsync<FeePaymentResponse>(new CommandDefinition(
                     """
-                    SELECT Id, TenantId, StudentId, StudentName, ClassLabel, FeeType, Amount, Method, Ref, [Date], InvoiceId, HeadId
-                    FROM dbo.FeePayments WHERE TenantId = @tenantId AND IdempotencyKey = @key
+                    SELECT "Id", "TenantId", "StudentId", "StudentName", "ClassLabel", "FeeType", "Amount", "Method", "Ref", "Date", "InvoiceId", "HeadId"
+                    FROM "dbo"."FeePayments" WHERE "TenantId" = @tenantId AND "IdempotencyKey" = @key
                     """,
                     new { tenantId, key }, tx, cancellationToken: ct));
                 if (existing is not null)
@@ -360,9 +364,10 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
             var inv = await conn.QuerySingleOrDefaultAsync<InvoiceLockRow>(
                 new CommandDefinition(
                     """
-                    SELECT Id, StudentId, Amount, Status, ISNULL(PaidAmount, 0) AS PaidAmount
-                    FROM dbo.FeeInvoices WITH (UPDLOCK, HOLDLOCK)
-                    WHERE Id = @invoiceId
+                    SELECT "Id", "StudentId", "Amount", "Status", COALESCE("PaidAmount", 0) AS "PaidAmount"
+                    FROM "dbo"."FeeInvoices"
+                    WHERE "Id" = @invoiceId
+                    FOR UPDATE
                     """,
                     new { invoiceId }, tx, cancellationToken: ct));
             if (inv is null)
@@ -387,8 +392,8 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
             {
                 await conn.ExecuteAsync(new CommandDefinition(
                     """
-                    INSERT dbo.FeePayments (Id, TenantId, StudentId, StudentName, ClassLabel, FeeType, Amount, Method, Ref, [Date], InvoiceId, HeadId, IdempotencyKey, CreatedAt)
-                    VALUES (@payId, @tenantId, @StudentId, @StudentName, @classLabel, @feeType, @amount, @method, @Ref, CAST(SYSUTCDATETIME() AS date), @invoiceId, @HeadId, @IdempotencyKey, SYSUTCDATETIME())
+                    INSERT INTO "dbo"."FeePayments" ("Id", "TenantId", "StudentId", "StudentName", "ClassLabel", "FeeType", "Amount", "Method", "Ref", "Date", "InvoiceId", "HeadId", "IdempotencyKey", "CreatedAt")
+                    VALUES (@payId, @tenantId, @StudentId, @StudentName, @classLabel, @feeType, @amount, @method, @Ref, now()::date, @invoiceId, @HeadId, @IdempotencyKey, now())
                     """,
                     new
                     {
@@ -413,8 +418,8 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
                    fall back to returning that row instead of surfacing the unique-index violation. */
                 var raced = await conn.QuerySingleOrDefaultAsync<FeePaymentResponse>(new CommandDefinition(
                     """
-                    SELECT Id, TenantId, StudentId, StudentName, ClassLabel, FeeType, Amount, Method, Ref, [Date], InvoiceId, HeadId
-                    FROM dbo.FeePayments WHERE TenantId = @tenantId AND IdempotencyKey = @key
+                    SELECT "Id", "TenantId", "StudentId", "StudentName", "ClassLabel", "FeeType", "Amount", "Method", "Ref", "Date", "InvoiceId", "HeadId"
+                    FROM "dbo"."FeePayments" WHERE "TenantId" = @tenantId AND "IdempotencyKey" = @key
                     """,
                     new { tenantId, key = req.IdempotencyKey }, tx, cancellationToken: ct));
                 if (raced is not null && (raced.InvoiceId != invoiceId || raced.Amount != amount))
@@ -429,27 +434,27 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
 
             await conn.ExecuteAsync(new CommandDefinition(
                 """
-                UPDATE dbo.FeeInvoices
+                UPDATE "dbo"."FeeInvoices"
                 SET
-                    PaidAmount = ISNULL(PaidAmount, 0) + @amount,
-                    Method = @method,
-                    Status = CASE
-                        WHEN ISNULL(PaidAmount, 0) + @amount >= Amount THEN N'paid'
-                        ELSE N'partial'
+                    "PaidAmount" = COALESCE("PaidAmount", 0) + @amount,
+                    "Method" = @method,
+                    "Status" = CASE
+                        WHEN COALESCE("PaidAmount", 0) + @amount >= "Amount" THEN 'paid'
+                        ELSE 'partial'
                     END,
-                    PaidOn = CASE
-                        WHEN ISNULL(PaidAmount, 0) + @amount >= Amount THEN CAST(SYSUTCDATETIME() AS date)
-                        ELSE PaidOn
+                    "PaidOn" = CASE
+                        WHEN COALESCE("PaidAmount", 0) + @amount >= "Amount" THEN now()::date
+                        ELSE "PaidOn"
                     END
-                WHERE Id = @invoiceId
-                  AND Status <> N'paid'
+                WHERE "Id" = @invoiceId
+                  AND "Status" <> 'paid'
                 """,
                 new { invoiceId, amount, method }, tx, cancellationToken: ct));
 
             var payment = await conn.QuerySingleOrDefaultAsync<FeePaymentResponse>(new CommandDefinition(
                 """
-                SELECT Id, TenantId, StudentId, StudentName, ClassLabel, FeeType, Amount, Method, Ref, [Date], InvoiceId, HeadId
-                FROM dbo.FeePayments WHERE Id = @payId
+                SELECT "Id", "TenantId", "StudentId", "StudentName", "ClassLabel", "FeeType", "Amount", "Method", "Ref", "Date", "InvoiceId", "HeadId"
+                FROM "dbo"."FeePayments" WHERE "Id" = @payId
                 """,
                 new { payId }, tx, cancellationToken: ct));
 
@@ -467,17 +472,17 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
         }
     }
 
-    private const string LineCols = "InvoiceId, FeeHeadId AS HeadId, FeeHeadName AS HeadName, Amount, FeeHeadDescription AS Description";
+    private const string LineCols = "\"InvoiceId\", \"FeeHeadId\" AS \"HeadId\", \"FeeHeadName\" AS \"HeadName\", \"Amount\", \"FeeHeadDescription\" AS \"Description\"";
 
     public async Task<FeeInvoiceResponse?> GetAsync(Guid id, CancellationToken ct = default)
     {
         await EnsurePaidAmountColumnAsync(ct);
         var row = (await QueryInlineAsync<FeeInvoiceSqlRow>(
-            $"{SelectJoined} WHERE i.Id = @id", new { id }, ct))
+            $"{SelectJoined} WHERE i.\"Id\" = @id", new { id }, ct))
             .FirstOrDefault();
         if (row is null) return null;
         var lines = await QueryInlineAsync<FeeInvoiceLineRow>(
-            $"SELECT {LineCols} FROM dbo.FeeInvoiceLines WHERE InvoiceId = @id ORDER BY CreatedAt",
+            $"SELECT {LineCols} FROM \"dbo\".\"FeeInvoiceLines\" WHERE \"InvoiceId\" = @id ORDER BY \"CreatedAt\"",
             new { id }, ct);
         return row.ToResponse(lines.Select(l => l.ToResponse()).ToList());
     }
@@ -486,13 +491,13 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
     {
         await EnsurePaidAmountColumnAsync(ct);
         var rows = await QueryInlineAsync<FeeInvoiceSqlRow>(
-            $"{SelectJoined} WHERE (@studentId IS NULL OR i.StudentId = @studentId) ORDER BY i.DueDate DESC",
+            $"{SelectJoined} WHERE (@studentId::uuid IS NULL OR i.\"StudentId\" = @studentId::uuid) ORDER BY i.\"DueDate\" DESC",
             new { studentId }, ct);
         if (rows.Count == 0) return [];
 
         var ids = rows.Select(r => r.Id).ToList();
         var allLines = await QueryInlineAsync<FeeInvoiceLineRow>(
-            $"SELECT {LineCols} FROM dbo.FeeInvoiceLines WHERE InvoiceId IN @ids ORDER BY CreatedAt",
+            $"SELECT {LineCols} FROM \"dbo\".\"FeeInvoiceLines\" WHERE \"InvoiceId\" = ANY(@ids) ORDER BY \"CreatedAt\"",
             new { ids }, ct);
         var byInvoice = allLines
             .GroupBy(l => l.InvoiceId)
@@ -505,7 +510,7 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
     public async Task<bool> ExistsForStudentPeriodAsync(Guid studentId, string period, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<int>(
-            "SELECT TOP 1 1 FROM dbo.FeeInvoices WHERE StudentId = @studentId AND Period = @period",
+            """SELECT 1 FROM "dbo"."FeeInvoices" WHERE "StudentId" = @studentId AND "Period" = @period LIMIT 1""",
             new { studentId, period }, ct);
         return rows.Count > 0;
     }
@@ -521,14 +526,15 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
     public async Task<IReadOnlyList<FeeInvoicePeriodRow>> ListPeriodsForYearAsync(
         string academicYear, CancellationToken ct = default)
     {
-        var escaped = academicYear.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]");
+        // Postgres LIKE's escape char is '\' (the SQL standard default), not T-SQL's '[...]'.
+        var escaped = academicYear.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
         var prefix = escaped + " %";
         return await QueryInlineAsync<FeeInvoicePeriodRow>(
             """
-            SELECT Period, MAX(DueDate) AS DueDate
-            FROM dbo.FeeInvoices
-            WHERE Period LIKE @prefix
-            GROUP BY Period
+            SELECT "Period", MAX("DueDate") AS "DueDate"
+            FROM "dbo"."FeeInvoices"
+            WHERE "Period" LIKE @prefix
+            GROUP BY "Period"
             """,
             new { prefix }, ct);
     }
@@ -544,7 +550,7 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
         if (studentIds.Count == 0) return [];
         await EnsurePaidAmountColumnAsync(ct);
         return await QueryInlineAsync<StudentInvoicePeriodRow>(
-            "SELECT StudentId, Period, Id AS InvoiceId, Amount, PaidAmount FROM dbo.FeeInvoices WHERE StudentId IN @ids",
+            """SELECT "StudentId", "Period", "Id" AS "InvoiceId", "Amount", "PaidAmount" FROM "dbo"."FeeInvoices" WHERE "StudentId" = ANY(@ids)""",
             new { ids = studentIds }, ct);
     }
 
@@ -567,7 +573,7 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
         try
         {
             var updated = await conn.ExecuteAsync(new CommandDefinition(
-                "UPDATE dbo.FeeInvoices SET Amount = @newAmount WHERE Id = @invoiceId AND PaidAmount = 0",
+                """UPDATE "dbo"."FeeInvoices" SET "Amount" = @newAmount WHERE "Id" = @invoiceId AND "PaidAmount" = 0""",
                 new { newAmount, invoiceId }, tx, cancellationToken: ct));
             if (updated == 0)
             {
@@ -576,14 +582,14 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
             }
 
             await conn.ExecuteAsync(new CommandDefinition(
-                "DELETE FROM dbo.FeeInvoiceLines WHERE InvoiceId = @invoiceId",
+                """DELETE FROM "dbo"."FeeInvoiceLines" WHERE "InvoiceId" = @invoiceId""",
                 new { invoiceId }, tx, cancellationToken: ct));
 
             foreach (var line in lines)
             {
                 await conn.ExecuteAsync(new CommandDefinition(
                     """
-                    INSERT dbo.FeeInvoiceLines (Id, TenantId, InvoiceId, FeeHeadId, FeeHeadName, Amount, FeeHeadDescription)
+                    INSERT INTO "dbo"."FeeInvoiceLines" ("Id", "TenantId", "InvoiceId", "FeeHeadId", "FeeHeadName", "Amount", "FeeHeadDescription")
                     VALUES (@id, @tenantId, @invoiceId, @headId, @headName, @amount, @description)
                     """,
                     new
@@ -877,7 +883,7 @@ public sealed class FeeHeadRepository(IDbConnectionFactory factory) : BaseReposi
 
     public async Task<bool> IsTransportFeeHeadAsync(Guid id, Guid tenantId, CancellationToken ct = default) =>
         (await QueryInlineAsync<int>(
-            "SELECT COUNT(1) FROM dbo.FeeHeads WHERE Id = @id AND TenantId = @tenantId AND IsTransportFeeHead = 1",
+            """SELECT COUNT(1) FROM "dbo"."FeeHeads" WHERE "Id" = @id AND "TenantId" = @tenantId AND "IsTransportFeeHead" = true""",
             new { id, tenantId }, ct)).First() > 0;
 
     public async Task<bool> DeleteAsync(Guid id, Guid tenantId, CancellationToken ct = default)
@@ -951,9 +957,9 @@ public sealed class FeeStructureRepository(IDbConnectionFactory factory) : BaseR
     public async Task<FeeStructureRow?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         (await QueryInlineAsync<FeeStructureRow>(
             """
-            SELECT Id, TenantId, Name, AcademicYear, ClassGrade, Section, Currency,
-                   EffectiveFrom, EffectiveTo, Status, Description, AmountsJson, CreatedAt
-            FROM dbo.FeeStructures WHERE Id = @id
+            SELECT "Id", "TenantId", "Name", "AcademicYear", "ClassGrade", "Section", "Currency",
+                   "EffectiveFrom", "EffectiveTo", "Status", "Description", "AmountsJson", "CreatedAt"
+            FROM "dbo"."FeeStructures" WHERE "Id" = @id
             """,
             new { id }, ct)).FirstOrDefault();
 
@@ -964,10 +970,10 @@ public sealed class FeeStructureRepository(IDbConnectionFactory factory) : BaseR
     public Task<IReadOnlyList<FeeStructureRow>> ListActiveAsync(Guid tenantId, CancellationToken ct = default) =>
         QueryInlineAsync<FeeStructureRow>(
             """
-            SELECT Id, TenantId, Name, AcademicYear, ClassGrade, Section, Currency,
-                   EffectiveFrom, EffectiveTo, Status, Description, AmountsJson, CreatedAt
-            FROM dbo.FeeStructures WHERE TenantId = @tenantId AND LOWER(Status) = N'active'
-            ORDER BY CreatedAt ASC, Id ASC
+            SELECT "Id", "TenantId", "Name", "AcademicYear", "ClassGrade", "Section", "Currency",
+                   "EffectiveFrom", "EffectiveTo", "Status", "Description", "AmountsJson", "CreatedAt"
+            FROM "dbo"."FeeStructures" WHERE "TenantId" = @tenantId AND lower("Status") = 'active'
+            ORDER BY "CreatedAt" ASC, "Id" ASC
             """,
             new { tenantId }, ct);
 

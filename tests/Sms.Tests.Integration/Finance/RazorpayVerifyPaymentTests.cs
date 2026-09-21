@@ -5,7 +5,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Application.Common;
@@ -85,7 +85,7 @@ public class RazorpayVerifyPaymentTests(PostgresFixture fx)
         var studentId = Guid.NewGuid();
         var invoiceId = Guid.NewGuid();
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         await conn.ExecuteAsync(
@@ -138,7 +138,7 @@ public class RazorpayVerifyPaymentTests(PostgresFixture fx)
         using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
         doc.RootElement.GetProperty("data").GetProperty("method").GetString().Should().Be("Razorpay");
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         var status = await conn.QuerySingleAsync<string>(
@@ -166,7 +166,7 @@ public class RazorpayVerifyPaymentTests(PostgresFixture fx)
         var second = await client.PostAsJsonAsync($"/v1/fees/invoices/{invoiceId}/razorpay/verify", body);
         second.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(
@@ -190,7 +190,7 @@ public class RazorpayVerifyPaymentTests(PostgresFixture fx)
         });
         res.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(

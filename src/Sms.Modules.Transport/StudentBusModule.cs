@@ -117,14 +117,14 @@ public sealed class StudentBusRepository(IDbConnectionFactory factory) : BaseRep
 
     public async Task<TransportStatusRow?> GetTransportStatusAsync(Guid studentId, CancellationToken ct = default) =>
         (await QueryInlineAsync<TransportStatusRow>(
-            "SELECT BusId, RouteId, StopId, FeeHeadId FROM dbo.StudentBusAssignments WHERE StudentId = @studentId",
+            """SELECT "BusId", "RouteId", "StopId", "FeeHeadId" FROM "dbo"."StudentBusAssignments" WHERE "StudentId" = @studentId""",
             new { studentId }, ct)).FirstOrDefault();
 
     /// One query for every student in the tenant with an active transport-fee-head assignment —
     /// used by invoice generation, which must not issue a per-student lookup for this.
     public Task<IReadOnlyList<StudentTransportFeeHeadRow>> ListActiveFeeHeadIdsAsync(CancellationToken ct = default) =>
         QueryInlineAsync<StudentTransportFeeHeadRow>(
-            "SELECT StudentId, FeeHeadId FROM dbo.StudentBusAssignments WHERE FeeHeadId IS NOT NULL", ct: ct);
+            """SELECT "StudentId", "FeeHeadId" FROM "dbo"."StudentBusAssignments" WHERE "FeeHeadId" IS NOT NULL""", ct: ct);
 
     public async Task<IReadOnlyList<TransportMappedStudentResponse>> ListMappedAsync(
         TransportStudentsFilter filter, CancellationToken ct = default)
@@ -169,7 +169,7 @@ public sealed class StudentBusRepository(IDbConnectionFactory factory) : BaseRep
 
     public async Task<bool> StudentExistsAsync(Guid studentId, CancellationToken ct = default) =>
         (await QueryInlineAsync<int>(
-            "SELECT COUNT(1) FROM dbo.Students WHERE Id = @studentId", new { studentId }, ct)).First() > 0;
+            """SELECT COUNT(1) FROM "dbo"."Students" WHERE "Id" = @studentId""", new { studentId }, ct)).First() > 0;
 
     public async Task<bool> IsStudentOnBusAsync(Guid studentId, Guid busId, CancellationToken ct = default) =>
         (await QueryInlineAsync<int>(

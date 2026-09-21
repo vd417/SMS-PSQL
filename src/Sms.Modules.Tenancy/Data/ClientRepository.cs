@@ -118,7 +118,7 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
         ids.Count == 0
             ? Task.FromResult<IReadOnlyList<ClientRow>>([])
             : QueryInlineAsync<ClientRow>(
-                $"{SelectLive} WHERE t.\"Id\" IN @ids ORDER BY t.\"Mrr\" DESC",
+                $"{SelectLive} WHERE t.\"Id\" = ANY(@ids) ORDER BY t.\"Mrr\" DESC",
                 new { ids }, ct);
 
     public sealed record DeleteResult(bool Ok, string Code, int Students, int Teachers, int Staff);

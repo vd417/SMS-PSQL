@@ -48,7 +48,10 @@ public abstract class BaseRepository(IDbConnectionFactory factory)
     // that unconditionally, and is a no-op for every non-keyword name. The converted function's
     // parameter must be declared with the matching quoted-lowercase name (or plain, if not a
     // keyword) to match.
-    private static string FunctionCallSql(string proc, object? args)
+    /// Exposed (not just used internally) for the rare call site that needs its own transaction
+    /// control and so can't go through QueryProcAsync/QuerySingleProcAsync/ExecuteProcAsync
+    /// directly (e.g. building a CommandDefinition against an already-open connection/transaction).
+    protected static string FunctionCallSql(string proc, object? args)
     {
         if (args is null)
             return $"SELECT * FROM {proc}()";

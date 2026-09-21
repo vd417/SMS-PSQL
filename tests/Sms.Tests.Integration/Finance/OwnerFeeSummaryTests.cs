@@ -45,28 +45,32 @@ public class OwnerFeeSummaryTests(PostgresFixture fx)
         await using (var c = await factory.OpenAsync())
         {
             await c.ExecuteAsync(
-                "INSERT dbo.Tenants (Id, Name, Slug, Status, Tier) VALUES (@a,'Alpha High',@sa,'active','gold'),(@b,'Beta High',@sb,'active','silver')",
+                """INSERT INTO "dbo"."Tenants" ("Id", "Name", "Slug", "Status", "Tier") VALUES (@a,'Alpha High',@sa,'active','gold'),(@b,'Beta High',@sb,'active','silver')""",
                 new { a = t1, sa = "a-" + t1.ToString("N")[..8], b = t2, sb = "b-" + t2.ToString("N")[..8] });
 
             var u1 = await c.QuerySingleAsync<Guid>(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, IsPlatform) OUTPUT inserted.Id VALUES (NEWID(),@t,@e,@h,0)",
+                """INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "PasswordHash", "IsPlatform") VALUES (gen_random_uuid(),@t,@e,@h,false) RETURNING "Id" """,
                 new { t = t1, e = email, h = hasher.Hash("Pass123!") });
             var u2 = await c.QuerySingleAsync<Guid>(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, IsPlatform) OUTPUT inserted.Id VALUES (NEWID(),@t,@e,@h,0)",
+                """INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "PasswordHash", "IsPlatform") VALUES (gen_random_uuid(),@t,@e,@h,false) RETURNING "Id" """,
                 new { t = t2, e = email, h = hasher.Hash("Pass123!") });
             await c.ExecuteAsync(
-                "INSERT dbo.UserRoles (UserId, Role) VALUES (@u1,'school.owner'),(@u2,'school.owner')",
+                """INSERT INTO "dbo"."UserRoles" ("UserId", "Role") VALUES (@u1,'school.owner'),(@u2,'school.owner')""",
                 new { u1, u2 });
 
             await c.ExecuteAsync(
-                @"INSERT dbo.FeePayments (Id, TenantId, StudentId, StudentName, ClassLabel, FeeType, Amount, Method, Ref, [Date])
-                  VALUES (NEWID(),@t1,@s1,'A','X-A','academic',10000,'UPI','R1',CAST(SYSUTCDATETIME() AS date)),
-                         (NEWID(),@t2,@s2,'B','IX-B','academic',2500,'Cash','R2',CAST(SYSUTCDATETIME() AS date))",
+                """
+                INSERT INTO "dbo"."FeePayments" ("Id", "TenantId", "StudentId", "StudentName", "ClassLabel", "FeeType", "Amount", "Method", "Ref", "Date")
+                  VALUES (gen_random_uuid(),@t1,@s1,'A','X-A','academic',10000,'UPI','R1',now()::date),
+                         (gen_random_uuid(),@t2,@s2,'B','IX-B','academic',2500,'Cash','R2',now()::date)
+                """,
                 new { t1, t2, s1, s2 });
 
             await c.ExecuteAsync(
-                @"INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, DueDate, Amount, Status)
-                  VALUES (NEWID(),@t1,@s1,'2026-07',CAST(SYSUTCDATETIME() AS date),3000,'due')",
+                """
+                INSERT INTO "dbo"."FeeInvoices" ("Id", "TenantId", "StudentId", "Period", "DueDate", "Amount", "Status")
+                  VALUES (gen_random_uuid(),@t1,@s1,'2026-07',now()::date,3000,'due')
+                """,
                 new { t1, s1 });
         }
 

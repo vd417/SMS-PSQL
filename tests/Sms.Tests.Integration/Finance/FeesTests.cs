@@ -306,9 +306,9 @@ public class FeesTests(PostgresFixture fx)
 
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenant", new { tenant });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenant::text, false)", new { tenant });
         var row = await conn.QuerySingleAsync<(Guid InvoiceId, string HeadId, string Method)>(
-            "SELECT InvoiceId, HeadId, Method FROM dbo.FeePayments WHERE Id = @paymentId",
+            """SELECT "InvoiceId", "HeadId", "Method" FROM "dbo"."FeePayments" WHERE "Id" = @paymentId""",
             new { paymentId });
         row.InvoiceId.Should().Be(invoiceId);
         row.HeadId.Should().Be("tuition");
@@ -391,9 +391,9 @@ public class FeesTests(PostgresFixture fx)
 
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenant", new { tenant });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenant::text, false)", new { tenant });
         var count = await conn.QuerySingleAsync<int>(
-            "SELECT COUNT(*) FROM dbo.AuditLogs WHERE EntityType = 'FeePayment' AND EntityId = @paymentId",
+            """SELECT COUNT(*) FROM "dbo"."AuditLogs" WHERE "EntityType" = 'FeePayment' AND "EntityId" = @paymentId""",
             new { paymentId });
         count.Should().Be(1);
     }
@@ -527,13 +527,13 @@ public class FeesTests(PostgresFixture fx)
 
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenant", new { tenant });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenant::text, false)", new { tenant });
         var paymentCount = await conn.QuerySingleAsync<int>(
-            "SELECT COUNT(*) FROM dbo.FeePayments WHERE Id = @id",
+            """SELECT COUNT(*) FROM "dbo"."FeePayments" WHERE "Id" = @id""",
             new { id = first.GetProperty("id").GetGuid() });
         paymentCount.Should().Be(1);
         var auditCount = await conn.QuerySingleAsync<int>(
-            "SELECT COUNT(*) FROM dbo.AuditLogs WHERE EntityType = 'FeePayment' AND EntityId = @id",
+            """SELECT COUNT(*) FROM "dbo"."AuditLogs" WHERE "EntityType" = 'FeePayment' AND "EntityId" = @id""",
             new { id = first.GetProperty("id").GetString() });
         auditCount.Should().Be(1);
     }
@@ -623,13 +623,13 @@ public class FeesTests(PostgresFixture fx)
 
         await using var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenant", new { tenant });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenant::text, false)", new { tenant });
         var paymentCount = await conn.QuerySingleAsync<int>(
-            "SELECT COUNT(*) FROM dbo.FeePayments WHERE TenantId = @tenant AND IdempotencyKey = @idempotencyKey",
+            """SELECT COUNT(*) FROM "dbo"."FeePayments" WHERE "TenantId" = @tenant AND "IdempotencyKey" = @idempotencyKey""",
             new { tenant, idempotencyKey });
         paymentCount.Should().Be(1);
         var amount = await conn.QuerySingleAsync<decimal>(
-            "SELECT Amount FROM dbo.FeePayments WHERE Id = @id", new { id = first.GetProperty("id").GetGuid() });
+            """SELECT "Amount" FROM "dbo"."FeePayments" WHERE "Id" = @id""", new { id = first.GetProperty("id").GetGuid() });
         amount.Should().Be(1500);
     }
 }

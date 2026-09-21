@@ -229,8 +229,10 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     // COALESCE(rs.Name, bs.Name) lookup) — a stop id is valid for opt-in if it exists in either.
     public async Task<bool> StopExistsAsync(Guid stopId, CancellationToken ct = default) =>
         (await QueryInlineAsync<int>(
-            @"SELECT (SELECT COUNT(1) FROM dbo.RouteStops WHERE Id = @stopId) +
-                     (SELECT COUNT(1) FROM dbo.BusStops WHERE Id = @stopId)",
+            """
+            SELECT (SELECT COUNT(1) FROM "dbo"."RouteStops" WHERE "Id" = @stopId) +
+                     (SELECT COUNT(1) FROM "dbo"."BusStops" WHERE "Id" = @stopId)
+            """,
             new { stopId }, ct)).First() > 0;
 
     public async Task<IReadOnlyList<BusDriverAssignmentResponse>> ListAssignmentHistoryAsync(
@@ -405,7 +407,8 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     }
 
     public async Task<bool> RouteExistsAsync(Guid routeId, CancellationToken ct = default) =>
-        (await QueryInlineAsync<int>("SELECT COUNT(1) FROM dbo.TransportRoutes WHERE Id = @routeId", new { routeId }, ct)).First() > 0;
+        (await QueryInlineAsync<int>(
+            """SELECT COUNT(1) FROM "dbo"."TransportRoutes" WHERE "Id" = @routeId""", new { routeId }, ct)).First() > 0;
 
     /// Every bus currently assigned to this route — used by CanViewRouteAsync to fan out the
     /// existing per-bus visibility check across all buses on the route, rather than duplicating

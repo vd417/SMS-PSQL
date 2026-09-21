@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Dapper;
 using FluentAssertions;
 using Xunit;
@@ -11,7 +11,7 @@ public class RazorpayFeePaymentSchemaTests(PostgresFixture fx)
     [Fact]
     public async Task TenantPaymentCredentials_and_FeePaymentOrders_tables_exist_with_expected_columns()
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
 
         var credColumns = (await conn.QueryAsync<string>(

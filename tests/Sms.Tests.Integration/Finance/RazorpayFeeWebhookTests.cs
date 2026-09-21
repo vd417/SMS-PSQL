@@ -7,7 +7,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Shared.Kernel.Auth;
@@ -51,7 +51,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         var invoiceId = Guid.NewGuid();
         var orderId = $"order_webhook_{Guid.NewGuid():N}";
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         await conn.ExecuteAsync(
@@ -117,7 +117,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
             WebhookBody(orderId, "pay_WEBHOOK_ONLY"));
         res.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         var status = await conn.QuerySingleAsync<string>(
@@ -138,7 +138,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         first.StatusCode.Should().Be(HttpStatusCode.OK);
         second.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(
@@ -167,7 +167,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         var webhookRes = await anonClient.PostAsync("/v1/webhooks/razorpay-fees", WebhookBody(orderId, paymentId));
         webhookRes.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(
@@ -196,7 +196,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         var verifyRes = await VerifyAsync(authedClient, invoiceId, orderId, paymentId);
         verifyRes.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(
@@ -217,7 +217,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         var res = await client.PostAsync("/v1/webhooks/razorpay-fees", WebhookBody(orderId, "pay_BADSIG"));
         res.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
         var status = await conn.QuerySingleAsync<string>(

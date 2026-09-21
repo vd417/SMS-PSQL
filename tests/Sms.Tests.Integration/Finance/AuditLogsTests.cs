@@ -1,6 +1,6 @@
 using Dapper;
 using FluentAssertions;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Shared.Kernel.Audit;
 using Xunit;
 
@@ -12,7 +12,7 @@ public class AuditLogsTests(PostgresFixture fx)
     [Fact]
     public async Task AuditLogs_table_exists_with_expected_columns()
     {
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         var cols = (await conn.QueryAsync<string>(
             "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'AuditLogs'")).ToList();
@@ -25,7 +25,7 @@ public class AuditLogsTests(PostgresFixture fx)
     /// <summary>Stamps SESSION_CONTEXT the same way NpgsqlConnectionFactory does in production
     /// (see src/Sms.Shared.Kernel/Data/NpgsqlConnectionFactory.cs:19-29), so the AuditLogs RLS
     /// filter/block predicate (rls.fn_tenant_predicate) matches this tenant.</summary>
-    private static async Task StampTenantAsync(SqlConnection conn, Guid tenantId)
+    private static async Task StampTenantAsync(NpgsqlConnection conn, Guid tenantId)
     {
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@v", new { v = tenantId });
         await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'IsPlatform', @value=@v", new { v = 0 });
@@ -38,7 +38,7 @@ public class AuditLogsTests(PostgresFixture fx)
         var tenantId = Guid.NewGuid();
         var actorId = Guid.NewGuid();
 
-        await using var conn = new SqlConnection(fx.ConnectionString);
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await StampTenantAsync(conn, tenantId);
         await using var tx = await conn.BeginTransactionAsync();
@@ -63,7 +63,7 @@ public class AuditLogsTests(PostgresFixture fx)
         var logger = new AuditLogger();
         var tenantId = Guid.NewGuid();
 
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await StampTenantAsync(conn, tenantId);
@@ -73,7 +73,7 @@ public class AuditLogsTests(PostgresFixture fx)
             await tx.RollbackAsync();
         }
 
-        await using var verifyConn = new SqlConnection(fx.ConnectionString);
+        await using var verifyConn = new NpgsqlConnection(fx.ConnectionString);
         await verifyConn.OpenAsync();
         await StampTenantAsync(verifyConn, tenantId);
         var count = await verifyConn.QuerySingleAsync<int>(

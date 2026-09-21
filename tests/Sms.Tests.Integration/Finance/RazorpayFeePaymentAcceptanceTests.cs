@@ -5,7 +5,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Sms.Application.Common;
@@ -85,7 +85,7 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
         return client;
     }
 
-    private static async Task SeedCredentialsAsync(WebApplicationFactory<Program> app, SqlConnection conn, Guid tenantId)
+    private static async Task SeedCredentialsAsync(WebApplicationFactory<Program> app, NpgsqlConnection conn, Guid tenantId)
     {
         // KeySecretEncrypted must be produced via the app's own IDataProtectionProvider under the
         // same purpose string TenantPaymentCredentialService uses ("TenantPaymentCredentials.Razorpay.v1"),
@@ -123,7 +123,7 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
         var invoiceB = Guid.NewGuid();
 
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
@@ -162,7 +162,7 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
         });
         verify.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        await using var check = new SqlConnection(fx.ConnectionString);
+        await using var check = new NpgsqlConnection(fx.ConnectionString);
         await check.OpenAsync();
         await check.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });
 
@@ -202,7 +202,7 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
 
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantAId, tier: "platinum");
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantBId, tier: "platinum");
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             // Tenant A: staff user only, no invoice of its own needed for this test.
@@ -234,7 +234,7 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
         });
         verifyRes.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
-        await using var check = new SqlConnection(fx.ConnectionString);
+        await using var check = new NpgsqlConnection(fx.ConnectionString);
         await check.OpenAsync();
         await check.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantBId", new { tenantBId });
         var status = await check.QuerySingleAsync<string>("SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceBId", new { invoiceBId });
@@ -261,7 +261,7 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
         var invoiceId = Guid.NewGuid();
 
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "silver"); // not platinum -> OnlineFeePayment not entitled
-        await using (var conn = new SqlConnection(fx.ConnectionString))
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@tenantId", new { tenantId });

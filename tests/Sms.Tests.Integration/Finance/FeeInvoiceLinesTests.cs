@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
+using Npgsql;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Time;
 using Sms.Tests.Integration;
@@ -53,11 +53,11 @@ public class FeeInvoiceLinesTests(PostgresFixture fx)
     private static async Task<Guid> SeedRouteAsync(string cs, Guid tenantId, string name)
     {
         var id = Guid.NewGuid();
-        await using var conn = new SqlConnection(cs);
+        await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
-        await conn.ExecuteAsync("EXEC sp_set_session_context @key=N'TenantId', @value=@t", new { t = tenantId });
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.TransportRoutes (Id, TenantId, Name) VALUES (@Id, @TenantId, @Name)",
+            """INSERT INTO "dbo"."TransportRoutes" ("Id", "TenantId", "Name") VALUES (@Id, @TenantId, @Name)""",
             new { Id = id, TenantId = tenantId, Name = name });
         return id;
     }
