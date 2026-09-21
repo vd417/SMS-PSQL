@@ -35,7 +35,7 @@ public class AnnouncementUserScopedNotificationTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES " +
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES " +
                 "(@principalUserId, @tenantId, 'Priya Principal'), " +
                 "(@guardianUserId, @tenantId, 'Guardian Of Aarav'), " +
                 "(@otherUserId, @tenantId, 'Some Other Parent')",

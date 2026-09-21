@@ -51,11 +51,11 @@ public class AnnouncementSpecificAudienceTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@principalUserId, @tenantId, 'Priya Principal')",
                 new { principalUserId, tenantId });
             // Two OTHER students in the tenant whose emails must NOT be swept in by "specific".
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Email, GuardianEmail) VALUES " +
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Email\", \"GuardianEmail\") VALUES " +
                 "(@id1, @tenantId, 'A1', 'Other One', 'active', 'other1@school.test', 'guardian1@school.test'), " +
                 "(@id2, @tenantId, 'A2', 'Other Two', 'active', 'other2@school.test', 'guardian2@school.test')",
                 new { id1 = Guid.NewGuid(), id2 = Guid.NewGuid(), tenantId });

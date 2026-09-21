@@ -22,7 +22,7 @@ public sealed class UserAppSettingsRepository(IDbConnectionFactory factory) : Ba
     public async Task<UserAppSettingsResponse> GetOrDefaultAsync(Guid userId, CancellationToken ct = default)
     {
         var row = (await QueryInlineAsync<UserAppSettingsRow>(
-            "SELECT UserId, TenantId, ChatAlerts, SchoolNotices, InAppToasts FROM dbo.UserAppSettings WHERE UserId = @userId",
+            "SELECT \"UserId\", \"TenantId\", \"ChatAlerts\", \"SchoolNotices\", \"InAppToasts\" FROM \"dbo\".\"UserAppSettings\" WHERE \"UserId\" = @userId",
             new { userId }, ct)).FirstOrDefault();
         return row is null
             ? Defaults
@@ -33,14 +33,13 @@ public sealed class UserAppSettingsRepository(IDbConnectionFactory factory) : Ba
         Guid tenantId, Guid userId, UserAppSettingsResponse value, CancellationToken ct = default)
     {
         await ExecuteInlineAsync(@"
-IF EXISTS (SELECT 1 FROM dbo.UserAppSettings WHERE UserId = @userId)
-    UPDATE dbo.UserAppSettings
-       SET ChatAlerts = @chatAlerts, SchoolNotices = @schoolNotices, InAppToasts = @inAppToasts,
-           UpdatedAt = SYSUTCDATETIME()
-     WHERE UserId = @userId;
-ELSE
-    INSERT dbo.UserAppSettings (UserId, TenantId, ChatAlerts, SchoolNotices, InAppToasts, UpdatedAt)
-    VALUES (@userId, @tenantId, @chatAlerts, @schoolNotices, @inAppToasts, SYSUTCDATETIME());",
+INSERT INTO ""dbo"".""UserAppSettings"" (""UserId"", ""TenantId"", ""ChatAlerts"", ""SchoolNotices"", ""InAppToasts"", ""UpdatedAt"")
+VALUES (@userId, @tenantId, @chatAlerts, @schoolNotices, @inAppToasts, now() AT TIME ZONE 'UTC')
+ON CONFLICT (""UserId"") DO UPDATE SET
+    ""ChatAlerts"" = EXCLUDED.""ChatAlerts"",
+    ""SchoolNotices"" = EXCLUDED.""SchoolNotices"",
+    ""InAppToasts"" = EXCLUDED.""InAppToasts"",
+    ""UpdatedAt"" = EXCLUDED.""UpdatedAt"";",
             new
             {
                 userId,

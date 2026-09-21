@@ -32,7 +32,7 @@ public class ChatPresenceTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@userId, @tenantId)", new { userId, tenantId });
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@userId, @tenantId)", new { userId, tenantId });
         }
 
         var jwt = new JwtTokenService(
@@ -48,7 +48,7 @@ public class ChatPresenceTests(PostgresFixture fx)
         await checkConn.OpenAsync();
         await checkConn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var lastSeen = await checkConn.QuerySingleAsync<DateTime?>(
-            "SELECT LastSeenAt FROM dbo.Users WHERE Id = @userId", new { userId });
+            "SELECT \"LastSeenAt\" FROM \"dbo\".\"Users\" WHERE \"Id\" = @userId", new { userId });
         lastSeen.Should().NotBeNull();
         lastSeen!.Value.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(1));
     }
@@ -69,10 +69,10 @@ public class ChatPresenceTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name, LastSeenAt) VALUES (@userId, @tenantId, 'Chat Contact', SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\", \"LastSeenAt\") VALUES (@userId, @tenantId, 'Chat Contact', now() AT TIME ZONE 'UTC')",
                 new { userId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.ChatThreads (TenantId, OwnerUserId, Name) VALUES (@tenantId, @userId, 'Chat Contact')",
+                "INSERT INTO \"dbo\".\"ChatThreads\" (\"TenantId\", \"OwnerUserId\", \"Name\") VALUES (@tenantId, @userId, 'Chat Contact')",
                 new { tenantId, userId });
         }
 
@@ -119,22 +119,22 @@ public class ChatPresenceTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@teacherUserId, @tenantId, 'Ms. Teacher')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@teacherUserId, @tenantId, 'Ms. Teacher')",
                 new { teacherUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@parentUserId, @tenantId, 'Parent Contact')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@parentUserId, @tenantId, 'Parent Contact')",
                 new { parentUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, ClassLabel) " +
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"ClassLabel\") " +
                 "VALUES (@studentId, @tenantId, 'A1', 'Kid Rahul', 'Grade 5 - A')",
                 new { studentId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@parentUserId, @studentId, @tenantId)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@parentUserId, @studentId, @tenantId)",
                 new { parentUserId, studentId, tenantId });
             // The parent's own thread with the teacher, scoped to their child — mirrors what
             // the parent app creates when messaging about a specific student.
             await conn.ExecuteAsync(
-                "INSERT dbo.ChatThreads (Id, TenantId, OwnerUserId, Name, ContactUserId, ChildId) " +
+                "INSERT INTO \"dbo\".\"ChatThreads\" (\"Id\", \"TenantId\", \"OwnerUserId\", \"Name\", \"ContactUserId\", \"ChildId\") " +
                 "VALUES (@parentThreadId, @tenantId, @parentUserId, 'Ms. Teacher', @teacherUserId, @studentId)",
                 new { parentThreadId, tenantId, parentUserId, teacherUserId, studentId });
         }

@@ -113,14 +113,14 @@ public sealed class CommsRepository(IDbConnectionFactory factory) : BaseReposito
     private sealed record UserNameRow(string? Name);
     private sealed record RoleLabelRow(string? RoleLabel);
 
-    private const string ComplaintCols = "Id, TenantId, Subject, [From], Category, Priority, Status, Age, Assignee, Body";
+    private const string ComplaintCols = "\"Id\", \"TenantId\", \"Subject\", \"From\", \"Category\", \"Priority\", \"Status\", \"Age\", \"Assignee\", \"Body\"";
     private const string NotificationCols = "\"Id\", \"TenantId\", \"Icon\", \"Tone\", \"Title\", \"Body\", \"Time\", \"Unread\"";
 
     public Task<IReadOnlyList<ComplaintResponse>> ListComplaintsAsync(
         string? status, Guid? createdByUserId, CancellationToken ct = default) =>
         QueryInlineAsync<ComplaintResponse>(
-            $"SELECT {ComplaintCols} FROM dbo.Complaints WHERE (@status IS NULL OR Status = @status) " +
-            "AND (@createdByUserId IS NULL OR CreatedByUserId = @createdByUserId) ORDER BY Priority",
+            $"SELECT {ComplaintCols} FROM \"dbo\".\"Complaints\" WHERE (@status::text IS NULL OR \"Status\" = @status::text) " +
+            "AND (@createdByUserId::uuid IS NULL OR \"CreatedByUserId\" = @createdByUserId::uuid) ORDER BY \"Priority\"",
             new { status, createdByUserId }, ct);
 
     public async Task<ComplaintResponse?> CreateComplaintAsync(
@@ -130,14 +130,14 @@ public sealed class CommsRepository(IDbConnectionFactory factory) : BaseReposito
             new { TenantId = tenantId, r.Subject, r.From, r.Category, r.Priority, r.Body }, ct);
         if (created is null || createdByUserId is null) return created;
         await ExecuteInlineAsync(
-            "UPDATE dbo.Complaints SET CreatedByUserId = @createdByUserId WHERE Id = @id",
+            "UPDATE \"dbo\".\"Complaints\" SET \"CreatedByUserId\" = @createdByUserId WHERE \"Id\" = @id",
             new { id = created.Id, createdByUserId }, ct);
         return created;
     }
 
     public async Task<ComplaintResponse?> GetComplaintAsync(Guid id, Guid tenantId, CancellationToken ct = default) =>
         (await QueryInlineAsync<ComplaintResponse>(
-            $"SELECT {ComplaintCols} FROM dbo.Complaints WHERE Id = @id AND TenantId = @tenantId", new { id, tenantId }, ct))
+            $"SELECT {ComplaintCols} FROM \"dbo\".\"Complaints\" WHERE \"Id\" = @id AND \"TenantId\" = @tenantId", new { id, tenantId }, ct))
         .FirstOrDefault();
 
     public Task<ComplaintResponse?> UpdateComplaintAsync(Guid id, Guid tenantId, string? status, string? assignee, CancellationToken ct = default) =>
@@ -162,30 +162,30 @@ public sealed class CommsRepository(IDbConnectionFactory factory) : BaseReposito
     // older threads without one fall back to matching Name against Users, same as delivery.
     public Task<IReadOnlyList<ChatThreadResponse>> ListThreadsAsync(Guid ownerUserId, CancellationToken ct = default) =>
         QueryInlineAsync<ChatThreadResponse>(@"
-SELECT th.Id, th.TenantId, th.Name, th.Role, th.LastMessage, th.LastAt, th.Unread, th.IsGroup AS [Group], th.ChildId,
-       CAST(CASE WHEN u.LastSeenAt IS NOT NULL AND u.LastSeenAt > DATEADD(MINUTE, -5, SYSUTCDATETIME())
-            THEN 1 ELSE 0 END AS bit) AS Online,
-       c.Name AS ChildName, c.ClassLabel AS ChildClassLabel,
-       CAST(CASE WHEN lm.SenderId = th.OwnerUserId THEN 1 ELSE 0 END AS bit) AS LastMessageMine,
+SELECT th.""Id"", th.""TenantId"", th.""Name"", th.""Role"", th.""LastMessage"", th.""LastAt"", th.""Unread"", th.""IsGroup"" AS ""Group"", th.""ChildId"",
+       (u.""LastSeenAt"" IS NOT NULL AND u.""LastSeenAt"" > (now() AT TIME ZONE 'UTC') - interval '5 minutes') AS ""Online"",
+       c.""Name"" AS ""ChildName"", c.""ClassLabel"" AS ""ChildClassLabel"",
+       (lm.""SenderId"" = th.""OwnerUserId"") AS ""LastMessageMine"",
        CASE
-           WHEN lm.SenderId IS NULL THEN NULL
-           WHEN lm.ReadAt IS NOT NULL THEN N'read'
-           WHEN lm.DeliveredAt IS NOT NULL THEN N'delivered'
-           ELSE N'sent'
-       END AS LastMessageStatus
-FROM dbo.ChatThreads th
-LEFT JOIN dbo.Users u
-    ON (th.ContactUserId IS NOT NULL AND u.Id = th.ContactUserId)
-    OR (th.ContactUserId IS NULL AND u.TenantId = th.TenantId AND u.Name = th.Name)
-LEFT JOIN dbo.Students c ON c.Id = th.ChildId
-OUTER APPLY (
-    SELECT TOP 1 m.SenderId, m.DeliveredAt, m.ReadAt
-    FROM dbo.ChatMessages m
-    WHERE m.ThreadId = th.Id
-    ORDER BY m.SentAt DESC
-) lm
-WHERE th.OwnerUserId = @ownerUserId
-ORDER BY th.LastAt DESC", new { ownerUserId }, ct);
+           WHEN lm.""SenderId"" IS NULL THEN NULL
+           WHEN lm.""ReadAt"" IS NOT NULL THEN 'read'
+           WHEN lm.""DeliveredAt"" IS NOT NULL THEN 'delivered'
+           ELSE 'sent'
+       END AS ""LastMessageStatus""
+FROM ""dbo"".""ChatThreads"" th
+LEFT JOIN ""dbo"".""Users"" u
+    ON (th.""ContactUserId"" IS NOT NULL AND u.""Id"" = th.""ContactUserId"")
+    OR (th.""ContactUserId"" IS NULL AND u.""TenantId"" = th.""TenantId"" AND u.""Name"" = th.""Name"")
+LEFT JOIN ""dbo"".""Students"" c ON c.""Id"" = th.""ChildId""
+LEFT JOIN LATERAL (
+    SELECT m.""SenderId"", m.""DeliveredAt"", m.""ReadAt""
+    FROM ""dbo"".""ChatMessages"" m
+    WHERE m.""ThreadId"" = th.""Id""
+    ORDER BY m.""SentAt"" DESC
+    LIMIT 1
+) lm ON true
+WHERE th.""OwnerUserId"" = @ownerUserId
+ORDER BY th.""LastAt"" DESC", new { ownerUserId }, ct);
 
     public async Task<ChatThreadResponse?> CreateThreadAsync(
         Guid tenantId, Guid ownerUserId, CreateThreadRequest r, CancellationToken ct = default)
@@ -210,12 +210,12 @@ ORDER BY th.LastAt DESC", new { ownerUserId }, ct);
 
         var sql = contactKind.Trim().ToLowerInvariant() switch
         {
-            "teacher" => "SELECT UserId AS Id FROM dbo.Teachers WHERE Id = @id AND TenantId = @tenantId AND UserId IS NOT NULL",
-            "staff" => "SELECT UserId AS Id FROM dbo.Staff WHERE Id = @id AND TenantId = @tenantId AND UserId IS NOT NULL",
-            "student" => "SELECT TOP 1 ParentUserId AS Id FROM dbo.ParentStudentLinks WHERE StudentId = @id AND TenantId = @tenantId ORDER BY CreatedAt",
+            "teacher" => "SELECT \"UserId\" AS \"Id\" FROM \"dbo\".\"Teachers\" WHERE \"Id\" = @id AND \"TenantId\" = @tenantId AND \"UserId\" IS NOT NULL",
+            "staff" => "SELECT \"UserId\" AS \"Id\" FROM \"dbo\".\"Staff\" WHERE \"Id\" = @id AND \"TenantId\" = @tenantId AND \"UserId\" IS NOT NULL",
+            "student" => "SELECT \"ParentUserId\" AS \"Id\" FROM \"dbo\".\"ParentStudentLinks\" WHERE \"StudentId\" = @id AND \"TenantId\" = @tenantId ORDER BY \"CreatedAt\" LIMIT 1",
             // "user": id IS already a Users.Id (e.g. another owner/admin/principal/vice_principal
             // CRM account) — just confirm it's a real account in this tenant.
-            "user" => "SELECT Id FROM dbo.Users WHERE Id = @id AND TenantId = @tenantId",
+            "user" => "SELECT \"Id\" FROM \"dbo\".\"Users\" WHERE \"Id\" = @id AND \"TenantId\" = @tenantId",
             _ => null,
         };
         if (sql is null)
@@ -228,7 +228,7 @@ ORDER BY th.LastAt DESC", new { ownerUserId }, ct);
     public async Task<bool> UserOwnsThreadAsync(Guid threadId, Guid ownerUserId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<int>(
-            "SELECT COUNT(1) FROM dbo.ChatThreads WHERE Id = @threadId AND OwnerUserId = @ownerUserId",
+            "SELECT CAST(COUNT(1) AS int) FROM \"dbo\".\"ChatThreads\" WHERE \"Id\" = @threadId AND \"OwnerUserId\" = @ownerUserId",
             new { threadId, ownerUserId }, ct);
         return rows.FirstOrDefault() > 0;
     }
@@ -242,7 +242,7 @@ ORDER BY th.LastAt DESC", new { ownerUserId }, ct);
         await MarkThreadReadAsync(threadId, ownerUserId, ct);
 
         var rows = await QueryInlineAsync<MessageRow>(
-            "SELECT Id, ThreadId, SenderId, [Text], ImageUrl, SentAt, DeliveredAt, ReadAt FROM dbo.ChatMessages WHERE ThreadId = @threadId ORDER BY SentAt",
+            "SELECT \"Id\", \"ThreadId\", \"SenderId\", \"Text\", \"ImageUrl\", \"SentAt\", \"DeliveredAt\", \"ReadAt\" FROM \"dbo\".\"ChatMessages\" WHERE \"ThreadId\" = @threadId ORDER BY \"SentAt\"",
             new { threadId }, ct);
         return rows.Select(m => ToResponse(m, callerId)).ToList();
     }
@@ -273,7 +273,7 @@ ORDER BY th.LastAt DESC", new { ownerUserId }, ct);
         if (delivered)
         {
             await ExecuteInlineAsync(
-                "UPDATE dbo.ChatMessages SET DeliveredAt = SYSUTCDATETIME() WHERE Id = @id AND DeliveredAt IS NULL",
+                "UPDATE \"dbo\".\"ChatMessages\" SET \"DeliveredAt\" = now() AT TIME ZONE 'UTC' WHERE \"Id\" = @id AND \"DeliveredAt\" IS NULL",
                 new { id = m.Id }, ct);
             deliveredAt = DateTime.UtcNow;
         }
@@ -287,19 +287,18 @@ ORDER BY th.LastAt DESC", new { ownerUserId }, ct);
     /// </summary>
     private Task MarkThreadReadAsync(Guid threadId, Guid ownerUserId, CancellationToken ct) =>
         ExecuteInlineAsync(@"
-UPDATE dbo.ChatThreads
-SET Unread = 0
-WHERE Id = @threadId AND OwnerUserId = @ownerUserId AND Unread <> 0;
+UPDATE ""dbo"".""ChatThreads""
+SET ""Unread"" = 0
+WHERE ""Id"" = @threadId AND ""OwnerUserId"" = @ownerUserId AND ""Unread"" <> 0;
 
-UPDATE m
-SET m.ReadAt = SYSUTCDATETIME()
-FROM dbo.ChatMessages m
-INNER JOIN dbo.ChatMessages incoming
-    ON incoming.CorrelationId = m.CorrelationId
-   AND incoming.ThreadId = @threadId
-   AND incoming.SenderId IS NOT NULL
-   AND incoming.SenderId <> @ownerUserId
-WHERE m.ReadAt IS NULL;",
+UPDATE ""dbo"".""ChatMessages"" m
+SET ""ReadAt"" = now() AT TIME ZONE 'UTC'
+FROM ""dbo"".""ChatMessages"" incoming
+WHERE incoming.""CorrelationId"" = m.""CorrelationId""
+   AND incoming.""ThreadId"" = @threadId
+   AND incoming.""SenderId"" IS NOT NULL
+   AND incoming.""SenderId"" <> @ownerUserId
+   AND m.""ReadAt"" IS NULL;",
             new { threadId, ownerUserId }, ct);
 
     private static ChatMessageResponse ToResponse(MessageRow m, Guid? callerId, DateTime? deliveredAt = null) =>
@@ -322,7 +321,7 @@ WHERE m.ReadAt IS NULL;",
             return false;
 
         var threadRows = await QueryInlineAsync<ThreadInfoRow>(
-            "SELECT Id, Name, Role, OwnerUserId, IsGroup, ContactUserId, ChildId FROM dbo.ChatThreads WHERE Id = @sourceThreadId",
+            "SELECT \"Id\", \"Name\", \"Role\", \"OwnerUserId\", \"IsGroup\", \"ContactUserId\", \"ChildId\" FROM \"dbo\".\"ChatThreads\" WHERE \"Id\" = @sourceThreadId",
             new { sourceThreadId }, ct);
         var thread = threadRows.FirstOrDefault();
         if (thread is null || thread.IsGroup)
@@ -375,7 +374,7 @@ WHERE m.ReadAt IS NULL;",
             return false;
 
         await ExecuteInlineAsync(
-            "UPDATE dbo.ChatThreads SET Unread = Unread + 1 WHERE Id = @threadId",
+            "UPDATE \"dbo\".\"ChatThreads\" SET \"Unread\" = \"Unread\" + 1 WHERE \"Id\" = @threadId",
             new { threadId = peerThread.Id }, ct);
 
         var preview = string.IsNullOrWhiteSpace(text)
@@ -404,31 +403,32 @@ WHERE m.ReadAt IS NULL;",
             : null;
 
         var rows = await QueryInlineAsync<UserIdRow>(@"
-SELECT TOP 1 x.Id
+SELECT x.""Id""
 FROM (
-    SELECT u.Id, 1 AS Pri
-    FROM dbo.Users u
-    WHERE u.TenantId = @tenantId AND u.Name = @contactName AND u.Id <> @senderId
+    SELECT u.""Id"", 1 AS ""Pri""
+    FROM ""dbo"".""Users"" u
+    WHERE u.""TenantId"" = @tenantId AND u.""Name"" = @contactName AND u.""Id"" <> @senderId
     UNION ALL
-    SELECT t.UserId, 2 AS Pri
-    FROM dbo.Teachers t
-    WHERE t.TenantId = @tenantId AND t.Name = @contactName AND t.UserId IS NOT NULL AND t.UserId <> @senderId
+    SELECT t.""UserId"", 2 AS ""Pri""
+    FROM ""dbo"".""Teachers"" t
+    WHERE t.""TenantId"" = @tenantId AND t.""Name"" = @contactName AND t.""UserId"" IS NOT NULL AND t.""UserId"" <> @senderId
     UNION ALL
-    SELECT s.UserId, 3 AS Pri
-    FROM dbo.Staff s
-    WHERE s.TenantId = @tenantId AND s.Name = @contactName AND s.UserId IS NOT NULL AND s.UserId <> @senderId
+    SELECT s.""UserId"", 3 AS ""Pri""
+    FROM ""dbo"".""Staff"" s
+    WHERE s.""TenantId"" = @tenantId AND s.""Name"" = @contactName AND s.""UserId"" IS NOT NULL AND s.""UserId"" <> @senderId
     UNION ALL
-    SELECT pl.ParentUserId, 4 AS Pri
-    FROM dbo.Students st
-    INNER JOIN dbo.ParentStudentLinks pl ON pl.StudentId = st.Id AND pl.TenantId = st.TenantId
-    WHERE @parentContactName IS NOT NULL
-      AND st.TenantId = @tenantId
-      AND st.Name = @parentContactName
-      AND pl.ParentUserId <> @senderId
-      AND (SELECT COUNT(1) FROM dbo.Students st2 WHERE st2.TenantId = @tenantId AND st2.Name = @parentContactName) = 1
+    SELECT pl.""ParentUserId"", 4 AS ""Pri""
+    FROM ""dbo"".""Students"" st
+    INNER JOIN ""dbo"".""ParentStudentLinks"" pl ON pl.""StudentId"" = st.""Id"" AND pl.""TenantId"" = st.""TenantId""
+    WHERE @parentContactName::text IS NOT NULL
+      AND st.""TenantId"" = @tenantId
+      AND st.""Name"" = @parentContactName
+      AND pl.""ParentUserId"" <> @senderId
+      AND (SELECT COUNT(1) FROM ""dbo"".""Students"" st2 WHERE st2.""TenantId"" = @tenantId AND st2.""Name"" = @parentContactName) = 1
 ) x
-WHERE x.Id IS NOT NULL
-ORDER BY x.Pri", new { tenantId, contactName, senderId, parentContactName }, ct);
+WHERE x.""Id"" IS NOT NULL
+ORDER BY x.""Pri""
+LIMIT 1", new { tenantId, contactName, senderId, parentContactName }, ct);
         return rows.FirstOrDefault()?.Id;
     }
 
@@ -441,21 +441,22 @@ ORDER BY x.Pri", new { tenantId, contactName, senderId, parentContactName }, ct)
     private async Task<string?> ResolveSenderDisplayNameAsync(Guid tenantId, Guid userId, CancellationToken ct)
     {
         var rows = await QueryInlineAsync<UserNameRow>(@"
-SELECT TOP 1 COALESCE(
-    NULLIF(LTRIM(RTRIM(u.Name)), ''),
-    NULLIF(LTRIM(RTRIM(t.Name)), ''),
-    NULLIF(LTRIM(RTRIM(s.Name)), ''),
+SELECT COALESCE(
+    NULLIF(btrim(u.""Name""), ''),
+    NULLIF(btrim(t.""Name""), ''),
+    NULLIF(btrim(s.""Name""), ''),
     CASE
-        WHEN EXISTS (SELECT 1 FROM dbo.UserRoles ur WHERE ur.UserId = u.Id AND ur.Role = N'school.owner') THEN N'School Owner'
-        WHEN EXISTS (SELECT 1 FROM dbo.UserRoles ur WHERE ur.UserId = u.Id AND ur.Role = N'school.admin') THEN N'School Admin'
-        WHEN EXISTS (SELECT 1 FROM dbo.UserRoles ur WHERE ur.UserId = u.Id AND ur.Role = N'school.principal') THEN N'Principal'
-        WHEN EXISTS (SELECT 1 FROM dbo.UserRoles ur WHERE ur.UserId = u.Id AND ur.Role LIKE N'%vice%principal%') THEN N'Vice Principal'
-        ELSE N'School Office'
-    END) AS Name
-FROM dbo.Users u
-LEFT JOIN dbo.Teachers t ON t.UserId = u.Id AND t.TenantId = @tenantId
-LEFT JOIN dbo.Staff s ON s.UserId = u.Id AND s.TenantId = @tenantId
-WHERE u.Id = @userId", new { tenantId, userId }, ct);
+        WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.owner') THEN 'School Owner'
+        WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.admin') THEN 'School Admin'
+        WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.principal') THEN 'Principal'
+        WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%vice%principal%') THEN 'Vice Principal'
+        ELSE 'School Office'
+    END) AS ""Name""
+FROM ""dbo"".""Users"" u
+LEFT JOIN ""dbo"".""Teachers"" t ON t.""UserId"" = u.""Id"" AND t.""TenantId"" = @tenantId
+LEFT JOIN ""dbo"".""Staff"" s ON s.""UserId"" = u.""Id"" AND s.""TenantId"" = @tenantId
+WHERE u.""Id"" = @userId
+LIMIT 1", new { tenantId, userId }, ct);
         return rows.FirstOrDefault()?.Name?.Trim();
     }
 
@@ -468,18 +469,19 @@ WHERE u.Id = @userId", new { tenantId, userId }, ct);
         // to be the default for ANY unmatched sender, mislabeling every student/parent reply
         // in the teacher's inbox as a teacher.
         var rows = await QueryInlineAsync<RoleLabelRow>(@"
-SELECT TOP 1 COALESCE(
-    NULLIF(LTRIM(RTRIM(t.Designation)), ''),
-    NULLIF(LTRIM(RTRIM(st.Role)), ''),
-    CASE WHEN NULLIF(LTRIM(RTRIM(u.StudentId)), '') IS NOT NULL THEN N'Student' END,
+SELECT COALESCE(
+    NULLIF(btrim(t.""Designation""), ''),
+    NULLIF(btrim(st.""Role""), ''),
+    CASE WHEN NULLIF(btrim(u.""StudentId""), '') IS NOT NULL THEN 'Student' END,
     CASE WHEN EXISTS (
-        SELECT 1 FROM dbo.ParentStudentLinks pl WHERE pl.ParentUserId = u.Id AND pl.TenantId = @tenantId
-    ) THEN N'Parent' END,
-    N'Teacher') AS RoleLabel
-FROM dbo.Users u
-LEFT JOIN dbo.Teachers t ON t.UserId = u.Id AND t.TenantId = @tenantId
-LEFT JOIN dbo.Staff st ON st.UserId = u.Id AND st.TenantId = @tenantId
-WHERE u.Id = @userId", new { tenantId, userId }, ct);
+        SELECT 1 FROM ""dbo"".""ParentStudentLinks"" pl WHERE pl.""ParentUserId"" = u.""Id"" AND pl.""TenantId"" = @tenantId
+    ) THEN 'Parent' END,
+    'Teacher') AS ""RoleLabel""
+FROM ""dbo"".""Users"" u
+LEFT JOIN ""dbo"".""Teachers"" t ON t.""UserId"" = u.""Id"" AND t.""TenantId"" = @tenantId
+LEFT JOIN ""dbo"".""Staff"" st ON st.""UserId"" = u.""Id"" AND st.""TenantId"" = @tenantId
+WHERE u.""Id"" = @userId
+LIMIT 1", new { tenantId, userId }, ct);
         return rows.FirstOrDefault()?.RoleLabel;
     }
 
@@ -491,28 +493,29 @@ WHERE u.Id = @userId", new { tenantId, userId }, ct);
     private async Task<Guid?> ResolveChildIdForSenderAsync(Guid tenantId, Guid userId, CancellationToken ct)
     {
         var rows = await QueryInlineAsync<UserIdRow>(@"
-SELECT TOP 1 ChildId AS Id FROM (
-    SELECT s.Id AS ChildId, 1 AS Pri
-    FROM dbo.Users u
-    INNER JOIN dbo.Students s
-        ON s.TenantId = @tenantId AND LOWER(LTRIM(RTRIM(s.AdmissionNo))) = LOWER(LTRIM(RTRIM(u.StudentId)))
-    WHERE u.Id = @userId AND NULLIF(LTRIM(RTRIM(u.StudentId)), '') IS NOT NULL
+SELECT ""ChildId"" AS ""Id"" FROM (
+    SELECT s.""Id"" AS ""ChildId"", 1 AS ""Pri""
+    FROM ""dbo"".""Users"" u
+    INNER JOIN ""dbo"".""Students"" s
+        ON s.""TenantId"" = @tenantId AND lower(btrim(s.""AdmissionNo"")) = lower(btrim(u.""StudentId""))
+    WHERE u.""Id"" = @userId AND NULLIF(btrim(u.""StudentId""), '') IS NOT NULL
     UNION ALL
-    SELECT pl.StudentId AS ChildId, 2 AS Pri
-    FROM dbo.ParentStudentLinks pl
-    WHERE pl.ParentUserId = @userId AND pl.TenantId = @tenantId
+    SELECT pl.""StudentId"" AS ""ChildId"", 2 AS ""Pri""
+    FROM ""dbo"".""ParentStudentLinks"" pl
+    WHERE pl.""ParentUserId"" = @userId AND pl.""TenantId"" = @tenantId
 ) x
-ORDER BY Pri", new { tenantId, userId }, ct);
+ORDER BY ""Pri""
+LIMIT 1", new { tenantId, userId }, ct);
         return rows.FirstOrDefault()?.Id;
     }
 
     public Task<IReadOnlyList<AnnouncementResponse>> ListAnnouncementsAsync(string? audience, CancellationToken ct = default) =>
         QueryInlineAsync<AnnouncementResponse>(@"
-SELECT a.Id, a.TenantId, a.Title, a.Body, a.[Date], COALESCE(u.Name, a.Role) AS [From], a.Role, a.Type, a.Pinned, a.Audience
-FROM dbo.Announcements a
-LEFT JOIN dbo.Users u ON u.Id = a.CreatorUserId
-WHERE (@audience IS NULL OR a.Audience IS NULL OR a.Audience = @audience)
-ORDER BY a.[Date] DESC", new { audience }, ct);
+SELECT a.""Id"", a.""TenantId"", a.""Title"", a.""Body"", a.""Date"", COALESCE(u.""Name"", a.""Role"") AS ""From"", a.""Role"", a.""Type"", a.""Pinned"", a.""Audience""
+FROM ""dbo"".""Announcements"" a
+LEFT JOIN ""dbo"".""Users"" u ON u.""Id"" = a.""CreatorUserId""
+WHERE (@audience::text IS NULL OR a.""Audience"" IS NULL OR a.""Audience"" = @audience::text)
+ORDER BY a.""Date"" DESC", new { audience }, ct);
 
     public Task<AnnouncementResponse?> CreateAnnouncementAsync(
         Guid tenantId, CreateAnnouncementRequest r, Guid? creatorUserId, string? role, CancellationToken ct = default) =>
@@ -524,11 +527,11 @@ ORDER BY a.[Date] DESC", new { audience }, ct);
         CancellationToken ct = default) =>
         ExecuteInlineAsync(
             """
-            UPDATE dbo.Announcements SET
-                RecipientsJson = @recipientsJson,
-                AttachmentFileName = @attachmentFileName,
-                AttachmentContentType = @attachmentContentType
-            WHERE Id = @id
+            UPDATE "dbo"."Announcements" SET
+                "RecipientsJson" = @recipientsJson,
+                "AttachmentFileName" = @attachmentFileName,
+                "AttachmentContentType" = @attachmentContentType
+            WHERE "Id" = @id
             """,
             new { id, recipientsJson, attachmentFileName, attachmentContentType }, ct);
 }
