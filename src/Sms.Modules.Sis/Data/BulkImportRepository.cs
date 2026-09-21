@@ -13,7 +13,7 @@ public sealed class BulkImportRepository(IDbConnectionFactory factory) : BaseRep
         Guid tenantId, Guid importId, int batchIndex, CancellationToken ct = default)
     {
         var row = (await QueryInlineAsync<string?>(
-            "SELECT ResultJson FROM dbo.BulkImportBatches WHERE TenantId = @tenantId AND ImportId = @importId AND BatchIndex = @batchIndex",
+            "SELECT \"ResultJson\" FROM \"dbo\".\"BulkImportBatches\" WHERE \"TenantId\" = @tenantId AND \"ImportId\" = @importId AND \"BatchIndex\" = @batchIndex",
             new { tenantId, importId, batchIndex }, ct)).FirstOrDefault();
         return row is null ? null : JsonSerializer.Deserialize<BulkImportBatchResponse>(row);
     }
@@ -30,8 +30,8 @@ public sealed class BulkImportRepository(IDbConnectionFactory factory) : BaseRep
         {
             await conn.ExecuteAsync(new CommandDefinition(
                 """
-                INSERT dbo.BulkImportBatches (Id, TenantId, ImportId, BatchIndex, ResultJson, CreatedAt)
-                VALUES (@id, @tenantId, @importId, @batchIndex, NULL, SYSUTCDATETIME())
+                INSERT INTO "dbo"."BulkImportBatches" ("Id", "TenantId", "ImportId", "BatchIndex", "ResultJson", "CreatedAt")
+                VALUES (@id, @tenantId, @importId, @batchIndex, NULL, now())
                 """,
                 new { id = Guid.NewGuid(), tenantId, importId, batchIndex },
                 commandType: CommandType.Text, cancellationToken: ct));
@@ -48,8 +48,8 @@ public sealed class BulkImportRepository(IDbConnectionFactory factory) : BaseRep
         Guid tenantId, Guid importId, int batchIndex, BulkImportBatchResponse result, CancellationToken ct = default) =>
         ExecuteInlineAsync(
             """
-            UPDATE dbo.BulkImportBatches SET ResultJson = @resultJson
-            WHERE TenantId = @tenantId AND ImportId = @importId AND BatchIndex = @batchIndex
+            UPDATE "dbo"."BulkImportBatches" SET "ResultJson" = @resultJson
+            WHERE "TenantId" = @tenantId AND "ImportId" = @importId AND "BatchIndex" = @batchIndex
             """,
             new { tenantId, importId, batchIndex, resultJson = JsonSerializer.Serialize(result) }, ct);
 }

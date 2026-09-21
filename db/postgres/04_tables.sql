@@ -171,12 +171,15 @@ CREATE TABLE "dbo"."Boardings" (
     "At" timestamptz NOT NULL
 );
 
+-- ResultJson is nullable (per live SQL Server: is_nullable=1) -- a NULL row is the
+-- "claimed but not yet completed" placeholder BulkImportRepository.TryClaimBatchAsync inserts
+-- before processing; the mechanical table-conversion pass had wrongly tightened this to NOT NULL.
 CREATE TABLE "dbo"."BulkImportBatches" (
     "Id" uuid NOT NULL,
     "TenantId" uuid NOT NULL,
     "ImportId" uuid NOT NULL,
     "BatchIndex" integer NOT NULL,
-    "ResultJson" text NOT NULL,
+    "ResultJson" text,
     "CreatedAt" timestamptz DEFAULT now() NOT NULL
 );
 
