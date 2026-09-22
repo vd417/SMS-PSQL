@@ -33,6 +33,19 @@ public sealed class PostgresFixture : IAsyncLifetime
                 Password = Environment.GetEnvironmentVariable("SMS_TEST_PG_PASSWORD"),
             }.ConnectionString;
 
+    // The app-facing connection string, returned as ConnectionString below: a non-superuser
+    // role (created by db/postgres/00_app_role.sql, part of the schema applied in
+    // InitializeAsync) so RLS policies actually apply during tests -- a Postgres superuser
+    // always bypasses RLS even with FORCE ROW LEVEL SECURITY, which would otherwise make every
+    // test run with tenant isolation silently disabled.
+    private string AppCs(string db) =>
+        !string.IsNullOrEmpty(_overrideCs)
+            ? new NpgsqlConnectionStringBuilder(_overrideCs) { Database = db, Username = "sms_app", Password = "sms_app_dev_pw" }.ConnectionString
+            : new NpgsqlConnectionStringBuilder
+            {
+                Host = _host, Database = db, Username = "sms_app", Password = "sms_app_dev_pw",
+            }.ConnectionString;
+
     public async Task InitializeAsync()
     {
         await using (var admin = new NpgsqlConnection(AdminCs))
@@ -45,19 +58,25 @@ public sealed class PostgresFixture : IAsyncLifetime
             await create.ExecuteNonQueryAsync();
         }
 
-        ConnectionString = DbCs(_dbName);
-
         var schemaDir = Path.Combine(AppContext.BaseDirectory, "postgres-schema");
         var files = Directory.GetFiles(schemaDir, "*.sql").OrderBy(f => f, StringComparer.Ordinal);
 
-        await using var conn = new NpgsqlConnection(ConnectionString);
-        await conn.OpenAsync();
-        foreach (var file in files)
+        // Schema application (CREATE ROLE, ENABLE/FORCE RLS, GRANT) needs superuser privilege,
+        // so this loop still runs on the admin/superuser connection to the new database.
+        await using (var conn = new NpgsqlConnection(DbCs(_dbName)))
         {
-            await using var batch = conn.CreateCommand();
-            batch.CommandText = await File.ReadAllTextAsync(file);
-            await batch.ExecuteNonQueryAsync();
+            await conn.OpenAsync();
+            foreach (var file in files)
+            {
+                await using var batch = conn.CreateCommand();
+                batch.CommandText = await File.ReadAllTextAsync(file);
+                await batch.ExecuteNonQueryAsync();
+            }
         }
+
+        // The app itself (and therefore every test) connects as the non-superuser role from
+        // here on, so RLS policies are genuinely exercised.
+        ConnectionString = AppCs(_dbName);
     }
 
     public async Task DisposeAsync()

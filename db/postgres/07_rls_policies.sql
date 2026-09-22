@@ -80,8 +80,12 @@ CREATE POLICY "AuditLogTenantPolicy_select" ON "dbo"."AuditLog" FOR SELECT USING
 CREATE POLICY "AuditLogTenantPolicy_update" ON "dbo"."AuditLog" FOR UPDATE USING (rls.is_platform() OR "TenantId" = rls.current_tenant_id()) WITH CHECK (rls.is_platform() OR "TenantId" = rls.current_tenant_id());
 CREATE POLICY "AuditLogTenantPolicy_delete" ON "dbo"."AuditLog" FOR DELETE USING (rls.is_platform() OR "TenantId" = rls.current_tenant_id());
 -- AuditLog: SQL Server policy has NO block/AFTER-INSERT predicate (append-only audit table --
--- writes are not tenant-restricted at the DB layer there, so no INSERT policy is added here either,
--- to preserve exact behavior rather than silently tightening it).
+-- writes are not tenant-restricted at the DB layer there). Unlike SQL Server, Postgres RLS
+-- denies INSERT by default when a table has RLS enabled/forced and no INSERT policy exists at
+-- all (there is no "no predicate = unrestricted" equivalent) -- so an explicit always-true
+-- WITH CHECK policy is required here to actually preserve that unrestricted-append behavior,
+-- not silently deny every insert instead.
+CREATE POLICY "AuditLogTenantPolicy_insert" ON "dbo"."AuditLog" FOR INSERT WITH CHECK (true);
 
 ALTER TABLE "dbo"."AuditLogs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "dbo"."AuditLogs" FORCE ROW LEVEL SECURITY;
