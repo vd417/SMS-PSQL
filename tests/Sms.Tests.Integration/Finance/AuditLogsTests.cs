@@ -48,7 +48,7 @@ public class AuditLogsTests(PostgresFixture fx)
         await tx.CommitAsync();
 
         var row = await conn.QuerySingleAsync<(Guid TenantId, Guid? ActorUserId, string Action, string Module, string EntityType, string EntityId)>(
-            "SELECT TenantId, ActorUserId, Action, Module, EntityType, EntityId FROM dbo.AuditLogs WHERE TenantId = @tenantId",
+            "SELECT \"TenantId\", \"ActorUserId\", \"Action\", \"Module\", \"EntityType\", \"EntityId\" FROM \"dbo\".\"AuditLogs\" WHERE \"TenantId\" = @tenantId",
             new { tenantId });
         row.ActorUserId.Should().Be(actorId);
         row.Action.Should().Be("Test.Action");
@@ -77,7 +77,7 @@ public class AuditLogsTests(PostgresFixture fx)
         await verifyConn.OpenAsync();
         await StampTenantAsync(verifyConn, tenantId);
         var count = await verifyConn.QuerySingleAsync<int>(
-            "SELECT COUNT(*) FROM dbo.AuditLogs WHERE TenantId = @tenantId", new { tenantId });
+            "SELECT COUNT(*) FROM \"dbo\".\"AuditLogs\" WHERE \"TenantId\" = @tenantId", new { tenantId });
         count.Should().Be(0);
     }
 }

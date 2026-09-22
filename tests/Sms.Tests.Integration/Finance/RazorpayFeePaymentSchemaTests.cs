@@ -31,8 +31,8 @@ public class RazorpayFeePaymentSchemaTests(PostgresFixture fx)
         });
 
         var uniqueIndexes = (await conn.QueryAsync<string>(
-            "SELECT i.name FROM sys.indexes i JOIN sys.tables t ON t.object_id = i.object_id " +
-            "WHERE t.name = 'FeePaymentOrders' AND i.is_unique = 1")).ToList();
+            "SELECT indexname FROM pg_indexes WHERE tablename = 'FeePaymentOrders' AND schemaname = 'dbo' " +
+            "AND indexdef LIKE 'CREATE UNIQUE INDEX%'")).ToList();
         uniqueIndexes.Should().Contain(n => n.Contains("RazorpayOrderId"));
     }
 }
