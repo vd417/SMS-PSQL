@@ -22,11 +22,11 @@ public class PeriodAttendanceAggregateTests
             TotalPeriods: 3,
             MarkedPeriods: 2).ToContract();
 
-        command.Sql.Should().Contain("FROM dbo.TimetableSlots ts");
-        command.Sql.Should().Contain("ts.ClassId = @ClassId");
-        command.Sql.Should().Contain("s.Grade = c.Grade AND s.Section = c.Section");
-        command.Sql.Should().NotContain("WHERE s.ClassId");
-        command.Sql.Should().Contain("UPPER(LEFT(LTRIM(RTRIM(ts.[Day])), 3))");
+        command.Sql.Should().Contain("FROM \"dbo\".\"TimetableSlots\" ts");
+        command.Sql.Should().Contain("ts.\"ClassId\" = @ClassId");
+        command.Sql.Should().Contain("s.\"Grade\" = c.\"Grade\" AND s.\"Section\" = c.\"Section\"");
+        command.Sql.Should().NotContain("WHERE s.\"ClassId\"");
+        command.Sql.Should().Contain("upper(left(trim(ts.\"Day\"), 3))");
         command.Parameters.Get<Guid>("ClassId").Should().Be(classId);
         command.Parameters.Get<DateTime>("Date").Should().Be(new DateTime(2026, 8, 13));
         summary.AttendancePercentage.Should().Be(80m);
@@ -56,11 +56,11 @@ public class PeriodAttendanceAggregateTests
         var command = PeriodAttendanceAggregateSql.BuildClassDay(
             Guid.NewGuid(), new DateOnly(2026, 8, 13));
 
-        command.Sql.Should().Contain("FROM ExpectedSessions es");
-        command.Sql.Should().Contain("LEFT JOIN dbo.PeriodAttendanceRecords par");
-        command.Sql.Should().Contain("par.Period = es.Period");
+        command.Sql.Should().Contain("FROM \"ExpectedSessions\" es");
+        command.Sql.Should().Contain("LEFT JOIN \"dbo\".\"PeriodAttendanceRecords\" par");
+        command.Sql.Should().Contain("par.\"Period\" = es.\"Period\"");
         command.Sql.Should().Contain(
-            "LOWER(LTRIM(RTRIM(par.Subject))) = es.Subject");
+            "lower(trim(par.\"Subject\")) = es.\"Subject\"");
     }
 
     [Fact]
@@ -77,8 +77,8 @@ public class PeriodAttendanceAggregateTests
             TotalPeriods: 1,
             MarkedPeriods: 0).ToContract();
 
-        command.Sql.Should().Contain("FROM ExpectedSessions es");
-        command.Sql.Should().Contain("LEFT JOIN dbo.PeriodAttendanceRecords par");
+        command.Sql.Should().Contain("FROM \"ExpectedSessions\" es");
+        command.Sql.Should().Contain("LEFT JOIN \"dbo\".\"PeriodAttendanceRecords\" par");
         summary.Present.Should().Be(0);
         summary.Absent.Should().Be(0);
         summary.Late.Should().Be(0);
@@ -116,10 +116,10 @@ public class PeriodAttendanceAggregateTests
         var command = PeriodAttendanceAggregateSql.BuildTeachers(
             new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 13));
 
-        command.Sql.Should().Contain("c.Grade");
+        command.Sql.Should().Contain("c.\"Grade\"");
         command.Sql.Should().Contain(
-            "COUNT(DISTINCT NULLIF(LTRIM(RTRIM(es.Grade)), N'')) AS Classes");
-        command.Sql.Should().Contain("COUNT(DISTINCT es.ClassId) AS Sections");
+            "COUNT(DISTINCT nullif(trim(es.\"Grade\"), '')) AS int) AS \"Classes\"");
+        command.Sql.Should().Contain("COUNT(DISTINCT es.\"ClassId\") AS int) AS \"Sections\"");
     }
 
     [Fact]
@@ -139,11 +139,11 @@ public class PeriodAttendanceAggregateTests
             " Science ",
             teacherId);
 
-        command.Sql.Should().Contain("par.ClassId = @ClassId");
-        command.Sql.Should().Contain("c.Grade = @Grade");
-        command.Sql.Should().Contain("c.Section = @Section");
-        command.Sql.Should().Contain("par.StudentId = @StudentId");
-        command.Sql.Should().Contain("ts.TeacherId = @TeacherId");
+        command.Sql.Should().Contain("par.\"ClassId\" = @ClassId");
+        command.Sql.Should().Contain("c.\"Grade\" = @Grade");
+        command.Sql.Should().Contain("c.\"Section\" = @Section");
+        command.Sql.Should().Contain("par.\"StudentId\" = @StudentId");
+        command.Sql.Should().Contain("ts.\"TeacherId\" = @TeacherId");
         command.Parameters.Get<Guid?>("ClassId").Should().Be(classId);
         command.Parameters.Get<Guid?>("StudentId").Should().Be(studentId);
         command.Parameters.Get<Guid?>("TeacherId").Should().Be(teacherId);

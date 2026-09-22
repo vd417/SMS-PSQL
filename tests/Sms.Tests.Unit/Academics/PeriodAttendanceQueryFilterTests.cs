@@ -26,8 +26,8 @@ public class PeriodAttendanceQueryFilterTests
 
         var command = PeriodAttendanceQuerySql.Build(query);
 
-        Assert.Contains("LOWER(LTRIM(RTRIM(par.Subject))) = LOWER(LTRIM(RTRIM(@Subject)))", command.Sql);
-        Assert.Contains("par.Status = @Status", command.Sql);
+        Assert.Contains("lower(trim(par.\"Subject\")) = lower(trim(@Subject))", command.Sql);
+        Assert.Contains("par.\"Status\" = @Status", command.Sql);
         Assert.Equal("Music", command.Parameters.Get<string?>("Subject"));
         Assert.Equal("absent", command.Parameters.Get<string?>("Status"));
         Assert.Equal(10L, command.Parameters.Get<long>("Offset"));
@@ -89,7 +89,7 @@ public class PeriodAttendanceQueryFilterTests
         Assert.Empty(page.Items);
         Assert.Equal(7, page.TotalCount);
         Assert.Equal(999, page.Page);
-        Assert.Contains("SELECT COUNT(*)", command.Sql);
+        Assert.Contains("SELECT CAST(COUNT(*) AS int)", command.Sql);
         Assert.DoesNotContain("COUNT(*) OVER()", command.Sql);
     }
 
@@ -101,8 +101,8 @@ public class PeriodAttendanceQueryFilterTests
 
         var command = PeriodAttendanceQuerySql.Build(query);
 
-        Assert.Contains("ts.TeacherId = @AuthorizedTeacherId", command.Sql);
-        Assert.Contains("c.ClassTeacherId = @AuthorizedTeacherId", command.Sql);
+        Assert.Contains("ts.\"TeacherId\" = @AuthorizedTeacherId", command.Sql);
+        Assert.Contains("c.\"ClassTeacherId\" = @AuthorizedTeacherId", command.Sql);
         Assert.Equal(teacherId, command.Parameters.Get<Guid?>("AuthorizedTeacherId"));
     }
 
@@ -114,10 +114,10 @@ public class PeriodAttendanceQueryFilterTests
         var command = PeriodAttendanceQuerySql.Build(query);
 
         Assert.Contains(
-            "REPLACE(LOWER(par.MarkedByRole), N'school.', N'') = LOWER(@MarkedByRole)",
+            "replace(lower(par.\"MarkedByRole\"), 'school.', '') = lower(@MarkedByRole)",
             command.Sql);
         Assert.Contains(
-            "REPLACE(LOWER(par.MarkedByRole), N'school.', N'') AS MarkedByRole",
+            "replace(lower(par.\"MarkedByRole\"), 'school.', '') AS \"MarkedByRole\"",
             command.Sql);
     }
 
@@ -140,9 +140,9 @@ public class PeriodAttendanceQueryFilterTests
         var command = PeriodAttendanceQuerySql.Build(query);
 
         Assert.Contains(
-            "(@GeoFenceStatus IS NULL OR COALESCE(par.GeoFenceStatus, N'not_required') = @GeoFenceStatus)",
+            "(@GeoFenceStatus IS NULL OR COALESCE(par.\"GeoFenceStatus\", 'not_required') = @GeoFenceStatus)",
             command.Sql);
-        Assert.Contains("COALESCE(par.GeoFenceStatus, N'not_required') AS GeoFenceStatus", command.Sql);
+        Assert.Contains("COALESCE(par.\"GeoFenceStatus\", 'not_required') AS \"GeoFenceStatus\"", command.Sql);
         Assert.Equal("outside", command.Parameters.Get<string?>("GeoFenceStatus"));
     }
 
@@ -151,11 +151,11 @@ public class PeriodAttendanceQueryFilterTests
     {
         var command = PeriodAttendanceQuerySql.Build(CreateQuery(1, 25));
 
-        Assert.Contains("par.GeoDistanceMeters", command.Sql);
-        Assert.Contains("par.GeoCapturedAt", command.Sql);
-        Assert.Contains("par.UpdatedBy,", command.Sql);
-        Assert.Contains("uu.Name AS UpdatedByName", command.Sql);
-        Assert.Contains("par.UpdatedByRole", command.Sql);
+        Assert.Contains("par.\"GeoDistanceMeters\"", command.Sql);
+        Assert.Contains("par.\"GeoCapturedAt\"", command.Sql);
+        Assert.Contains("par.\"UpdatedBy\",", command.Sql);
+        Assert.Contains("uu.\"Name\" AS \"UpdatedByName\"", command.Sql);
+        Assert.Contains("par.\"UpdatedByRole\"", command.Sql);
     }
 
     [Fact]
