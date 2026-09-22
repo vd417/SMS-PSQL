@@ -35,10 +35,10 @@ public class UserDirectoryRepositoryTests(PostgresFixture fx)
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         await Seed(conn => conn.ExecuteAsync(
-            "INSERT INTO dbo.Users (Id, TenantId, Email, Name, Status) VALUES (@userId, @tenantId, @email, @name, 'active')",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Name\", \"Status\") VALUES (@userId, @tenantId, @email, @name, 'active')",
             new { userId, tenantId, email = $"owner{Guid.NewGuid():N}@school.test", name = "Rahul Sharma" }));
         await Seed(conn => conn.ExecuteAsync(
-            "INSERT INTO dbo.UserRoles (UserId, Role) VALUES (@userId, 'school.owner')", new { userId }));
+            "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'school.owner')", new { userId }));
 
         var repo = MakeRepo(fx.ConnectionString, tenantId);
 
@@ -53,10 +53,10 @@ public class UserDirectoryRepositoryTests(PostgresFixture fx)
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         await Seed(conn => conn.ExecuteAsync(
-            "INSERT INTO dbo.Users (Id, TenantId, Email, Status) VALUES (@userId, @tenantId, @email, 'active')",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Status\") VALUES (@userId, @tenantId, @email, 'active')",
             new { userId, tenantId, email = $"noname{Guid.NewGuid():N}@school.test" }));
         await Seed(conn => conn.ExecuteAsync(
-            "INSERT INTO dbo.UserRoles (UserId, Role) VALUES (@userId, 'school.admin')", new { userId }));
+            "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'school.admin')", new { userId }));
 
         var repo = MakeRepo(fx.ConnectionString, tenantId);
 
@@ -69,10 +69,10 @@ public class UserDirectoryRepositoryTests(PostgresFixture fx)
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         await Seed(conn => conn.ExecuteAsync(
-            "INSERT INTO dbo.Users (Id, TenantId, Email, Name, Status) VALUES (@userId, @tenantId, @email, 'Rahul Sharma', 'active')",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Name\", \"Status\") VALUES (@userId, @tenantId, @email, 'Rahul Sharma', 'active')",
             new { userId, tenantId, email = $"teacher{Guid.NewGuid():N}@school.test" }));
         await Seed(conn => conn.ExecuteAsync(
-            "INSERT INTO dbo.UserRoles (UserId, Role) VALUES (@userId, 'school.teacher')", new { userId }));
+            "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'school.teacher')", new { userId }));
 
         var repo = MakeRepo(fx.ConnectionString, tenantId);
 
@@ -86,10 +86,10 @@ public class UserDirectoryRepositoryTests(PostgresFixture fx)
         var tenantId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         await Seed(conn => conn.ExecuteAsync(
-            "INSERT INTO dbo.Users (Id, TenantId, Email, Name, Status) VALUES (@userId, @tenantId, @email, @name, 'active')",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Name\", \"Status\") VALUES (@userId, @tenantId, @email, @name, 'active')",
             new { userId, tenantId, email = $"principal{Guid.NewGuid():N}@school.test", name = "Priya Singh" }));
         await Seed(conn => conn.ExecuteAsync(
-            "INSERT INTO dbo.UserRoles (UserId, Role) VALUES (@userId, 'school.principal')", new { userId }));
+            "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'school.principal')", new { userId }));
 
         var repo = MakeRepo(fx.ConnectionString, tenantId);
 

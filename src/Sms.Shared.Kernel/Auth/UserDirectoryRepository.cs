@@ -32,14 +32,14 @@ public sealed class UserDirectoryRepository(IDbConnectionFactory factory)
     public async Task<IReadOnlyList<UserDirectoryMatch>> SearchByNameAsync(string name, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<(Guid Id, string Name, string? Email, string Roles)>(
-            @"SELECT u.Id, u.Name, u.Email,
-                     Roles = STRING_AGG(ur.Role, ',') WITHIN GROUP (ORDER BY ur.Role)
-              FROM dbo.Users u
-              JOIN dbo.UserRoles ur ON ur.UserId = u.Id
-              WHERE u.Name IS NOT NULL
-                AND u.Name LIKE '%' + @name + '%'
-                AND ur.Role IN ('school.owner', 'school.principal', 'school.admin')
-              GROUP BY u.Id, u.Name, u.Email",
+            @"SELECT u.""Id"", u.""Name"", u.""Email"",
+                     string_agg(ur.""Role"", ',' ORDER BY ur.""Role"") AS ""Roles""
+              FROM ""dbo"".""Users"" u
+              JOIN ""dbo"".""UserRoles"" ur ON ur.""UserId"" = u.""Id""
+              WHERE u.""Name"" IS NOT NULL
+                AND u.""Name"" LIKE '%' || @name || '%'
+                AND ur.""Role"" IN ('school.owner', 'school.principal', 'school.admin')
+              GROUP BY u.""Id"", u.""Name"", u.""Email""",
             new { name }, ct);
 
         return rows.Select(r => new UserDirectoryMatch(r.Id, r.Name, TypeFor(r.Roles), r.Email)).ToList();
@@ -48,13 +48,13 @@ public sealed class UserDirectoryRepository(IDbConnectionFactory factory)
     public async Task<UserDirectoryMatch?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<(Guid Id, string Name, string? Email, string Roles)>(
-            @"SELECT u.Id, u.Name, u.Email,
-                     Roles = STRING_AGG(ur.Role, ',') WITHIN GROUP (ORDER BY ur.Role)
-              FROM dbo.Users u
-              JOIN dbo.UserRoles ur ON ur.UserId = u.Id
-              WHERE u.Id = @id AND u.Name IS NOT NULL
-                AND ur.Role IN ('school.owner', 'school.principal', 'school.admin')
-              GROUP BY u.Id, u.Name, u.Email",
+            @"SELECT u.""Id"", u.""Name"", u.""Email"",
+                     string_agg(ur.""Role"", ',' ORDER BY ur.""Role"") AS ""Roles""
+              FROM ""dbo"".""Users"" u
+              JOIN ""dbo"".""UserRoles"" ur ON ur.""UserId"" = u.""Id""
+              WHERE u.""Id"" = @id AND u.""Name"" IS NOT NULL
+                AND ur.""Role"" IN ('school.owner', 'school.principal', 'school.admin')
+              GROUP BY u.""Id"", u.""Name"", u.""Email""",
             new { id }, ct);
         var row = rows.FirstOrDefault();
         return row.Id == Guid.Empty ? null : new UserDirectoryMatch(row.Id, row.Name, TypeFor(row.Roles), row.Email);
