@@ -30,7 +30,7 @@ public class AuthFlowTests(PostgresFixture fx)
         var email = $"admin{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "INSERT dbo.Users (Id, Email, PasswordHash, IsPlatform) VALUES (NEWID(),@e,@h,1)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"Email\", \"PasswordHash\", \"IsPlatform\") VALUES (gen_random_uuid(),@e,@h,true)",
                 new { e = email, h = hasher.Hash("Pass123!") });
 
         await using var app = AppWithDb();
@@ -58,7 +58,7 @@ public class AuthFlowTests(PostgresFixture fx)
         var phone = $"+9198{Random.Shared.Next(10_000_000, 99_999_999)}";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "INSERT dbo.Users (Id, Phone, PasswordHash, IsPlatform) VALUES (NEWID(),@p,@h,1)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"Phone\", \"PasswordHash\", \"IsPlatform\") VALUES (gen_random_uuid(),@p,@h,true)",
                 new { p = phone, h = hasher.Hash("Pass123!") });
 
         await using var app = AppWithDb();
@@ -83,7 +83,7 @@ public class AuthFlowTests(PostgresFixture fx)
         var email = $"plat{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "INSERT dbo.Users (Id, Email, PasswordHash, IsPlatform) VALUES (NEWID(),@e,@h,1)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"Email\", \"PasswordHash\", \"IsPlatform\") VALUES (gen_random_uuid(),@e,@h,true)",
                 new { e = email, h = hasher.Hash("Pass123!") });
 
         await using var app = AppWithDb();
@@ -109,7 +109,7 @@ public class AuthFlowTests(PostgresFixture fx)
         const string photoUrl = "https://cdn.example.com/avatars/a.png";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "INSERT dbo.Users (Id, Email, PasswordHash, IsPlatform, PhotoUrl) VALUES (NEWID(),@e,@h,1,@p)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"Email\", \"PasswordHash\", \"IsPlatform\", \"PhotoUrl\") VALUES (gen_random_uuid(),@e,@h,true,@p)",
                 new { e = email, h = hasher.Hash("Pass123!"), p = photoUrl });
 
         await using var app = AppWithDb();
@@ -134,7 +134,7 @@ public class AuthFlowTests(PostgresFixture fx)
         var email = $"nophoto{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "INSERT dbo.Users (Id, Email, PasswordHash, IsPlatform) VALUES (NEWID(),@e,@h,1)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"Email\", \"PasswordHash\", \"IsPlatform\") VALUES (gen_random_uuid(),@e,@h,true)",
                 new { e = email, h = hasher.Hash("Pass123!") });
 
         await using var app = AppWithDb();
@@ -159,7 +159,7 @@ public class AuthFlowTests(PostgresFixture fx)
         var email = $"setphoto{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "INSERT dbo.Users (Id, Email, PasswordHash, IsPlatform) VALUES (NEWID(),@e,@h,1)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"Email\", \"PasswordHash\", \"IsPlatform\") VALUES (gen_random_uuid(),@e,@h,true)",
                 new { e = email, h = hasher.Hash("Pass123!") });
 
         await using var app = AppWithDb();
@@ -195,7 +195,7 @@ public class AuthFlowTests(PostgresFixture fx)
         var email = $"badphoto{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "INSERT dbo.Users (Id, Email, PasswordHash, IsPlatform) VALUES (NEWID(),@e,@h,1)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"Email\", \"PasswordHash\", \"IsPlatform\") VALUES (gen_random_uuid(),@e,@h,true)",
                 new { e = email, h = hasher.Hash("Pass123!") });
 
         await using var app = AppWithDb();
@@ -218,7 +218,7 @@ public class AuthFlowTests(PostgresFixture fx)
         var email = $"bigphoto{Guid.NewGuid():N}@x.com";
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "INSERT dbo.Users (Id, Email, PasswordHash, IsPlatform) VALUES (NEWID(),@e,@h,1)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"Email\", \"PasswordHash\", \"IsPlatform\") VALUES (gen_random_uuid(),@e,@h,true)",
                 new { e = email, h = hasher.Hash("Pass123!") });
 
         await using var app = AppWithDb();

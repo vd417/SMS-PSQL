@@ -30,13 +30,13 @@ public class GetMeProfileTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Jane Teacher')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\") VALUES (@userId, @tenantId, @email, @hash, 'Jane Teacher')",
                 new { userId, tenantId, email = $"t{Guid.NewGuid():N}@x.com", hash = hasher.Hash("Pass123!") });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (TenantId, Name, Designation, UserId) VALUES (@tenantId, 'Jane Teacher', 'Senior Teacher', @userId)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"Designation\", \"UserId\") VALUES (@tenantId, 'Jane Teacher', 'Senior Teacher', @userId)",
                 new { tenantId, userId });
             await conn.ExecuteAsync(
-                "INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, 'school.teacher')", new { userId });
+                "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'school.teacher')", new { userId });
         }
 
         await using var app = AppWithDb();
@@ -66,7 +66,7 @@ public class GetMeProfileTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Priya Principal')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\") VALUES (@userId, @tenantId, @email, @hash, 'Priya Principal')",
                 new { userId, tenantId, email = $"p{Guid.NewGuid():N}@x.com", hash = hasher.Hash("Pass123!") });
         }
 
@@ -97,13 +97,13 @@ public class GetMeProfileTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Tenants (Id, Name, Slug, Status, Tier, PlanName) VALUES (@tenantId, 'Gold Academy', @slug, 'active', 'gold', 'Gold')",
+                "INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\", \"Status\", \"Tier\", \"PlanName\") VALUES (@tenantId, 'Gold Academy', @slug, 'active', 'gold', 'Gold')",
                 new { tenantId, slug = $"t{tenantId:N}" });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Gold Teacher')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\") VALUES (@userId, @tenantId, @email, @hash, 'Gold Teacher')",
                 new { userId, tenantId, email = $"g{Guid.NewGuid():N}@x.com", hash = hasher.Hash("Pass123!") });
             await conn.ExecuteAsync(
-                "INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, 'school.teacher')", new { userId });
+                "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'school.teacher')", new { userId });
         }
 
         await using var app = AppWithDb();
@@ -135,14 +135,14 @@ public class GetMeProfileTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name, Phone) VALUES (@userId, @tenantId, @email, @hash, 'Jane Teacher', '9000000001')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\", \"Phone\") VALUES (@userId, @tenantId, @email, @hash, 'Jane Teacher', '9000000001')",
                 new { userId, tenantId, email, hash = hasher.Hash("Pass123!") });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (TenantId, Name, Designation, UserId, Email, Phone, EmployeeCode, ClassTeacher, CreatedAt) " +
-                "VALUES (@tenantId, 'Jane Teacher', 'Senior Teacher', @userId, @email, '9000000099', 'TCH-42', 'IX-A', SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"Designation\", \"UserId\", \"Email\", \"Phone\", \"EmployeeCode\", \"ClassTeacher\", \"CreatedAt\") " +
+                "VALUES (@tenantId, 'Jane Teacher', 'Senior Teacher', @userId, @email, '9000000099', 'TCH-42', 'IX-A', now())",
                 new { tenantId, userId, email });
             await conn.ExecuteAsync(
-                "INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, 'school.teacher')", new { userId });
+                "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'school.teacher')", new { userId });
         }
 
         await using var app = AppWithDb();
@@ -175,11 +175,11 @@ public class GetMeProfileTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Priya Principal')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\") VALUES (@userId, @tenantId, @email, @hash, 'Priya Principal')",
                 new { userId, tenantId, email, hash = hasher.Hash("Pass123!") });
             await conn.ExecuteAsync(
-                "INSERT dbo.Staff (TenantId, Name, Role, Email, Phone, EmployeeCode, CreatedAt) " +
-                "VALUES (@tenantId, 'Priya Principal', 'Principal', @email, '9111111111', 'STF-7', SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Staff\" (\"TenantId\", \"Name\", \"Role\", \"Email\", \"Phone\", \"EmployeeCode\", \"CreatedAt\") " +
+                "VALUES (@tenantId, 'Priya Principal', 'Principal', @email, '9111111111', 'STF-7', now())",
                 new { tenantId, email });
         }
 
@@ -215,17 +215,17 @@ public class GetMeProfileTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             await conn.ExecuteAsync(
-                "INSERT dbo.Tenants (Id, Name, Slug) VALUES (@tenantA, 'School A', @slugA), (@tenantB, 'School B', @slugB)",
+                "INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\") VALUES (@tenantA, 'School A', @slugA), (@tenantB, 'School B', @slugB)",
                 new { tenantA, tenantB, slugA = $"a{tenantA:N}", slugB = $"b{tenantB:N}" });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userA, @tenantA, @email, @hash, 'Rina A'), (@userB, @tenantB, @email, @hash, NULL)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\") VALUES (@userA, @tenantA, @email, @hash, 'Rina A'), (@userB, @tenantB, @email, @hash, NULL)",
                 new { userA, userB, tenantA, tenantB, email, hash = hasher.Hash("Pass123!") });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (TenantId, Name, Designation, UserId, Email, Phone, EmployeeCode, CreatedAt) " +
-                "VALUES (@tenantA, 'Rina A', 'Teacher', @userA, @email, @phone, 'TCH-1', SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"Designation\", \"UserId\", \"Email\", \"Phone\", \"EmployeeCode\", \"CreatedAt\") " +
+                "VALUES (@tenantA, 'Rina A', 'Teacher', @userA, @email, @phone, 'TCH-1', now())",
                 new { tenantA, userA, email, phone });
             await conn.ExecuteAsync(
-                "INSERT dbo.UserRoles (UserId, Role) VALUES (@userA, 'school.teacher'), (@userB, 'school.teacher')",
+                "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userA, 'school.teacher'), (@userB, 'school.teacher')",
                 new { userA, userB });
         }
 
@@ -259,17 +259,17 @@ public class GetMeProfileTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             await conn.ExecuteAsync(
-                "INSERT dbo.Tenants (Id, Name, Slug) VALUES (@tenantA, 'School A', @slugA), (@tenantB, 'School B', @slugB)",
+                "INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\") VALUES (@tenantA, 'School A', @slugA), (@tenantB, 'School B', @slugB)",
                 new { tenantA, tenantB, slugA = $"a{tenantA:N}", slugB = $"b{tenantB:N}" });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userA, @tenantA, @email, @hash, 'Rina A'), (@userB, @tenantB, @email, @hash, NULL)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\") VALUES (@userA, @tenantA, @email, @hash, 'Rina A'), (@userB, @tenantB, @email, @hash, NULL)",
                 new { userA, userB, tenantA, tenantB, email, hash = hasher.Hash("Pass123!") });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (TenantId, Name, Designation, UserId, Email, Phone, EmployeeCode, CreatedAt) " +
-                "VALUES (@tenantA, 'Rina A', 'Teacher', @userA, @email, @phone, 'TCH-9', SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"Designation\", \"UserId\", \"Email\", \"Phone\", \"EmployeeCode\", \"CreatedAt\") " +
+                "VALUES (@tenantA, 'Rina A', 'Teacher', @userA, @email, @phone, 'TCH-9', now())",
                 new { tenantA, userA, email, phone });
             await conn.ExecuteAsync(
-                "INSERT dbo.UserRoles (UserId, Role) VALUES (@userA, 'school.teacher'), (@userB, 'school.teacher')",
+                "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userA, 'school.teacher'), (@userB, 'school.teacher')",
                 new { userA, userB });
         }
 
@@ -300,7 +300,7 @@ public class GetMeProfileTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             var stored = await conn.QuerySingleAsync<string?>(
-                "SELECT Phone FROM dbo.Users WHERE Id = @userB", new { userB });
+                "SELECT \"Phone\" FROM \"dbo\".\"Users\" WHERE \"Id\" = @userB", new { userB });
             stored.Should().Be(phone);
         }
     }

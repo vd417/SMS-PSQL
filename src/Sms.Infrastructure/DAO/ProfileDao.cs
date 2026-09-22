@@ -7,41 +7,43 @@ public sealed class ProfileDao(IDbConnectionFactory factory) : BaseRepository(fa
 {
     private const string TeacherSelect =
         """
-        SELECT TOP 1 t.Designation, t.ClassTeacher, t.Phone, t.Email, t.EmployeeCode, t.CreatedAt AS JoinedAt,
-            (SELECT TOP 1 c.Name FROM dbo.Classes c WHERE c.ClassTeacherId = t.Id) AS HomeroomClassName,
-            CAST(NULL AS nvarchar(80)) AS DutyPost
-        FROM dbo.Teachers t
-        WHERE t.UserId = @userId
+        SELECT t."Designation", t."ClassTeacher", t."Phone", t."Email", t."EmployeeCode", t."CreatedAt" AS "JoinedAt",
+            (SELECT c."Name" FROM "dbo"."Classes" c WHERE c."ClassTeacherId" = t."Id" LIMIT 1) AS "HomeroomClassName",
+            CAST(NULL AS varchar(80)) AS "DutyPost"
+        FROM "dbo"."Teachers" t
+        WHERE t."UserId" = @userId
            OR (
-                @tenantId IS NOT NULL AND t.TenantId = @tenantId AND (
-                    (@email IS NOT NULL AND LOWER(LTRIM(RTRIM(t.Email))) = LOWER(LTRIM(RTRIM(@email))))
-                    OR (@name IS NOT NULL AND LOWER(LTRIM(RTRIM(t.Name))) = LOWER(LTRIM(RTRIM(@name))))
+                @tenantId IS NOT NULL AND t."TenantId" = @tenantId AND (
+                    (@email IS NOT NULL AND lower(trim(t."Email")) = lower(trim(@email)))
+                    OR (@name IS NOT NULL AND lower(trim(t."Name")) = lower(trim(@name)))
                 )
               )
-        ORDER BY CASE WHEN t.UserId = @userId THEN 0
-                      WHEN @email IS NOT NULL AND LOWER(LTRIM(RTRIM(t.Email))) = LOWER(LTRIM(RTRIM(@email))) THEN 1
-                      ELSE 2 END, t.CreatedAt
+        ORDER BY CASE WHEN t."UserId" = @userId THEN 0
+                      WHEN @email IS NOT NULL AND lower(trim(t."Email")) = lower(trim(@email)) THEN 1
+                      ELSE 2 END, t."CreatedAt"
+        LIMIT 1
         """;
 
     private const string StaffSelect =
         """
-        SELECT TOP 1 s.Role AS Designation,
-            CAST(NULL AS nvarchar(40)) AS ClassTeacher,
-            s.Phone, s.Email, s.EmployeeCode,
-            s.CreatedAt AS JoinedAt,
-            CAST(NULL AS nvarchar(200)) AS HomeroomClassName,
-            COALESCE(NULLIF(LTRIM(RTRIM(s.Route)), N''), NULLIF(LTRIM(RTRIM(s.Department)), N''), N'') AS DutyPost
-        FROM dbo.Staff s
-        WHERE s.UserId = @userId
+        SELECT s."Role" AS "Designation",
+            CAST(NULL AS varchar(40)) AS "ClassTeacher",
+            s."Phone", s."Email", s."EmployeeCode",
+            s."CreatedAt" AS "JoinedAt",
+            CAST(NULL AS varchar(200)) AS "HomeroomClassName",
+            COALESCE(NULLIF(trim(s."Route"), ''), NULLIF(trim(s."Department"), ''), '') AS "DutyPost"
+        FROM "dbo"."Staff" s
+        WHERE s."UserId" = @userId
            OR (
-                @tenantId IS NOT NULL AND s.TenantId = @tenantId AND (
-                    (@email IS NOT NULL AND LOWER(LTRIM(RTRIM(s.Email))) = LOWER(LTRIM(RTRIM(@email))))
-                    OR (@name IS NOT NULL AND LOWER(LTRIM(RTRIM(s.Name))) = LOWER(LTRIM(RTRIM(@name))))
+                @tenantId IS NOT NULL AND s."TenantId" = @tenantId AND (
+                    (@email IS NOT NULL AND lower(trim(s."Email")) = lower(trim(@email)))
+                    OR (@name IS NOT NULL AND lower(trim(s."Name")) = lower(trim(@name)))
                 )
               )
-        ORDER BY CASE WHEN s.UserId = @userId THEN 0
-                      WHEN @email IS NOT NULL AND LOWER(LTRIM(RTRIM(s.Email))) = LOWER(LTRIM(RTRIM(@email))) THEN 1
-                      ELSE 2 END, s.CreatedAt
+        ORDER BY CASE WHEN s."UserId" = @userId THEN 0
+                      WHEN @email IS NOT NULL AND lower(trim(s."Email")) = lower(trim(@email)) THEN 1
+                      ELSE 2 END, s."CreatedAt"
+        LIMIT 1
         """;
 
     public Task<LinkedPersonProfile?> GetLinkedTeacherAsync(
@@ -57,26 +59,27 @@ public sealed class ProfileDao(IDbConnectionFactory factory) : BaseRepository(fa
         if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(name)) return null;
         var rows = await QueryInlineAsync<string>(
             """
-            SELECT TOP 1 Phone FROM (
-                SELECT t.Phone, t.CreatedAt
-                FROM dbo.Teachers t
-                WHERE t.Phone IS NOT NULL AND LTRIM(t.Phone) <> ''
+            SELECT "Phone" FROM (
+                SELECT t."Phone", t."CreatedAt"
+                FROM "dbo"."Teachers" t
+                WHERE t."Phone" IS NOT NULL AND trim(t."Phone") <> ''
                   AND (
-                    (@email IS NOT NULL AND t.Email IS NOT NULL
-                     AND LOWER(LTRIM(RTRIM(t.Email))) = LOWER(LTRIM(RTRIM(@email))))
-                    OR (@name IS NOT NULL AND LOWER(LTRIM(RTRIM(t.Name))) = LOWER(LTRIM(RTRIM(@name))))
+                    (@email IS NOT NULL AND t."Email" IS NOT NULL
+                     AND lower(trim(t."Email")) = lower(trim(@email)))
+                    OR (@name IS NOT NULL AND lower(trim(t."Name")) = lower(trim(@name)))
                   )
                 UNION ALL
-                SELECT s.Phone, s.CreatedAt
-                FROM dbo.Staff s
-                WHERE s.Phone IS NOT NULL AND LTRIM(s.Phone) <> ''
+                SELECT s."Phone", s."CreatedAt"
+                FROM "dbo"."Staff" s
+                WHERE s."Phone" IS NOT NULL AND trim(s."Phone") <> ''
                   AND (
-                    (@email IS NOT NULL AND s.Email IS NOT NULL
-                     AND LOWER(LTRIM(RTRIM(s.Email))) = LOWER(LTRIM(RTRIM(@email))))
-                    OR (@name IS NOT NULL AND LOWER(LTRIM(RTRIM(s.Name))) = LOWER(LTRIM(RTRIM(@name))))
+                    (@email IS NOT NULL AND s."Email" IS NOT NULL
+                     AND lower(trim(s."Email")) = lower(trim(@email)))
+                    OR (@name IS NOT NULL AND lower(trim(s."Name")) = lower(trim(@name)))
                   )
             ) AS contacts
-            ORDER BY CreatedAt DESC
+            ORDER BY "CreatedAt" DESC
+            LIMIT 1
             """,
             new { email, name }, ct);
         return rows.FirstOrDefault()?.Trim();
