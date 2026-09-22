@@ -717,7 +717,8 @@ public sealed record CreatePayslipRequest(Guid UserId, string? Month, int Year, 
 public sealed class PayslipRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
     private const string Cols =
-        "Id, TenantId, UserId, Month, Year, Gross, Deductions, Net, Status, Basic, Hra, Allowances, Epf, ProfTax, OtherDeductions";
+        "\"Id\", \"TenantId\", \"UserId\", \"Month\", \"Year\", \"Gross\", \"Deductions\", \"Net\", \"Status\", " +
+        "\"Basic\", \"Hra\", \"Allowances\", \"Epf\", \"ProfTax\", \"OtherDeductions\"";
 
     public Task<PayslipResponse?> CreateAsync(Guid tenantId, CreatePayslipRequest r, CancellationToken ct = default) =>
         QuerySingleProcAsync<PayslipResponse>("dbo.Payslip_Create",
@@ -725,7 +726,7 @@ public sealed class PayslipRepository(IDbConnectionFactory factory) : BaseReposi
 
     public Task<IReadOnlyList<PayslipResponse>> ListAsync(Guid tenantId, Guid userId, CancellationToken ct = default) =>
         QueryInlineAsync<PayslipResponse>(
-            $"SELECT {Cols} FROM dbo.Payslips WHERE TenantId = @tenantId AND UserId = @userId ORDER BY Year DESC, Month DESC",
+            $"SELECT {Cols} FROM \"dbo\".\"Payslips\" WHERE \"TenantId\" = @tenantId AND \"UserId\" = @userId ORDER BY \"Year\" DESC, \"Month\" DESC",
             new { tenantId, userId }, ct);
 
     /// Replace any payslip for this user/period and publish payroll figures (mobile payslip feed).
@@ -736,12 +737,12 @@ public sealed class PayslipRepository(IDbConnectionFactory factory) : BaseReposi
     {
         var slipStatus = string.IsNullOrWhiteSpace(status) ? "pending" : status.Trim().ToLowerInvariant();
         await ExecuteInlineAsync(
-            "DELETE FROM dbo.Payslips WHERE TenantId=@tenantId AND UserId=@userId AND Month=@month AND Year=@year",
+            "DELETE FROM \"dbo\".\"Payslips\" WHERE \"TenantId\"=@tenantId AND \"UserId\"=@userId AND \"Month\"=@month AND \"Year\"=@year",
             new { tenantId, userId, month, year }, ct);
         await ExecuteInlineAsync(
             """
-            INSERT dbo.Payslips (TenantId, UserId, Month, Year, Gross, Deductions, Net, Status,
-                Basic, Hra, Allowances, Epf, ProfTax, OtherDeductions)
+            INSERT INTO "dbo"."Payslips" ("TenantId", "UserId", "Month", "Year", "Gross", "Deductions", "Net", "Status",
+                "Basic", "Hra", "Allowances", "Epf", "ProfTax", "OtherDeductions")
             VALUES (@tenantId, @userId, @month, @year, @gross, @deductions, @net, @status,
                 @basic, @hra, @allowances, @epf, @profTax, @otherDeductions)
             """,
