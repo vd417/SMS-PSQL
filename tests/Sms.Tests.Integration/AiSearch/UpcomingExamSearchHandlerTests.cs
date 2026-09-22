@@ -52,8 +52,8 @@ public class UpcomingExamSearchHandlerTests(PostgresFixture fx)
         NpgsqlConnection conn, Guid id, Guid tenantId, string name, string? grades, DateTime? fromDate) =>
         await conn.ExecuteAsync(
             """
-            INSERT dbo.Exams (Id, TenantId, Name, Type, Grades, FromDate, ToDate, SubjectCount, Status, MarksEnteredPct, Published)
-            VALUES (@id, @tenantId, @name, N'term', @grades, @fromDate, @fromDate, 0, N'draft', 0, 0)
+            INSERT INTO "dbo"."Exams" ("Id", "TenantId", "Name", "Type", "Grades", "FromDate", "ToDate", "SubjectCount", "Status", "MarksEnteredPct", "Published")
+            VALUES (@id, @tenantId, @name, 'term', @grades, @fromDate, @fromDate, 0, 'draft', 0, false)
             """,
             new { id, tenantId, name, grades, fromDate });
 
