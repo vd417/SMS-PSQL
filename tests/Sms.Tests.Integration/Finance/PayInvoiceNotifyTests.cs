@@ -83,20 +83,20 @@ public class PayInvoiceNotifyTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@principalUserId, @tenantId, 'Priya Principal')",
             new { principalUserId, tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade, GuardianEmail, GuardianPhone) " +
+            "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Grade\", \"GuardianEmail\", \"GuardianPhone\") " +
             "VALUES (@studentId, @tenantId, 'A100', 'Aarav Sharma', 'active', '5', @guardianEmail, @guardianPhone)",
             new { studentId, tenantId, guardianEmail, guardianPhone });
         await conn.ExecuteAsync(
-            "INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, DueDate, Amount, Status) " +
+            "INSERT INTO \"dbo\".\"FeeInvoices\" (\"Id\", \"TenantId\", \"StudentId\", \"Period\", \"DueDate\", \"Amount\", \"Status\") " +
             "VALUES (@invoiceId, @tenantId, @studentId, 'Term 2 2026', '2026-03-15', 8500, 'due')",
             new { invoiceId, tenantId, studentId });
         if (guardianUserId is { } gid)
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name, Email) VALUES (@gid, @tenantId, 'Guardian Of Aarav', @guardianEmail)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\", \"Email\") VALUES (@gid, @tenantId, 'Guardian Of Aarav', @guardianEmail)",
                 new { gid, tenantId, guardianEmail });
         }
 
@@ -203,7 +203,7 @@ public class PayInvoiceNotifyTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         return await conn.QuerySingleAsync<Guid>(
-            "SELECT TOP 1 Id FROM dbo.Students WHERE TenantId = @tenantId", new { tenantId });
+            "SELECT \"Id\" FROM \"dbo\".\"Students\" WHERE \"TenantId\" = @tenantId LIMIT 1", new { tenantId });
     }
 
     [Fact]
@@ -255,15 +255,15 @@ public class PayInvoiceNotifyTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@principalUserId, @tenantId, 'Priya Principal')",
                 new { principalUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade, GuardianEmail, GuardianPhone) VALUES " +
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Grade\", \"GuardianEmail\", \"GuardianPhone\") VALUES " +
                 "(@studentAId, @tenantId, 'A100', 'Aarav Sharma', 'active', '5', 'guardian-a@school.test', '+91-9000000001'), " +
                 "(@studentBId, @tenantId, 'B100', 'Bela Iyer', 'active', '5', 'guardian-b@school.test', '+91-9000000002')",
                 new { studentAId, studentBId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, DueDate, Amount, Status) " +
+                "INSERT INTO \"dbo\".\"FeeInvoices\" (\"Id\", \"TenantId\", \"StudentId\", \"Period\", \"DueDate\", \"Amount\", \"Status\") " +
                 "VALUES (@invoiceAId, @tenantId, @studentAId, 'Term 2 2026', '2026-03-15', 8500, 'due')",
                 new { invoiceAId, tenantId, studentAId });
         }

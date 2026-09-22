@@ -46,10 +46,10 @@ public class GenerateInvoicesNotifyTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@principalUserId, @tenantId, 'Priya Principal')",
             new { principalUserId, tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade, GuardianEmail, GuardianPhone) " +
+            "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Grade\", \"GuardianEmail\", \"GuardianPhone\") " +
             "VALUES (@studentId, @tenantId, 'A100', 'Aarav Sharma', 'active', '5', 'guardian-aarav@school.test', '+91-9000000000')",
             new { studentId, tenantId });
 

@@ -55,13 +55,13 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@principalUserId, @tenantId, 'Priya Principal')",
             new { principalUserId, tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade) " +
+            "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Grade\") " +
             "VALUES (@studentId, @tenantId, 'A400', 'Webhook Kid', 'active', '8')", new { studentId, tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, Amount, PaidAmount, Status) " +
+            "INSERT INTO \"dbo\".\"FeeInvoices\" (\"Id\", \"TenantId\", \"StudentId\", \"Period\", \"Amount\", \"PaidAmount\", \"Status\") " +
             "VALUES (@invoiceId, @tenantId, @studentId, 'Term 1', 2000, 0, 'due')", new { invoiceId, tenantId, studentId });
         // GetActiveAsync unconditionally Unprotect()s these — must be produced via the app's own
         // IDataProtectionProvider under the same purpose TenantPaymentCredentialService uses, or it throws.
@@ -71,12 +71,12 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         var keySecretEncrypted = protector.Protect("irrelevant-for-this-test-fake-client");
         var webhookSecretEncrypted = protector.Protect("irrelevant-webhook-secret-fake-client");
         await conn.ExecuteAsync(
-            "INSERT dbo.TenantPaymentCredentials (TenantId, Provider, KeyId, KeySecretEncrypted, WebhookSecretEncrypted, Mode, IsEnabled) " +
-            "VALUES (@tenantId, 'razorpay', 'rzp_test_wh', @keySecretEncrypted, @webhookSecretEncrypted, 'test', 1)",
+            "INSERT INTO \"dbo\".\"TenantPaymentCredentials\" (\"TenantId\", \"Provider\", \"KeyId\", \"KeySecretEncrypted\", \"WebhookSecretEncrypted\", \"Mode\", \"IsEnabled\") " +
+            "VALUES (@tenantId, 'razorpay', 'rzp_test_wh', @keySecretEncrypted, @webhookSecretEncrypted, 'test', true)",
             new { tenantId, keySecretEncrypted, webhookSecretEncrypted });
         await conn.ExecuteAsync(
-            "INSERT dbo.FeePaymentOrders (Id, TenantId, InvoiceId, RazorpayOrderId, AmountPaise, Status, InitiatedBy) " +
-            "VALUES (NEWID(), @tenantId, @invoiceId, @orderId, 200000, 'Created', 'parent')", new { tenantId, invoiceId, orderId });
+            "INSERT INTO \"dbo\".\"FeePaymentOrders\" (\"Id\", \"TenantId\", \"InvoiceId\", \"RazorpayOrderId\", \"AmountPaise\", \"Status\", \"InitiatedBy\") " +
+            "VALUES (gen_random_uuid(), @tenantId, @invoiceId, @orderId, 200000, 'Created', 'parent')", new { tenantId, invoiceId, orderId });
         return (tenantId, principalUserId, invoiceId, orderId);
     }
 
@@ -121,7 +121,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var status = await conn.QuerySingleAsync<string>(
-            "SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceId", new { invoiceId });
+            "SELECT \"Status\" FROM \"dbo\".\"FeeInvoices\" WHERE \"Id\" = @invoiceId", new { invoiceId });
         status.Should().Be("paid");
     }
 
@@ -142,7 +142,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(
-            "SELECT COUNT(*) FROM dbo.FeePayments WHERE InvoiceId = @invoiceId", new { invoiceId });
+            "SELECT COUNT(*) FROM \"dbo\".\"FeePayments\" WHERE \"InvoiceId\" = @invoiceId", new { invoiceId });
         paymentCount.Should().Be(1);
     }
 
@@ -171,10 +171,10 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(
-            "SELECT COUNT(*) FROM dbo.FeePayments WHERE InvoiceId = @invoiceId", new { invoiceId });
+            "SELECT COUNT(*) FROM \"dbo\".\"FeePayments\" WHERE \"InvoiceId\" = @invoiceId", new { invoiceId });
         paymentCount.Should().Be(1);
         var status = await conn.QuerySingleAsync<string>(
-            "SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceId", new { invoiceId });
+            "SELECT \"Status\" FROM \"dbo\".\"FeeInvoices\" WHERE \"Id\" = @invoiceId", new { invoiceId });
         status.Should().Be("paid");
     }
 
@@ -200,10 +200,10 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var paymentCount = await conn.QuerySingleAsync<int>(
-            "SELECT COUNT(*) FROM dbo.FeePayments WHERE InvoiceId = @invoiceId", new { invoiceId });
+            "SELECT COUNT(*) FROM \"dbo\".\"FeePayments\" WHERE \"InvoiceId\" = @invoiceId", new { invoiceId });
         paymentCount.Should().Be(1);
         var status = await conn.QuerySingleAsync<string>(
-            "SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceId", new { invoiceId });
+            "SELECT \"Status\" FROM \"dbo\".\"FeeInvoices\" WHERE \"Id\" = @invoiceId", new { invoiceId });
         status.Should().Be("paid");
     }
 
@@ -221,7 +221,7 @@ public class RazorpayFeeWebhookTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         var status = await conn.QuerySingleAsync<string>(
-            "SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceId", new { invoiceId });
+            "SELECT \"Status\" FROM \"dbo\".\"FeeInvoices\" WHERE \"Id\" = @invoiceId", new { invoiceId });
         status.Should().Be("due");
     }
 

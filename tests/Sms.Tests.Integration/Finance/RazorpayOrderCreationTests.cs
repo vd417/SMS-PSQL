@@ -63,14 +63,14 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@principalUserId, @tenantId, 'Priya Principal')",
             new { principalUserId, tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade) " +
+            "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Grade\") " +
             "VALUES (@studentId, @tenantId, 'A200', 'Kabir Shah', 'active', '6')",
             new { studentId, tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, Amount, PaidAmount, Status) " +
+            "INSERT INTO \"dbo\".\"FeeInvoices\" (\"Id\", \"TenantId\", \"StudentId\", \"Period\", \"Amount\", \"PaidAmount\", \"Status\") " +
             "VALUES (@invoiceId, @tenantId, @studentId, 'Term 1', @invoiceAmount, 0, 'due')",
             new { invoiceId, tenantId, studentId, invoiceAmount });
         // KeySecretEncrypted must be produced via the app's own IDataProtectionProvider under the
@@ -81,8 +81,8 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
             .CreateProtector("TenantPaymentCredentials.Razorpay.v1");
         var encryptedSecret = protector.Protect("irrelevant-for-this-test-fake-client");
         await conn.ExecuteAsync(
-            "INSERT dbo.TenantPaymentCredentials (TenantId, Provider, KeyId, KeySecretEncrypted, Mode, IsEnabled) " +
-            "VALUES (@tenantId, 'razorpay', 'rzp_test_seed', @encryptedSecret, 'test', 1)",
+            "INSERT INTO \"dbo\".\"TenantPaymentCredentials\" (\"TenantId\", \"Provider\", \"KeyId\", \"KeySecretEncrypted\", \"Mode\", \"IsEnabled\") " +
+            "VALUES (@tenantId, 'razorpay', 'rzp_test_seed', @encryptedSecret, 'test', true)",
             new { tenantId, encryptedSecret });
 
         return (tenantId, principalUserId, studentId, invoiceId);
@@ -126,7 +126,7 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
         await conn.ExecuteAsync(
-            "UPDATE dbo.FeeInvoices SET PaidAmount = 1000, Status = 'paid' WHERE Id = @invoiceId", new { invoiceId });
+            "UPDATE \"dbo\".\"FeeInvoices\" SET \"PaidAmount\" = 1000, \"Status\" = 'paid' WHERE \"Id\" = @invoiceId", new { invoiceId });
         var client = AuthedClient(app, tenantId, principalUserId, "principal");
 
         var res = await client.PostAsync($"/v1/fees/invoices/{invoiceId}/razorpay/order", null);
@@ -147,13 +147,13 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@principalUserId, @tenantId, 'Priya Principal')",
                 new { principalUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade) " +
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Grade\") " +
                 "VALUES (@studentId, @tenantId, 'A201', 'No Creds', 'active', '6')", new { studentId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, Amount, PaidAmount, Status) " +
+                "INSERT INTO \"dbo\".\"FeeInvoices\" (\"Id\", \"TenantId\", \"StudentId\", \"Period\", \"Amount\", \"PaidAmount\", \"Status\") " +
                 "VALUES (@invoiceId, @tenantId, @studentId, 'Term 1', 1000, 0, 'due')", new { invoiceId, tenantId, studentId });
             // deliberately NOT inserting TenantPaymentCredentials
         }

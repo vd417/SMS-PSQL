@@ -95,8 +95,8 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
             .CreateProtector("TenantPaymentCredentials.Razorpay.v1");
         var encryptedSecret = protector.Protect("irrelevant-for-this-test-fake-client");
         await conn.ExecuteAsync(
-            "INSERT dbo.TenantPaymentCredentials (TenantId, Provider, KeyId, KeySecretEncrypted, Mode, IsEnabled) " +
-            "VALUES (@tenantId, 'razorpay', 'rzp_test_seed', @encryptedSecret, 'test', 1)",
+            "INSERT INTO \"dbo\".\"TenantPaymentCredentials\" (\"TenantId\", \"Provider\", \"KeyId\", \"KeySecretEncrypted\", \"Mode\", \"IsEnabled\") " +
+            "VALUES (@tenantId, 'razorpay', 'rzp_test_seed', @encryptedSecret, 'test', true)",
             new { tenantId, encryptedSecret });
     }
 
@@ -128,27 +128,27 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@parentUserId, @tenantId, 'Two Kids Parent')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@parentUserId, @tenantId, 'Two Kids Parent')",
                 new { parentUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade, GuardianEmail) " +
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Grade\", \"GuardianEmail\") " +
                 "VALUES (@studentA, @tenantId, 'A500', 'Child A', 'active', '4', 'twokids@school.test')",
                 new { studentA, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade, GuardianEmail) " +
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Grade\", \"GuardianEmail\") " +
                 "VALUES (@studentB, @tenantId, 'A501', 'Child B', 'active', '5', 'twokids@school.test')",
                 new { studentB, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@parentUserId, @studentA, @tenantId)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@parentUserId, @studentA, @tenantId)",
                 new { parentUserId, studentA, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId) VALUES (@parentUserId, @studentB, @tenantId)",
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@parentUserId, @studentB, @tenantId)",
                 new { parentUserId, studentB, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, Amount, PaidAmount, Status) " +
+                "INSERT INTO \"dbo\".\"FeeInvoices\" (\"Id\", \"TenantId\", \"StudentId\", \"Period\", \"Amount\", \"PaidAmount\", \"Status\") " +
                 "VALUES (@invoiceA, @tenantId, @studentA, 'Term 1', 3000, 0, 'due')", new { invoiceA, tenantId, studentA });
             await conn.ExecuteAsync(
-                "INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, Amount, PaidAmount, Status) " +
+                "INSERT INTO \"dbo\".\"FeeInvoices\" (\"Id\", \"TenantId\", \"StudentId\", \"Period\", \"Amount\", \"PaidAmount\", \"Status\") " +
                 "VALUES (@invoiceB, @tenantId, @studentB, 'Term 1', 4000, 0, 'due')", new { invoiceB, tenantId, studentB });
             await SeedCredentialsAsync(app, conn, tenantId);
         }
@@ -166,13 +166,13 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
         await check.OpenAsync();
         await check.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
 
-        var statusA = await check.QuerySingleAsync<string>("SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceA", new { invoiceA });
-        var statusB = await check.QuerySingleAsync<string>("SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceB", new { invoiceB });
+        var statusA = await check.QuerySingleAsync<string>("SELECT \"Status\" FROM \"dbo\".\"FeeInvoices\" WHERE \"Id\" = @invoiceA", new { invoiceA });
+        var statusB = await check.QuerySingleAsync<string>("SELECT \"Status\" FROM \"dbo\".\"FeeInvoices\" WHERE \"Id\" = @invoiceB", new { invoiceB });
         statusA.Should().Be("due"); // untouched
         statusB.Should().Be("paid");
 
-        var paymentsA = await check.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.FeePayments WHERE InvoiceId = @invoiceA", new { invoiceA });
-        var paymentsB = await check.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.FeePayments WHERE InvoiceId = @invoiceB", new { invoiceB });
+        var paymentsA = await check.QuerySingleAsync<int>("SELECT COUNT(*) FROM \"dbo\".\"FeePayments\" WHERE \"InvoiceId\" = @invoiceA", new { invoiceA });
+        var paymentsB = await check.QuerySingleAsync<int>("SELECT COUNT(*) FROM \"dbo\".\"FeePayments\" WHERE \"InvoiceId\" = @invoiceB", new { invoiceB });
         paymentsA.Should().Be(0);
         paymentsB.Should().Be(1);
 
@@ -208,16 +208,16 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
             // Tenant A: staff user only, no invoice of its own needed for this test.
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantAId::text, false)", new { tenantAId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@staffAUserId, @tenantAId, 'Staff In Tenant A')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@staffAUserId, @tenantAId, 'Staff In Tenant A')",
                 new { staffAUserId, tenantAId });
 
             // Tenant B: the invoice tenant A's staff will try to guess.
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantBId::text, false)", new { tenantBId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade) " +
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Grade\") " +
                 "VALUES (@studentBId, @tenantBId, 'B900', 'Tenant B Kid', 'active', '9')", new { studentBId, tenantBId });
             await conn.ExecuteAsync(
-                "INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, Amount, PaidAmount, Status) " +
+                "INSERT INTO \"dbo\".\"FeeInvoices\" (\"Id\", \"TenantId\", \"StudentId\", \"Period\", \"Amount\", \"PaidAmount\", \"Status\") " +
                 "VALUES (@invoiceBId, @tenantBId, @studentBId, 'Term 1', 2500, 0, 'due')", new { invoiceBId, tenantBId, studentBId });
             await SeedCredentialsAsync(app, conn, tenantBId);
         }
@@ -237,9 +237,9 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
         await using var check = new NpgsqlConnection(fx.ConnectionString);
         await check.OpenAsync();
         await check.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantBId::text, false)", new { tenantBId });
-        var status = await check.QuerySingleAsync<string>("SELECT Status FROM dbo.FeeInvoices WHERE Id = @invoiceBId", new { invoiceBId });
+        var status = await check.QuerySingleAsync<string>("SELECT \"Status\" FROM \"dbo\".\"FeeInvoices\" WHERE \"Id\" = @invoiceBId", new { invoiceBId });
         status.Should().Be("due");
-        var payments = await check.QuerySingleAsync<int>("SELECT COUNT(*) FROM dbo.FeePayments WHERE InvoiceId = @invoiceBId", new { invoiceBId });
+        var payments = await check.QuerySingleAsync<int>("SELECT COUNT(*) FROM \"dbo\".\"FeePayments\" WHERE \"InvoiceId\" = @invoiceBId", new { invoiceBId });
         payments.Should().Be(0);
     }
 
@@ -266,13 +266,13 @@ public class RazorpayFeePaymentAcceptanceTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Name) VALUES (@principalUserId, @tenantId, 'Priya Principal')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@principalUserId, @tenantId, 'Priya Principal')",
                 new { principalUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Status, Grade) " +
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\", \"Grade\") " +
                 "VALUES (@studentId, @tenantId, 'S700', 'Silver Tier Kid', 'active', '6')", new { studentId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.FeeInvoices (Id, TenantId, StudentId, Period, Amount, PaidAmount, Status) " +
+                "INSERT INTO \"dbo\".\"FeeInvoices\" (\"Id\", \"TenantId\", \"StudentId\", \"Period\", \"Amount\", \"PaidAmount\", \"Status\") " +
                 "VALUES (@invoiceId, @tenantId, @studentId, 'Term 1', 1500, 0, 'due')", new { invoiceId, tenantId, studentId });
             // Credentials ARE configured — the feature-tier gate, not the credentials gate, must be what blocks this.
             await SeedCredentialsAsync(app, conn, tenantId);

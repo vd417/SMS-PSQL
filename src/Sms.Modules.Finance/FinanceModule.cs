@@ -388,6 +388,11 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
             var feeType = string.IsNullOrWhiteSpace(req.FeeType)
                 ? (string.IsNullOrWhiteSpace(req.HeadName) ? "academic" : req.HeadName)
                 : req.FeeType;
+            // A savepoint before the risky INSERT: unlike SQL Server, Postgres aborts the whole
+            // transaction on ANY statement error (25P02 "current transaction is aborted" on every
+            // subsequent command until rollback) — without this, the catch block's own recovery
+            // SELECT below would itself fail immediately.
+            await tx.SaveAsync("payment_insert", ct);
             try
             {
                 await conn.ExecuteAsync(new CommandDefinition(
@@ -416,6 +421,7 @@ public sealed class FeeInvoiceRepository(IDbConnectionFactory factory, IAuditLog
             {
                 /* Concurrent request with the same IdempotencyKey won the race and inserted first —
                    fall back to returning that row instead of surfacing the unique-index violation. */
+                await tx.RollbackAsync("payment_insert", ct);
                 var raced = await conn.QuerySingleOrDefaultAsync<FeePaymentResponse>(new CommandDefinition(
                     """
                     SELECT "Id", "TenantId", "StudentId", "StudentName", "ClassLabel", "FeeType", "Amount", "Method", "Ref", "Date", "InvoiceId", "HeadId"
@@ -887,14 +893,8 @@ public sealed class FeeHeadRepository(IDbConnectionFactory factory) : BaseReposi
             """SELECT COUNT(1) FROM "dbo"."FeeHeads" WHERE "Id" = @id AND "TenantId" = @tenantId AND "IsTransportFeeHead" = true""",
             new { id, tenantId }, ct)).First() > 0;
 
-    public async Task<bool> DeleteAsync(Guid id, Guid tenantId, CancellationToken ct = default)
-    {
-        var row = await QuerySingleProcAsync<DeleteCountRow>("dbo.FeeHead_Delete",
-            new { Id = id, TenantId = tenantId }, ct);
-        return row is { Deleted: > 0 };
-    }
-
-    private sealed record DeleteCountRow(int Deleted);
+    public async Task<bool> DeleteAsync(Guid id, Guid tenantId, CancellationToken ct = default) =>
+        (await ExecuteProcAsync("dbo.FeeHead_Delete", new { Id = id, TenantId = tenantId }, ct)) > 0;
 }
 
 // ---- Fee structure (named document + class×head amounts JSON) ----
