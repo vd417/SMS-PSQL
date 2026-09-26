@@ -5,7 +5,7 @@ The canonical spec lives in the staff app repo:
 
 Backend changes it requires in this repo (see §3 of that spec):
 
-1. Trip start attribution — driver/conductor always taken from the bus assignment; caller must be the assigned driver or conductor (403 `not_assigned`); no assigned driver → 422 `no_driver_assigned`. Migration `0005_trip_start_assignment_attribution.sql`.
+1. Trip start attribution — driver/conductor always taken from the bus assignment; caller must be the assigned driver or conductor (403 `not_assigned`); no assigned driver → 422 `no_driver_assigned`. Done in C# before the unchanged `dbo.trip_start` call — no migration.
 2. `GET /v1/staff/trip/assignment` resolves for conductors too; adds `driver_name`.
 3. New participant-only `GET /v1/staff/trips/{tripId}/stops` returning authoritative `TripStopProgress` state.
 4. Staff trip JSON gains `current_stop_id`.
