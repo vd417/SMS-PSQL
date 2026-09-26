@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Dev-only seed for a *_dev database: one isolated "SchoolDesk Dev Seed" tenant (+ a minimal second
+         tenant for cross-tenant checks). Entry point is Sms.DevSeed.Cli (not a top-level Program) so the
+         integration tests can reference it alongside Sms.Api's Program, like Sms.PgMigrator. -->
+    <OutputType>Exe</OutputType>
+    <StartupObject>Sms.DevSeed.Cli</StartupObject>
+    <RootNamespace>Sms.DevSeed</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sms.Shared.Kernel\Sms.Shared.Kernel.csproj" />
+  </ItemGroup>
+</Project>
