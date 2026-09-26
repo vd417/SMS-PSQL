@@ -8,7 +8,6 @@
     <ProjectReference Include="..\Sms.Application\Sms.Application.csproj" />
     <ProjectReference Include="..\Sms.Infrastructure\Sms.Infrastructure.csproj" />
     <ProjectReference Include="..\Sms.Shared.Kernel\Sms.Shared.Kernel.csproj" />
-    <ProjectReference Include="..\..\db\Sms.Migrations\Sms.Migrations.csproj" />
     <ProjectReference Include="..\Sms.Modules.Identity\Sms.Modules.Identity.csproj" />
     <ProjectReference Include="..\Sms.Modules.Tenancy\Sms.Modules.Tenancy.csproj" />
     <ProjectReference Include="..\Sms.Modules.Sis\Sms.Modules.Sis.csproj" />

@@ -8,62 +8,18 @@ namespace Sms.Tests.Integration;
 /// order. Replaces the old SQL-Server-based fixture that ran the retired FluentMigrator history.
 public sealed class PostgresFixture : IAsyncLifetime
 {
-    private readonly string? _overrideCs =
-        Environment.GetEnvironmentVariable("SMS_TEST_PG_CONNECTION");
-    private readonly string _host =
-        Environment.GetEnvironmentVariable("SMS_TEST_PG_HOST") ?? "localhost";
     private readonly string _dbName = "sms_test_" + Guid.NewGuid().ToString("N");
     public string ConnectionString { get; private set; } = "";
 
-    private string AdminCs =>
-        !string.IsNullOrEmpty(_overrideCs)
-            ? new NpgsqlConnectionStringBuilder(_overrideCs) { Database = "postgres" }.ConnectionString
-            : new NpgsqlConnectionStringBuilder
-            {
-                Host = _host, Database = "postgres", Username = "postgres",
-                Password = Environment.GetEnvironmentVariable("SMS_TEST_PG_PASSWORD"),
-            }.ConnectionString;
-
-    private string DbCs(string db) =>
-        !string.IsNullOrEmpty(_overrideCs)
-            ? new NpgsqlConnectionStringBuilder(_overrideCs) { Database = db }.ConnectionString
-            : new NpgsqlConnectionStringBuilder
-            {
-                Host = _host, Database = db, Username = "postgres",
-                Password = Environment.GetEnvironmentVariable("SMS_TEST_PG_PASSWORD"),
-            }.ConnectionString;
-
-    // The app-facing connection string, returned as ConnectionString below: a non-superuser
-    // role (created by db/postgres/00_app_role.sql, part of the schema applied in
-    // InitializeAsync) so RLS policies actually apply during tests -- a Postgres superuser
-    // always bypasses RLS even with FORCE ROW LEVEL SECURITY, which would otherwise make every
-    // test run with tenant isolation silently disabled.
-    private string AppCs(string db) =>
-        !string.IsNullOrEmpty(_overrideCs)
-            ? new NpgsqlConnectionStringBuilder(_overrideCs) { Database = db, Username = "sms_app", Password = "sms_app_dev_pw" }.ConnectionString
-            : new NpgsqlConnectionStringBuilder
-            {
-                Host = _host, Database = db, Username = "sms_app", Password = "sms_app_dev_pw",
-            }.ConnectionString;
-
     public async Task InitializeAsync()
     {
-        await using (var admin = new NpgsqlConnection(AdminCs))
-        {
-            await admin.OpenAsync();
-            await using var create = admin.CreateCommand();
-            // Database names can't be parameterised; _dbName is our own generated guid-based
-            // name, never external input, so this is not a SQL-injection boundary.
-            create.CommandText = $"CREATE DATABASE \"{_dbName}\";";
-            await create.ExecuteNonQueryAsync();
-        }
+        await TestPostgresServer.CreateDatabaseAsync(_dbName);
 
         var schemaDir = Path.Combine(AppContext.BaseDirectory, "postgres-schema");
         var files = Directory.GetFiles(schemaDir, "*.sql").OrderBy(f => f, StringComparer.Ordinal);
 
-        // Schema application (CREATE ROLE, ENABLE/FORCE RLS, GRANT) needs superuser privilege,
-        // so this loop still runs on the admin/superuser connection to the new database.
-        await using (var conn = new NpgsqlConnection(DbCs(_dbName)))
+        // Schema application (CREATE ROLE, ENABLE/FORCE RLS, GRANT) needs superuser privilege.
+        await using (var conn = new NpgsqlConnection(TestPostgresServer.ForDatabase(_dbName)))
         {
             await conn.OpenAsync();
             foreach (var file in files)
@@ -76,23 +32,10 @@ public sealed class PostgresFixture : IAsyncLifetime
 
         // The app itself (and therefore every test) connects as the non-superuser role from
         // here on, so RLS policies are genuinely exercised.
-        ConnectionString = AppCs(_dbName);
+        ConnectionString = TestPostgresServer.AppConnectionString(_dbName);
     }
 
-    public async Task DisposeAsync()
-    {
-        await using var admin = new NpgsqlConnection(AdminCs);
-        await admin.OpenAsync();
-        await using var terminate = admin.CreateCommand();
-        terminate.CommandText =
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = @db AND pid <> pg_backend_pid();";
-        terminate.Parameters.AddWithValue("db", _dbName);
-        await terminate.ExecuteNonQueryAsync();
-
-        await using var drop = admin.CreateCommand();
-        drop.CommandText = $"DROP DATABASE IF EXISTS \"{_dbName}\";";
-        await drop.ExecuteNonQueryAsync();
-    }
+    public Task DisposeAsync() => TestPostgresServer.DropDatabaseAsync(_dbName);
 }
 
 [CollectionDefinition("sql")]

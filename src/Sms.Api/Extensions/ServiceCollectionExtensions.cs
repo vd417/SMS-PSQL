@@ -20,7 +20,6 @@ using Sms.Application.Services.Tasks;
 using Sms.Application.Services.Transport;
 using Sms.Application;
 using Sms.Infrastructure;
-using Sms.Migrations;
 using Sms.Modules.Academics;
 using Sms.Modules.AiSearch;
 using Sms.Modules.AiSearch.Data;

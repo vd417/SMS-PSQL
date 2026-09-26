@@ -14,7 +14,9 @@ services:
     build: { context: ., dockerfile: src/Sms.Api/Dockerfile }
     depends_on: [db]
     environment:
-      ConnectionStrings__Sql: "Host=db;Port=5432;Database=sms_dev;Username=sms;Password=Local_Dev_Pass123!"
+      # The API connects as the non-superuser sms_app role (db/postgres/00_app_role.sql), never as the
+      # "sms" bootstrap superuser above: a superuser bypasses every RLS policy.
+      ConnectionStrings__Sql: "Host=db;Port=5432;Database=sms_dev;Username=sms_app;Password=sms_app_dev_pw"
       Jwt__SigningKey: "compose-dev-signing-key-at-least-32-bytes!!"
       ASPNETCORE_ENVIRONMENT: "Development"
       # DataProtection keys must survive `docker compose restart`/recreate or every school's

@@ -3,7 +3,6 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Serilog;
 using Sms.Api.Endpoints.Auth;
 using Sms.Api.Extensions;
-using Sms.Migrations;
 using Sms.Shared.Kernel.Http;
 using Sms.Shared.Kernel.Results;
 using Sms.Shared.Kernel.Tenancy;
@@ -31,6 +30,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+await DatabaseRoleGuard.RunAsync(app);
 await PlatformAdminSeeder.RunAsync(app);
 await Sms.Api.Metrics.MetricsSnapshotWriter.RunAsync(app);
 
