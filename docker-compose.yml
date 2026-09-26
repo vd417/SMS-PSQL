@@ -10,9 +10,25 @@ services:
       - db-data:/var/lib/postgresql/data
       # Files here run once, in name order, only against a brand-new (empty) data volume.
       - ./db/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "sms", "-d", "sms_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  # One-shot: applies pending db/postgres/migrations on top of the baseline initdb created, as
+  # the schema owner (the sms bootstrap superuser). The API only starts after it succeeds.
+  migrate:
+    build: { context: ., dockerfile: db/Sms.PgMigrator/Dockerfile }
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      SMS_MIGRATOR_CONNECTION: "Host=db;Port=5432;Database=sms_dev;Username=sms;Password=Local_Dev_Pass123!"
+    command: ["migrate"]
   api:
     build: { context: ., dockerfile: src/Sms.Api/Dockerfile }
-    depends_on: [db]
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     environment:
       # The API connects as the non-superuser sms_app role (db/postgres/00_app_role.sql), never as the
       # "sms" bootstrap superuser above: a superuser bypasses every RLS policy.
