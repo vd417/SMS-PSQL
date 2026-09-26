@@ -32,7 +32,7 @@ public sealed record StartBusTripRequest(string? Direction);
 /// School-admin transport surface (Operations screen). Distinct from the teacher-app /v1/bus routes.
 [Route("v1/transport")]
 [Authorize(Policy = Policies.Principal)]
-public sealed class TransportController(IBusService bus, IStudentBusService studentBus) : ApiControllerBase
+public sealed class TransportController(IBusService bus, IStudentBusService studentBus, IBusNotifyService notify) : ApiControllerBase
 {
     [HttpGet("summary")]
     public async Task<IActionResult> Summary(CancellationToken ct) =>
@@ -100,6 +100,11 @@ public sealed class TransportController(IBusService bus, IStudentBusService stud
     [HttpDelete("buses/{busId:guid}/students/{studentId:guid}")]
     public async Task<IActionResult> UnassignStudent(Guid busId, Guid studentId, CancellationToken ct) =>
         FromResult(await studentBus.UnassignAsync(studentId, ct));
+
+    [HttpPost("buses/{busId:guid}/notify")]
+    public async Task<IActionResult> NotifyParents(
+        Guid busId, [FromBody] SendBusNotificationRequest req, CancellationToken ct) =>
+        FromResult(await notify.NotifyAsync(busId, req, ct));
 
     [HttpGet("routes")]
     public async Task<IActionResult> ListRoutes(CancellationToken ct) =>

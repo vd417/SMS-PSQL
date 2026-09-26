@@ -154,4 +154,32 @@ public class GeofenceCheckinTests(PostgresFixture fx)
 
         (await client.GetAsync("/v1/me/attendance/school-location")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
+
+    [Fact]
+    public async Task Principal_can_delete_school_location_and_it_is_gone()
+    {
+        await using var app = App();
+        var tenantId = Guid.NewGuid();
+        await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
+        var principal = PrincipalClient(app, tenantId);
+        await SetSchoolLocation(principal);
+
+        (await principal.DeleteAsync("/v1/me/attendance/school-location")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var err = await Error(await principal.GetAsync("/v1/me/attendance/school-location"), HttpStatusCode.NotFound);
+        err.GetProperty("code").GetString().Should().Be("school_location_not_configured");
+    }
+
+    [Fact]
+    public async Task Teacher_cannot_delete_school_location()
+    {
+        await using var app = App();
+        var tenantId = Guid.NewGuid();
+        await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
+        await SetSchoolLocation(PrincipalClient(app, tenantId));
+        var teacher = TeacherClient(app, tenantId, Guid.NewGuid());
+
+        (await teacher.DeleteAsync("/v1/me/attendance/school-location")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await teacher.GetAsync("/v1/me/attendance/school-location")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
 }

@@ -19,6 +19,11 @@ public sealed class AttendanceController(IAttendanceService attendance) : ApiCon
     public async Task<IActionResult> UpsertSchoolLocation([FromBody] UpsertSchoolLocationRequest req, CancellationToken ct) =>
         FromResult(await attendance.UpsertSchoolLocationAsync(req, ct));
 
+    [HttpDelete("school-location")]
+    [Authorize(Policy = Policies.Principal)]
+    public async Task<IActionResult> DeleteSchoolLocation(CancellationToken ct) =>
+        FromResult(await attendance.DeleteSchoolLocationAsync(ct));
+
     [HttpPost("punch")]
     public async Task<IActionResult> Punch([FromBody] PunchRequest req, CancellationToken ct) =>
         FromResult(await attendance.PunchAsync(req, ct));
