@@ -107,7 +107,9 @@ public class TripBroadcastTests(PostgresFixture fx)
         var (app, fleet, live) = App();
         await using var _ = app;
         var tenantId = Guid.NewGuid();
-        var client = StaffClient(app, tenantId, Guid.NewGuid());
+        var userId = Guid.NewGuid();
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, "KA-01-F-3301", userId);
+        var client = StaffClient(app, tenantId, userId);
 
         var start = await client.PostAsJsonAsync("/v1/staff/trips",
             new { direction = "pickup", bus_no = "KA-01-F-3301" });
@@ -158,6 +160,7 @@ public class TripBroadcastTests(PostgresFixture fx)
                 new { Id = Guid.NewGuid(), TenantId = tenantId, BusNo = busNo, ConductorStaffId = conductorStaffId });
         }
 
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, driverUserId);
         var driver = StaffClient(app, tenantId, driverUserId);
         var trip = await Data(await driver.PostAsJsonAsync("/v1/staff/trips",
             new { direction = "pickup", bus_no = busNo }), HttpStatusCode.Created);
@@ -195,6 +198,7 @@ public class TripBroadcastTests(PostgresFixture fx)
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
         }
 
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, driverUserId);
         var driver = StaffClient(app, tenantId, driverUserId);
         var trip = await Data(await driver.PostAsJsonAsync("/v1/staff/trips",
             new { direction = "pickup", bus_no = busNo }), HttpStatusCode.Created);
@@ -248,15 +252,16 @@ public class TripBroadcastTests(PostgresFixture fx)
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
         }
 
-        var driver = StaffClient(app, tenantId, Guid.NewGuid());
+        var driverId = Guid.NewGuid();
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, driverId);
+        var driver = StaffClient(app, tenantId, driverId);
         var first = await driver.PostAsJsonAsync("/v1/staff/trips", new { direction = "pickup", bus_no = busNo });
         first.StatusCode.Should().Be(HttpStatusCode.Created);
 
         // A different driver (or the same one retrying) trying to start a second trip on the
         // same bus while the first is still live must be rejected, not silently create a
         // second concurrent "live" trip on the same physical bus.
-        var otherDriver = StaffClient(app, tenantId, Guid.NewGuid());
-        var second = await otherDriver.PostAsJsonAsync("/v1/staff/trips", new { direction = "pickup", bus_no = busNo });
+        var second = await driver.PostAsJsonAsync("/v1/staff/trips", new { direction = "pickup", bus_no = busNo });
         second.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
@@ -290,6 +295,7 @@ public class TripBroadcastTests(PostgresFixture fx)
                 new { Id = stopId, TenantId = tenantId, RouteId = routeId, Lat = stopLat, Lng = stopLng });
         }
 
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, driverUserId);
         var driver = StaffClient(app, tenantId, driverUserId);
         var trip = await Data(await driver.PostAsJsonAsync("/v1/staff/trips",
             new { direction = "pickup", bus_no = busNo, route_id = routeId }), HttpStatusCode.Created);

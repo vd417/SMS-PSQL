@@ -143,6 +143,7 @@ public class StaffTripAssignmentTests(PostgresFixture fx)
                 new { Id = Guid.NewGuid(), TenantId = tenantId, StudentId = studentId, BusId = busId, StopId = stopId });
         });
 
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, userId);
         var client = DriverClient(app, tenantId, userId);
         var trip = await Data(await client.PostAsJsonAsync("/v1/staff/trips",
             new { direction = "pickup", bus_no = busNo }), HttpStatusCode.Created);
@@ -159,7 +160,9 @@ public class StaffTripAssignmentTests(PostgresFixture fx)
     {
         await using var app = App();
         var tenantId = Guid.NewGuid();
-        var owner = DriverClient(app, tenantId, Guid.NewGuid());
+        var ownerId = Guid.NewGuid();
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, "KA-01-F-4501", ownerId);
+        var owner = DriverClient(app, tenantId, ownerId);
         var peer = DriverClient(app, tenantId, Guid.NewGuid());
 
         var trip = await Data(await owner.PostAsJsonAsync("/v1/staff/trips",
