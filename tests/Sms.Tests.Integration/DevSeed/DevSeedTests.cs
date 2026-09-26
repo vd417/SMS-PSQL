@@ -63,13 +63,24 @@ public class DevSeedTests(PostgresFixture fx)
     [Fact]
     public async Task Seed_fails_and_commits_nothing_when_a_seed_row_is_shadowed()
     {
-        // A non-seed tenant already owns the slug a seed tenant wants, so ON CONFLICT DO NOTHING would
-        // silently skip it. The runner must detect that and roll everything back.
-        var rows = SeedData.Build(new PasswordHasher());
-        var shadowSlug = (string)rows.First(r => r.Table == "Tenants").Values["Slug"] + "-shadow-test";
-        var shadowed = rows.Select(r => r.Table == "Tenants" && (Guid)r.Values["Id"] == SeedData.MainTenantId
-                ? r with { Values = new Dictionary<string, object>(r.Values) { ["Id"] = SeedIds.Of("shadow.tenant"), ["Slug"] = shadowSlug } }
-                : r).ToList();
+        // A non-seed tenant already owns the slug a seed (shadowed) tenant wants, so ON CONFLICT DO
+        // NOTHING would silently skip it. The runner must detect that and roll everything back —
+        // including the probe row, which has no conflict of its own and would otherwise insert cleanly.
+        // That is what proves rollback rather than merely proving the shadowed row itself never lands
+        // (it never would, conflict or not).
+        var probeId = SeedIds.Of($"probe.{Guid.NewGuid()}");
+        var probeSlug = $"commit-nothing-probe-{Guid.NewGuid():N}";
+        var shadowSlug = $"commit-nothing-shadow-{Guid.NewGuid():N}";
+        var shadowedId = SeedIds.Of("shadow.tenant");
+
+        var rows = new List<SeedRow>
+        {
+            new("Tenants", new Dictionary<string, object>
+                { ["Id"] = probeId, ["Name"] = "Probe", ["Slug"] = probeSlug, ["Status"] = "active" }),
+            new("Tenants", new Dictionary<string, object>
+                { ["Id"] = shadowedId, ["Name"] = "Shadowed", ["Slug"] = shadowSlug, ["Status"] = "active" }),
+        };
+
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
@@ -80,13 +91,13 @@ public class DevSeedTests(PostgresFixture fx)
             await cmd.ExecuteNonQueryAsync();
         }
 
-        var act = () => SeedRunner.RunAsync(fx.ConnectionString, shadowed);
+        var act = () => SeedRunner.RunAsync(fx.ConnectionString, rows);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*shadowed*");
         await using var check = new NpgsqlConnection(fx.ConnectionString);
         await check.OpenAsync();
         await using var q = new NpgsqlCommand("""SELECT count(*) FROM "dbo"."Tenants" WHERE "Id" = @id""", check);
-        q.Parameters.AddWithValue("id", SeedIds.Of("shadow.tenant"));
+        q.Parameters.AddWithValue("id", probeId);
         ((long)(await q.ExecuteScalarAsync())!).Should().Be(0);
     }
 }
