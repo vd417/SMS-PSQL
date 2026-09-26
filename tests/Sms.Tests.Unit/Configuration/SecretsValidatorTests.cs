@@ -7,7 +7,7 @@ namespace Sms.Tests.Unit.Configuration;
 public class SecretsValidatorTests
 {
     private const string ValidKey = "a-perfectly-fine-signing-key-32-bytes-min!!";
-    private const string Conn = "Server=x;Database=y;Trusted_Connection=True;";
+    private const string Conn = "Host=x;Database=y;Username=sms_app;Password=p";
 
     [Fact]
     public void Passes_with_valid_key_and_connection() =>
