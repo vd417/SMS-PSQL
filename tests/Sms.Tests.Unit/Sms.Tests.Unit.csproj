@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sms.Shared.Kernel\Sms.Shared.Kernel.csproj" />
+    <ProjectReference Include="..\..\db\Sms.PgMigrator\Sms.PgMigrator.csproj" />
     <ProjectReference Include="..\..\src\Sms.Application\Sms.Application.csproj" />
     <ProjectReference Include="..\..\src\Sms.Modules.Issues\Sms.Modules.Issues.csproj" />
   </ItemGroup>

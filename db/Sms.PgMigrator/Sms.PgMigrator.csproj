@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Postgres schema runner: `init` (empty DB -> baseline + migrations), `migrate` (existing DB ->
+         pending migrations), `status`. The entry point is Sms.PgMigrator.Cli (not a top-level Program)
+         so the integration tests can reference this project alongside Sms.Api's Program. -->
+    <OutputType>Exe</OutputType>
+    <StartupObject>Sms.PgMigrator.Cli</StartupObject>
+    <RootNamespace>Sms.PgMigrator</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\postgres\*.sql" LinkBase="baseline" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\postgres\migrations\*.sql" LinkBase="migrations" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

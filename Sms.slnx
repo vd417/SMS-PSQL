@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/db/">
     <Project Path="db/Sms.Migrations/Sms.Migrations.csproj" />
+    <Project Path="db/Sms.PgMigrator/Sms.PgMigrator.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Sms.Api/Sms.Api.csproj" />
