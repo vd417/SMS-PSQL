@@ -29,7 +29,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sms.Shared.Kernel\Sms.Shared.Kernel.csproj" />
-    <ProjectReference Include="..\..\db\Sms.Migrations\Sms.Migrations.csproj" />
     <ProjectReference Include="..\..\src\Sms.Api\Sms.Api.csproj" />
     <ProjectReference Include="..\..\db\Sms.PgMigrator\Sms.PgMigrator.csproj" />
   </ItemGroup>

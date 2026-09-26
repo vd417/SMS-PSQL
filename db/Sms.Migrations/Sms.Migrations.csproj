@@ -4,11 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- Runnable as a CLI for prod migrations, while still referenced as a library by Sms.Api and the
-         tests. StartupObject avoids emitting a top-level Program type that would clash with Sms.Api's
-         Program in the test project. See MigrateCli.cs for the entrypoint usage. -->
-    <OutputType>Exe</OutputType>
-    <StartupObject>Sms.Migrations.MigrateCli</StartupObject>
+    <!-- Historical reference only: the retired SQL Server FluentMigrator history (M0001..M0210 and procs/). Nothing runs it; Postgres schema changes go through db/Sms.PgMigrator. -->
   </PropertyGroup>
 
   <ItemGroup>
