@@ -60,6 +60,23 @@ public sealed class RealMigrationsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Migrate_removes_the_redundant_metrics_unique_even_under_a_drifted_name()
+    {
+        // sms_dev (built before this runner) carries the redundant UNIQUE ("Month") under a
+        // lowercase name, so a drop by the baseline's exact name would silently do nothing.
+        var db = await NewDbAsync();
+        (await Runner(db, _empty).InitAsync()).Should().BeEmpty();
+        await db.ExecAsync(
+            """ALTER TABLE dbo."PlatformMetricsSnapshot" RENAME CONSTRAINT "PlatformMetricsSnapshot_Month_key" TO platformmetricssnapshot_month_key""");
+
+        await Runner(db, Migrations).MigrateAsync();
+
+        (await db.ScalarAsync<string>(
+            """SELECT string_agg(conname, ',' ORDER BY conname) FROM pg_constraint WHERE conrelid = 'dbo."PlatformMetricsSnapshot"'::regclass AND contype IN ('p', 'u')"""))
+            .Should().Be("PK_PlatformMetricsSnapshot");
+    }
+
+    [Fact]
     public async Task Migrate_brings_a_baseline_only_database_up_to_date()
     {
         var db = await NewDbAsync();
