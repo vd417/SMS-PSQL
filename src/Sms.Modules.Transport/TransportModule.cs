@@ -24,7 +24,8 @@ public sealed record BoardingRequest(Guid StudentId, Guid? StopId, string State,
 public sealed record StaffStopResponse(Guid Id, string Name, double Lat, double Lng, int Seq, int? EtaMin);
 public sealed record StaffRouteResponse(Guid Id, string Name, string BusNo, IReadOnlyList<StaffStopResponse> Stops);
 public sealed record StaffTripAssignmentResponse(
-    StaffRouteResponse Route, Guid BusId, string BusNo, string? ConductorName, string? Shift, int StudentsAssigned);
+    StaffRouteResponse Route, Guid BusId, string BusNo, string? ConductorName, string? Shift, int StudentsAssigned,
+    string? DriverName = null);
 public sealed record StaffRosterStudentResponse(Guid Id, string Name, Guid? StopId, string? PhotoUrl);
 public sealed record StaffBusRouteSummaryResponse(string BusNo, string RouteName, string? Shift, int StudentsAssigned);
 public sealed record StaleTripRow(Guid TripId, Guid BusId, Guid TenantId, DateTime? LastPingAt);
@@ -147,19 +148,22 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
         return new TripSummaryResponse(tripId, durationMin, Math.Round(metres / 1000, 2), stops, boarded);
     }
 
-    private sealed record AssignedBusRow(Guid BusId, string BusNo, Guid? RouteId, string? ConductorName, string? Shift);
+    private sealed record AssignedBusRow(Guid BusId, string BusNo, Guid? RouteId, string? DriverName, string? ConductorName, string? Shift);
     private sealed record RouteRow(Guid Id, string Name);
 
-    /// Resolved by the driver's own identity (Staff.UserId -> Buses.DriverStaffId), never by a
-    /// client-supplied id, so the Trip screen's first load needs nothing but the caller's JWT.
-    public async Task<StaffTripAssignmentResponse?> GetAssignmentAsync(Guid driverUserId, CancellationToken ct = default)
+    /// Resolved by the caller's own identity (Staff.UserId -> Buses.DriverStaffId or
+    /// ConductorStaffId), never by a client-supplied id. Shift is the caller's own.
+    public async Task<StaffTripAssignmentResponse?> GetAssignmentAsync(Guid userId, CancellationToken ct = default)
     {
         var bus = (await QueryInlineAsync<AssignedBusRow>(
-            @"SELECT b.""Id"" AS ""BusId"", b.""BusNo"", b.""RouteId"", cs.""Name"" AS ""ConductorName"", s.""Shift""
+            @"SELECT b.""Id"" AS ""BusId"", b.""BusNo"", b.""RouteId"", ds.""Name"" AS ""DriverName"", cs.""Name"" AS ""ConductorName"",
+                     CASE WHEN ds.""UserId"" = @userId THEN ds.""Shift"" ELSE cs.""Shift"" END AS ""Shift""
               FROM ""dbo"".""Buses"" b
-              JOIN ""dbo"".""Staff"" s ON s.""Id"" = b.""DriverStaffId""
+              LEFT JOIN ""dbo"".""Staff"" ds ON ds.""Id"" = b.""DriverStaffId""
               LEFT JOIN ""dbo"".""Staff"" cs ON cs.""Id"" = b.""ConductorStaffId""
-              WHERE s.""UserId"" = @driverUserId", new { driverUserId }, ct)).FirstOrDefault();
+              WHERE ds.""UserId"" = @userId OR cs.""UserId"" = @userId
+              ORDER BY (ds.""UserId"" = @userId) DESC NULLS LAST, b.""Id""
+              LIMIT 1", new { userId }, ct)).FirstOrDefault();
         if (bus?.RouteId is not { } routeId) return null;
 
         var route = (await QueryInlineAsync<RouteRow>(
@@ -174,7 +178,8 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
             "SELECT CAST(COUNT(*) AS int) FROM \"dbo\".\"StudentBusAssignments\" WHERE \"BusId\" = @busId", new { busId = bus.BusId }, ct)).First();
 
         return new StaffTripAssignmentResponse(
-            new StaffRouteResponse(route.Id, route.Name, bus.BusNo, stops), bus.BusId, bus.BusNo, bus.ConductorName, bus.Shift, studentsAssigned);
+            new StaffRouteResponse(route.Id, route.Name, bus.BusNo, stops), bus.BusId, bus.BusNo, bus.ConductorName, bus.Shift, studentsAssigned,
+            bus.DriverName);
     }
 
     /// Lightweight bus+route lookup for the staff dashboard's role card — driver/conductor

@@ -171,4 +171,60 @@ public class StaffTripAssignmentTests(PostgresFixture fx)
 
         (await peer.GetAsync($"/v1/staff/trips/{tripId}/roster")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
+
+    [Fact]
+    public async Task GetAssignment_resolves_for_the_buses_conductor_with_both_names()
+    {
+        await using var app = App();
+        var (tenantId, driverUserId, conductorUserId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var (driverStaffId, conductorStaffId, busId, routeId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var busNo = $"KA-{Guid.NewGuid():N}"[..12];
+
+        await Seed(fx.ConnectionString, tenantId, async conn =>
+        {
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\", \"Shift\", \"UserId\") VALUES (@Id, @TenantId, @Name, @Shift, @UserId)",
+                new[]
+                {
+                    new { Id = driverStaffId, TenantId = tenantId, Name = "Ram Kumar", Shift = "7:00 AM - 4:00 PM", UserId = driverUserId },
+                    new { Id = conductorStaffId, TenantId = tenantId, Name = "Priya Rao", Shift = "7:30 AM - 4:30 PM", UserId = conductorUserId },
+                });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'North Route')",
+                new { Id = routeId, TenantId = tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\", \"DriverStaffId\", \"ConductorStaffId\") VALUES (@Id, @TenantId, @BusNo, @RouteId, @D, @C)",
+                new { Id = busId, TenantId = tenantId, BusNo = busNo, RouteId = routeId, D = driverStaffId, C = conductorStaffId });
+        });
+
+        var data = await Data(await DriverClient(app, tenantId, conductorUserId).GetAsync("/v1/staff/trip/assignment"), HttpStatusCode.OK);
+
+        data.GetProperty("bus_id").GetGuid().Should().Be(busId);
+        data.GetProperty("driver_name").GetString().Should().Be("Ram Kumar");
+        data.GetProperty("conductor_name").GetString().Should().Be("Priya Rao");
+        data.GetProperty("shift").GetString().Should().Be("7:30 AM - 4:30 PM", "shift is the caller's own");
+    }
+
+    [Fact]
+    public async Task GetAssignment_for_the_driver_includes_driver_name()
+    {
+        await using var app = App();
+        var (tenantId, userId, staffId, routeId) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var busNo = $"KA-{Guid.NewGuid():N}"[..12];
+        await Seed(fx.ConnectionString, tenantId, async conn =>
+        {
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@Id, @TenantId, 'Ram Kumar', @UserId)",
+                new { Id = staffId, TenantId = tenantId, UserId = userId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'North Route')",
+                new { Id = routeId, TenantId = tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\", \"RouteId\", \"DriverStaffId\") VALUES (gen_random_uuid(), @TenantId, @BusNo, @RouteId, @D)",
+                new { TenantId = tenantId, BusNo = busNo, RouteId = routeId, D = staffId });
+        });
+
+        var data = await Data(await DriverClient(app, tenantId, userId).GetAsync("/v1/staff/trip/assignment"), HttpStatusCode.OK);
+        data.GetProperty("driver_name").GetString().Should().Be("Ram Kumar");
+    }
 }
