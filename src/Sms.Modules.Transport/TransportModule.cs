@@ -28,6 +28,7 @@ public sealed record StaffTripAssignmentResponse(
 public sealed record StaffRosterStudentResponse(Guid Id, string Name, Guid? StopId, string? PhotoUrl);
 public sealed record StaffBusRouteSummaryResponse(string BusNo, string RouteName, string? Shift, int StudentsAssigned);
 public sealed record StaleTripRow(Guid TripId, Guid BusId, Guid TenantId, DateTime? LastPingAt);
+public sealed record BusAssignmentRow(Guid BusId, Guid? RouteId, Guid? DriverUserId, Guid? ConductorUserId);
 
 public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
@@ -39,6 +40,17 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
     public Task<TripResponse?> StartAsync(Guid tenantId, Guid driverId, StartTripRequest r, CancellationToken ct = default) =>
         QuerySingleProcAsync<TripResponse>("dbo.Trip_Start",
             new { TenantId = tenantId, r.RouteId, r.BusNo, DriverId = driverId, r.Direction }, ct);
+
+    /// The bus's assigned driver/conductor login identities — the authoritative attribution for
+    /// a staff-started trip. Tenant-filtered explicitly on top of RLS, like Trip_Start itself.
+    public async Task<BusAssignmentRow?> GetBusAssignmentByNoAsync(Guid tenantId, string busNo, CancellationToken ct = default) =>
+        (await QueryInlineAsync<BusAssignmentRow>(
+            @"SELECT b.""Id"" AS ""BusId"", b.""RouteId"", ds.""UserId"" AS ""DriverUserId"", cs.""UserId"" AS ""ConductorUserId""
+              FROM ""dbo"".""Buses"" b
+              LEFT JOIN ""dbo"".""Staff"" ds ON ds.""Id"" = b.""DriverStaffId""
+              LEFT JOIN ""dbo"".""Staff"" cs ON cs.""Id"" = b.""ConductorStaffId""
+              WHERE b.""TenantId"" = @tenantId AND b.""BusNo"" = @busNo
+              ORDER BY b.""Id"" LIMIT 1", new { tenantId, busNo }, ct)).FirstOrDefault();
 
     public async Task<TripResponse?> GetCurrentAsync(Guid userId, CancellationToken ct = default) =>
         (await QueryInlineAsync<TripResponse>(

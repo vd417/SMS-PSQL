@@ -146,8 +146,8 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         // would still see this bus's pickup trip stuck at 'arrived' forever and reject the
         // return/drop leg — the headline scenario this whole feature exists to support.
         await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, "BUS-1", driverId);
-        var startRes = await client.PostAsJsonAsync("/v1/staff/trips", new { RouteId = (Guid?)null, BusNo = "BUS-1", Direction = "drop" });
-        startRes.IsSuccessStatusCode.Should().BeTrue();
+        var startRes = await client.PostAsJsonAsync("/v1/staff/trips", new { route_id = (Guid?)null, bus_no = "BUS-1", direction = "drop" });
+        startRes.IsSuccessStatusCode.Should().BeTrue(await startRes.Content.ReadAsStringAsync());
     }
 
     [Fact]

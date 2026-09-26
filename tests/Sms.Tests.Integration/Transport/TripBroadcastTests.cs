@@ -341,6 +341,10 @@ public class TripBroadcastTests(PostgresFixture fx)
                 "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
         }
+        // The admin/CRM start path reuses TripService.StartAsync, which now requires the
+        // caller to be the bus's assigned driver or conductor — assign the principal as the
+        // bus's driver so this operator path still works like it did before that check existed.
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, principalId);
 
         var admin = PrincipalClient(app, tenantId, principalId);
         var start = await Data(await admin.PostAsJsonAsync($"/v1/transport/buses/{busId}/trip/start",

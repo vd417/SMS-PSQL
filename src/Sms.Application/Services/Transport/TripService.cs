@@ -45,12 +45,21 @@ public sealed class TripService(
     {
         if (tenant.TenantId is not { } tid || tenant.UserId is not { } uid)
             return ApiResult<TripResponse>.Fail(new Error("forbidden", "no tenant/user context"), 403);
-        // dbo.Trip_Start now returns no row (instead of inserting) when the bus it resolves
-        // from req.BusNo already has a live trip — the guard has to live in the stored proc
-        // because BusId is resolved there from BusNo, never in C#, so there is no busId this
-        // service layer could check up front. A null result here means "blocked", not "trip
-        // vanished immediately after insert" (that never happens), so it's safe to treat as 409.
-        if (await repo.StartAsync(tid, uid, req, ct) is not { } trip)
+        if (string.IsNullOrWhiteSpace(req.BusNo))
+            return ApiResult<TripResponse>.Fail(new Error("bus_no_required", "bus_no is required"), 422);
+        // The bus assignment — never the caller — decides who the trip's driver and conductor are.
+        // The caller only has to be one of them; a conductor pressing Start must not become DriverId.
+        if (await repo.GetBusAssignmentByNoAsync(tid, req.BusNo, ct) is not { } bus)
+            return ApiResult<TripResponse>.Fail(new Error("bus_not_found", "no bus with that number in this school"), 404);
+        if (bus.DriverUserId is not { } driverUserId)
+            return ApiResult<TripResponse>.Fail(new Error("no_driver_assigned", "this bus has no driver assigned"), 422);
+        if (uid != driverUserId && uid != bus.ConductorUserId)
+            return ApiResult<TripResponse>.Fail(new Error("not_assigned", "you are not assigned to this bus"), 403);
+
+        var effective = req with { RouteId = req.RouteId ?? bus.RouteId };
+        // dbo.Trip_Start returns no row (instead of inserting) when the bus already has a live
+        // trip; it fills ConductorId from Buses.ConductorStaffId itself.
+        if (await repo.StartAsync(tid, driverUserId, effective, ct) is not { } trip)
             return ApiResult<TripResponse>.Fail(new Error("bus_already_active", "This bus already has an active trip"), 409);
         await fleetBroadcaster.BroadcastFleetAsync(tid, ct);
         await live.PublishAsync(tid, LiveEventTypes.Transport, ct: ct);
