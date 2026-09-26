@@ -71,7 +71,7 @@ public class CheckinHistoryTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.CheckIns (TenantId, UserId, Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified) " +
+                "INSERT INTO \"dbo\".\"CheckIns\" (\"TenantId\", \"UserId\", \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\") " +
                 "VALUES (@TenantId, @UserId, @Kind, @At, 0, 0, 0, 0, @Verified)",
                 new[]
                 {
@@ -122,7 +122,7 @@ public class CheckinHistoryTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.CheckIns (TenantId, UserId, Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified) " +
+                "INSERT INTO \"dbo\".\"CheckIns\" (\"TenantId\", \"UserId\", \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\") " +
                 "VALUES (@TenantId, @UserId, @Kind, @At, 0, 0, 0, 0, @Verified)",
                 new[]
                 {
@@ -155,8 +155,8 @@ public class CheckinHistoryTests(PostgresFixture fx)
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
-                "INSERT dbo.CheckIns (TenantId, UserId, Kind, At, Lat, Lng, AccuracyMeters, DistanceMeters, Verified) " +
-                "VALUES (@TenantId, @UserId, 'in', @At, 0, 0, 0, 15800, 0)",
+                "INSERT INTO \"dbo\".\"CheckIns\" (\"TenantId\", \"UserId\", \"Kind\", \"At\", \"Lat\", \"Lng\", \"AccuracyMeters\", \"DistanceMeters\", \"Verified\") " +
+                "VALUES (@TenantId, @UserId, 'in', @At, 0, 0, 0, 15800, false)",
                 new { TenantId = tenantId, UserId = userId, At = punchUtc });
         });
 

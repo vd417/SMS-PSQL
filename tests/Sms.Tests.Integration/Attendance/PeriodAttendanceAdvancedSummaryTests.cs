@@ -189,29 +189,29 @@ public sealed class PeriodAttendanceAdvancedSummaryTests(PostgresFixture fx)
             new { tenantId });
         await connection.ExecuteAsync(
             """
-            INSERT dbo.Users (Id, TenantId) VALUES
+            INSERT INTO "dbo"."Users" ("Id", "TenantId") VALUES
                 (@adminUserId, @tenantId),
                 (@teacherAUserId, @tenantId),
                 (@teacherBUserId, @tenantId);
-            INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES
-                (@teacherAId, @tenantId, N'Teacher A', @teacherAUserId),
-                (@teacherBId, @tenantId, N'Teacher B', @teacherBUserId);
-            INSERT dbo.Classes (Id, TenantId, Name, Grade, Section, StudentCount, ClassTeacherId) VALUES
-                (@classAId, @tenantId, N'IX-A', N'IX', N'A', 1, @teacherAId),
-                (@classBId, @tenantId, N'IX-B', N'IX', N'B', 1, @teacherBId);
-            INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, Status) VALUES
-                (@studentAId, @tenantId, N'SUM-A', N'Student A', N'IX', N'A', N'active'),
-                (@studentBId, @tenantId, N'SUM-B', N'Student B', N'IX', N'B', N'active');
-            INSERT dbo.TimetableSlots
-                (TenantId, [Day], Period, Subject, ClassId, ClassName, StartTime, EndTime, TeacherId)
+            INSERT INTO "dbo"."Teachers" ("Id", "TenantId", "Name", "UserId") VALUES
+                (@teacherAId, @tenantId, 'Teacher A', @teacherAUserId),
+                (@teacherBId, @tenantId, 'Teacher B', @teacherBUserId);
+            INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "Grade", "Section", "StudentCount", "ClassTeacherId") VALUES
+                (@classAId, @tenantId, 'IX-A', 'IX', 'A', 1, @teacherAId),
+                (@classBId, @tenantId, 'IX-B', 'IX', 'B', 1, @teacherBId);
+            INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "Status") VALUES
+                (@studentAId, @tenantId, 'SUM-A', 'Student A', 'IX', 'A', 'active'),
+                (@studentBId, @tenantId, 'SUM-B', 'Student B', 'IX', 'B', 'active');
+            INSERT INTO "dbo"."TimetableSlots"
+                ("TenantId", "Day", "Period", "Subject", "ClassId", "ClassName", "StartTime", "EndTime", "TeacherId")
             VALUES
-                (@tenantId, N'Wed', 1, N'Math', @classAId, N'IX-A', N'09:00', N'09:45', @teacherAId),
-                (@tenantId, N'Wed', 1, N'Science', @classBId, N'IX-B', N'09:00', N'09:45', @teacherBId);
-            INSERT dbo.PeriodAttendanceRecords
-                (TenantId, ClassId, StudentId, [Date], Period, Subject, Status, MarkedBy, MarkedByRole)
+                (@tenantId, 'Wed', 1, 'Math', @classAId, 'IX-A', '09:00', '09:45', @teacherAId),
+                (@tenantId, 'Wed', 1, 'Science', @classBId, 'IX-B', '09:00', '09:45', @teacherBId);
+            INSERT INTO "dbo"."PeriodAttendanceRecords"
+                ("TenantId", "ClassId", "StudentId", "Date", "Period", "Subject", "Status", "MarkedBy", "MarkedByRole")
             VALUES
-                (@tenantId, @classAId, @studentAId, @date, 1, N'Math', N'present', @teacherAUserId, N'teacher'),
-                (@tenantId, @classBId, @studentBId, @date, 1, N'Science', N'absent', @teacherBUserId, N'teacher');
+                (@tenantId, @classAId, @studentAId, @date, 1, 'Math', 'present', @teacherAUserId, 'teacher'),
+                (@tenantId, @classBId, @studentBId, @date, 1, 'Science', 'absent', @teacherBUserId, 'teacher');
             """,
             new
             {

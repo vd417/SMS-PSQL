@@ -1,4 +1,4 @@
-using System.Data;
+using System.Text.Json;
 using Dapper;
 using FluentAssertions;
 using Npgsql;
@@ -25,9 +25,9 @@ public sealed class PeriodAttendanceAuditTests(PostgresFixture fx)
 
         await connection.ExecuteAsync(
             """
-            INSERT dbo.Users (Id, TenantId, Name) VALUES (@markerId, @tenantId, N'Ravi Sharma');
-            INSERT dbo.Classes (Id, TenantId, Name, Grade, Section, StudentCount) VALUES (@classId, @tenantId, N'IX-A', N'IX', N'A', 1);
-            INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, Status) VALUES (@studentId, @tenantId, N'AUD-1', N'Student One', N'IX', N'A', N'active');
+            INSERT INTO "dbo"."Users" ("Id", "TenantId", "Name") VALUES (@markerId, @tenantId, 'Ravi Sharma');
+            INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "Grade", "Section", "StudentCount") VALUES (@classId, @tenantId, 'IX-A', 'IX', 'A', 1);
+            INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "Status") VALUES (@studentId, @tenantId, 'AUD-1', 'Student One', 'IX', 'A', 'active');
             """,
             new { tenantId, classId, studentId, markerId });
 
@@ -55,7 +55,7 @@ public sealed class PeriodAttendanceAuditTests(PostgresFixture fx)
         latest.ToStatus.Should().Be("absent");
 
         var record = await connection.QuerySingleAsync<(Guid? UpdatedBy, string? UpdatedByRole)>(
-            "SELECT UpdatedBy, UpdatedByRole FROM dbo.PeriodAttendanceRecords WHERE Id = @recordId",
+            "SELECT \"UpdatedBy\", \"UpdatedByRole\" FROM \"dbo\".\"PeriodAttendanceRecords\" WHERE \"Id\" = @recordId",
             new { recordId });
         record.UpdatedBy.Should().Be(markerId);
     }
@@ -69,35 +69,34 @@ public sealed class PeriodAttendanceAuditTests(PostgresFixture fx)
         NpgsqlConnection connection, Guid tenantId, Guid classId, DateTime date, Guid markerId, string status)
     {
         await SetTenantAsync(connection, tenantId);
-        var table = new DataTable();
-        table.Columns.Add("StudentId", typeof(Guid));
-        table.Columns.Add("Status", typeof(string));
         var studentId = await connection.QuerySingleAsync<Guid>(
-            "SELECT TOP 1 Id FROM dbo.Students WHERE TenantId = @tenantId", new { tenantId });
-        table.Rows.Add(studentId, status);
+            "SELECT \"Id\" FROM \"dbo\".\"Students\" WHERE \"TenantId\" = @tenantId LIMIT 1", new { tenantId });
+        var rowsJson = JsonSerializer.Serialize(new[] { new { StudentId = studentId, Status = status } });
 
-        var p = new DynamicParameters();
-        p.Add("@TenantId", tenantId);
-        p.Add("@ClassId", classId);
-        p.Add("@Date", date);
-        p.Add("@Period", 1);
-        p.Add("@Subject", "Math");
-        p.Add("@MarkedBy", markerId);
-        p.Add("@MarkedByRole", "teacher");
-        p.Add("@Rows", table.AsTableValuedParameter("dbo.PeriodAttendanceTvp"));
         await connection.ExecuteAsync(
-            "dbo.PeriodAttendance_BulkUpsert",
-            p,
-            commandType: CommandType.StoredProcedure);
+            "SELECT * FROM \"dbo\".periodattendance_bulkupsert(" +
+            "tenantid => @TenantId, classid => @ClassId, date => @Date, period => @Period, subject => @Subject, " +
+            "rows => @Rows, markedby => @MarkedBy, markedbyrole => @MarkedByRole)",
+            new
+            {
+                TenantId = tenantId,
+                ClassId = classId,
+                Date = date,
+                Period = 1,
+                Subject = "Math",
+                MarkedBy = markerId,
+                MarkedByRole = "teacher",
+                Rows = rowsJson,
+            });
 
         return await connection.QuerySingleAsync<Guid>(
-            "SELECT Id FROM dbo.PeriodAttendanceRecords WHERE TenantId = @tenantId AND ClassId = @classId AND [Date] = @date AND Period = 1 AND Subject = N'Math'",
+            "SELECT \"Id\" FROM \"dbo\".\"PeriodAttendanceRecords\" WHERE \"TenantId\" = @tenantId AND \"ClassId\" = @classId AND \"Date\" = @date AND \"Period\" = 1 AND \"Subject\" = 'Math'",
             new { tenantId, classId, date });
     }
 
     private static async Task<List<AuditRow>> ReadAuditAsync(NpgsqlConnection connection, Guid recordId) =>
         (await connection.QueryAsync<AuditRow>(
-            "SELECT FromStatus, ToStatus, ActorId, ActorName, At FROM dbo.PeriodAttendanceAudit WHERE RecordId = @recordId",
+            "SELECT \"FromStatus\", \"ToStatus\", \"ActorId\", \"ActorName\", \"At\" FROM \"dbo\".\"PeriodAttendanceAudit\" WHERE \"RecordId\" = @recordId",
             new { recordId })).AsList();
 
     private sealed record AuditRow(string? FromStatus, string ToStatus, Guid? ActorId, string? ActorName, DateTime At);

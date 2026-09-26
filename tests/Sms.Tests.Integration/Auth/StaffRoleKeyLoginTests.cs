@@ -43,14 +43,14 @@ public class StaffRoleKeyLoginTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Dave Driver')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\") VALUES (@userId, @tenantId, @email, @hash, 'Dave Driver')",
                 new { userId, tenantId, email, hash = hasher.Hash("Pass123!") });
             await conn.ExecuteAsync(
-                "INSERT dbo.Staff (TenantId, Name, Role, Email, Phone, Route, UserId, CreatedAt) " +
-                "VALUES (@tenantId, 'Dave Driver', 'Driver', @email, '9000000011', 'Route 12', @userId, SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Staff\" (\"TenantId\", \"Name\", \"Role\", \"Email\", \"Phone\", \"Route\", \"UserId\", \"CreatedAt\") " +
+                "VALUES (@tenantId, 'Dave Driver', 'Driver', @email, '9000000011', 'Route 12', @userId, now())",
                 new { tenantId, email, userId });
             await conn.ExecuteAsync(
-                "INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, 'staff')", new { userId });
+                "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'staff')", new { userId });
         }
 
         await using var app = AppWithDb();
@@ -78,14 +78,14 @@ public class StaffRoleKeyLoginTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Gopal Guard')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\") VALUES (@userId, @tenantId, @email, @hash, 'Gopal Guard')",
                 new { userId, tenantId, email, hash = hasher.Hash("Pass123!") });
             await conn.ExecuteAsync(
-                "INSERT dbo.Staff (TenantId, Name, Role, Email, Phone, Department, UserId, CreatedAt) " +
-                "VALUES (@tenantId, 'Gopal Guard', 'Watchman', @email, '9000000022', 'Main Gate', @userId, SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Staff\" (\"TenantId\", \"Name\", \"Role\", \"Email\", \"Phone\", \"Department\", \"UserId\", \"CreatedAt\") " +
+                "VALUES (@tenantId, 'Gopal Guard', 'Watchman', @email, '9000000022', 'Main Gate', @userId, now())",
                 new { tenantId, email, userId });
             await conn.ExecuteAsync(
-                "INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, 'staff')", new { userId });
+                "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'staff')", new { userId });
         }
 
         await using var app = AppWithDb();
@@ -114,14 +114,14 @@ public class StaffRoleKeyLoginTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Tara Teacher')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\") VALUES (@userId, @tenantId, @email, @hash, 'Tara Teacher')",
                 new { userId, tenantId, email, hash = hasher.Hash("Pass123!") });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (TenantId, Name, Designation, UserId, Email, CreatedAt) " +
-                "VALUES (@tenantId, 'Tara Teacher', 'Senior Teacher', @userId, @email, SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"Designation\", \"UserId\", \"Email\", \"CreatedAt\") " +
+                "VALUES (@tenantId, 'Tara Teacher', 'Senior Teacher', @userId, @email, now())",
                 new { tenantId, email, userId });
             await conn.ExecuteAsync(
-                "INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, 'school.teacher')", new { userId });
+                "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'school.teacher')", new { userId });
         }
 
         await using var app = AppWithDb();
@@ -149,14 +149,14 @@ public class StaffRoleKeyLoginTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name) VALUES (@userId, @tenantId, @email, @hash, 'Mystery Staffer')",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\") VALUES (@userId, @tenantId, @email, @hash, 'Mystery Staffer')",
                 new { userId, tenantId, email, hash = hasher.Hash("Pass123!") });
             await conn.ExecuteAsync(
-                "INSERT dbo.Staff (TenantId, Name, Role, Email, Phone, UserId, CreatedAt) " +
-                "VALUES (@tenantId, 'Mystery Staffer', 'Storekeeper', @email, '9000000033', @userId, SYSUTCDATETIME())",
+                "INSERT INTO \"dbo\".\"Staff\" (\"TenantId\", \"Name\", \"Role\", \"Email\", \"Phone\", \"UserId\", \"CreatedAt\") " +
+                "VALUES (@tenantId, 'Mystery Staffer', 'Storekeeper', @email, '9000000033', @userId, now())",
                 new { tenantId, email, userId });
             await conn.ExecuteAsync(
-                "INSERT dbo.UserRoles (UserId, Role) VALUES (@userId, 'staff')", new { userId });
+                "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@userId, 'staff')", new { userId });
         }
 
         await using var app = AppWithDb();

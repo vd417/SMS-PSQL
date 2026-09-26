@@ -64,8 +64,8 @@ public class FeeAutoApplyOnCreateTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         var rows = await conn.QueryAsync<InvoiceRow>(
-            "SELECT \"Id\", \"StudentId\", \"Period\", \"Amount\" FROM \"dbo\".\"FeeInvoices\" WHERE \"StudentId\" IN @ids",
-            new { ids = studentIds });
+            "SELECT \"Id\", \"StudentId\", \"Period\", \"Amount\" FROM \"dbo\".\"FeeInvoices\" WHERE \"StudentId\" = ANY(@ids)",
+            new { ids = studentIds.ToArray() });
         return rows.ToList();
     }
 

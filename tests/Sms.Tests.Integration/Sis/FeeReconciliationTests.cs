@@ -137,8 +137,8 @@ public class FeeReconciliationTests(PostgresFixture fx)
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         var rows = await conn.QueryAsync<InvoiceRow>(
-            "SELECT \"Id\", \"StudentId\", \"Period\", \"Amount\" FROM \"dbo\".\"FeeInvoices\" WHERE \"StudentId\" IN @ids",
-            new { ids = studentIds });
+            "SELECT \"Id\", \"StudentId\", \"Period\", \"Amount\" FROM \"dbo\".\"FeeInvoices\" WHERE \"StudentId\" = ANY(@ids)",
+            new { ids = studentIds.ToArray() });
         return rows.ToList();
     }
 
@@ -154,9 +154,9 @@ public class FeeReconciliationTests(PostgresFixture fx)
         await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
         await conn.ExecuteAsync(
             """
-            INSERT dbo.Students
-                (Id, TenantId, AdmissionNo, Name, Gender, Grade, Section, ClassLabel, Roll,
-                 GuardianName, GuardianPhone, Status, AvatarHue, Dob, Email)
+            INSERT INTO "dbo"."Students"
+                ("Id", "TenantId", "AdmissionNo", "Name", "Gender", "Grade", "Section", "ClassLabel", "Roll",
+                 "GuardianName", "GuardianPhone", "Status", "AvatarHue", "Dob", "Email")
             VALUES
                 (@id, @tenantId, @admissionNo, @name, 'M', 'I', 'A', @classLabel, 1,
                  @guardianName, '9000000099', 'active', 200, '2019-04-23', @email)
@@ -172,7 +172,7 @@ public class FeeReconciliationTests(PostgresFixture fx)
         {
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, RouteId, FeeHeadId)
+                INSERT INTO "dbo"."StudentBusAssignments" ("Id", "TenantId", "StudentId", "RouteId", "FeeHeadId")
                 VALUES (@id, @tenantId, @studentId, @routeId, @feeHeadId)
                 """,
                 new { id = Guid.NewGuid(), tenantId, studentId = id, routeId, feeHeadId });

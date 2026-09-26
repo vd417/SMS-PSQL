@@ -65,9 +65,9 @@ public class AiSearchAuthorizationServiceTests(PostgresFixture fx)
         await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         return await conn.QuerySingleAsync<Guid>(
             """
-            SELECT Id FROM dbo.Users
-            WHERE TenantId = @tenantId
-              AND LOWER(LTRIM(RTRIM(Email))) = LOWER(LTRIM(RTRIM(@email)))
+            SELECT "Id" FROM "dbo"."Users"
+            WHERE "TenantId" = @tenantId
+              AND lower(trim("Email")) = lower(trim(@email))
             """,
             new { email, tenantId });
     }
@@ -79,9 +79,9 @@ public class AiSearchAuthorizationServiceTests(PostgresFixture fx)
         await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         return await conn.QuerySingleAsync<Guid>(
             """
-            SELECT Id FROM dbo.Users
-            WHERE TenantId = @tenantId
-              AND LOWER(LTRIM(RTRIM(StudentId))) = LOWER(LTRIM(RTRIM(@admissionNo)))
+            SELECT "Id" FROM "dbo"."Users"
+            WHERE "TenantId" = @tenantId
+              AND lower(trim("StudentId")) = lower(trim(@admissionNo))
             """,
             new { admissionNo, tenantId });
     }
@@ -334,21 +334,21 @@ public class AiSearchAuthorizationServiceTests(PostgresFixture fx)
             var teacherId = Guid.NewGuid();
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId)",
                 new { teacherUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, N'Meena', @teacherUserId)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'Meena', @teacherUserId)",
                 new { teacherId, tenantId, teacherUserId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId)
-                VALUES (@classId, @tenantId, N'8A', 0, @teacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "StudentCount", "ClassTeacherId")
+                VALUES (@classId, @tenantId, '8A', 0, @teacherId)
                 """,
                 new { classId, tenantId, teacherId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.TimetableSlots (TenantId, [Day], Period, Subject, ClassId, ClassName, TeacherId)
-                VALUES (@tenantId, 'Mon', 1, N'Math', @classId, N'8A', @teacherId)
+                INSERT INTO "dbo"."TimetableSlots" ("TenantId", "Day", "Period", "Subject", "ClassId", "ClassName", "TeacherId")
+                VALUES (@tenantId, 'Mon', 1, 'Math', @classId, '8A', @teacherId)
                 """,
                 new { tenantId, classId, teacherId });
         });
@@ -379,21 +379,21 @@ public class AiSearchAuthorizationServiceTests(PostgresFixture fx)
             var teacherId = Guid.NewGuid();
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId)",
                 new { teacherUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, N'Meena', @teacherUserId)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'Meena', @teacherUserId)",
                 new { teacherId, tenantId, teacherUserId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId)
-                VALUES (@classId, @tenantId, N'8A', 0, @teacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "StudentCount", "ClassTeacherId")
+                VALUES (@classId, @tenantId, '8A', 0, @teacherId)
                 """,
                 new { classId, tenantId, teacherId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.TimetableSlots (TenantId, [Day], Period, Subject, ClassId, ClassName, TeacherId)
-                VALUES (@tenantId, 'Mon', 1, N'Math', @classId, N'8A', @teacherId)
+                INSERT INTO "dbo"."TimetableSlots" ("TenantId", "Day", "Period", "Subject", "ClassId", "ClassName", "TeacherId")
+                VALUES (@tenantId, 'Mon', 1, 'Math', @classId, '8A', @teacherId)
                 """,
                 new { tenantId, classId, teacherId });
         });
@@ -471,27 +471,27 @@ public class AiSearchAuthorizationServiceTests(PostgresFixture fx)
             var classBId = Guid.NewGuid();
 
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId), (@otherTeacherUserId, @tenantId)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId), (@otherTeacherUserId, @tenantId)",
                 new { teacherUserId, otherTeacherUserId, tenantId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES
-                (@teacherId, @tenantId, N'Meena', @teacherUserId),
-                (@otherTeacherId, @tenantId, N'Asha', @otherTeacherUserId)
+                INSERT INTO "dbo"."Teachers" ("Id", "TenantId", "Name", "UserId") VALUES
+                (@teacherId, @tenantId, 'Meena', @teacherUserId),
+                (@otherTeacherId, @tenantId, 'Asha', @otherTeacherUserId)
                 """,
                 new { teacherId, otherTeacherId, tenantId, teacherUserId, otherTeacherUserId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, Grade, Section, StudentCount, ClassTeacherId) VALUES
-                (@classAId, @tenantId, N'8-A', N'8', N'A', 0, @teacherId),
-                (@classBId, @tenantId, N'8-B', N'8', N'B', 0, @otherTeacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "Grade", "Section", "StudentCount", "ClassTeacherId") VALUES
+                (@classAId, @tenantId, '8-A', '8', 'A', 0, @teacherId),
+                (@classBId, @tenantId, '8-B', '8', 'B', 0, @otherTeacherId)
                 """,
                 new { classAId, classBId, tenantId, teacherId, otherTeacherId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.TimetableSlots (TenantId, [Day], Period, Subject, ClassId, ClassName, TeacherId) VALUES
-                (@tenantId, 'Mon', 1, N'Math', @classAId, N'8-A', @teacherId),
-                (@tenantId, 'Mon', 2, N'Math', @classBId, N'8-B', @otherTeacherId)
+                INSERT INTO "dbo"."TimetableSlots" ("TenantId", "Day", "Period", "Subject", "ClassId", "ClassName", "TeacherId") VALUES
+                (@tenantId, 'Mon', 1, 'Math', @classAId, '8-A', @teacherId),
+                (@tenantId, 'Mon', 2, 'Math', @classBId, '8-B', @otherTeacherId)
                 """,
                 new { tenantId, classAId, classBId, teacherId, otherTeacherId });
         });
@@ -531,27 +531,27 @@ public class AiSearchAuthorizationServiceTests(PostgresFixture fx)
             var classBId = Guid.NewGuid();
 
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId), (@otherTeacherUserId, @tenantId)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId), (@otherTeacherUserId, @tenantId)",
                 new { teacherUserId, otherTeacherUserId, tenantId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES
-                (@teacherId, @tenantId, N'Meena', @teacherUserId),
-                (@otherTeacherId, @tenantId, N'Asha', @otherTeacherUserId)
+                INSERT INTO "dbo"."Teachers" ("Id", "TenantId", "Name", "UserId") VALUES
+                (@teacherId, @tenantId, 'Meena', @teacherUserId),
+                (@otherTeacherId, @tenantId, 'Asha', @otherTeacherUserId)
                 """,
                 new { teacherId, otherTeacherId, tenantId, teacherUserId, otherTeacherUserId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, Grade, Section, StudentCount, ClassTeacherId) VALUES
-                (@classAId, @tenantId, N'8-A', N'8', N'A', 0, @teacherId),
-                (@classBId, @tenantId, N'8-B', N'8', N'B', 0, @otherTeacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "Grade", "Section", "StudentCount", "ClassTeacherId") VALUES
+                (@classAId, @tenantId, '8-A', '8', 'A', 0, @teacherId),
+                (@classBId, @tenantId, '8-B', '8', 'B', 0, @otherTeacherId)
                 """,
                 new { classAId, classBId, tenantId, teacherId, otherTeacherId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.TimetableSlots (TenantId, [Day], Period, Subject, ClassId, ClassName, TeacherId) VALUES
-                (@tenantId, 'Mon', 1, N'Math', @classAId, N'8-A', @teacherId),
-                (@tenantId, 'Mon', 2, N'Math', @classBId, N'8-B', @otherTeacherId)
+                INSERT INTO "dbo"."TimetableSlots" ("TenantId", "Day", "Period", "Subject", "ClassId", "ClassName", "TeacherId") VALUES
+                (@tenantId, 'Mon', 1, 'Math', @classAId, '8-A', @teacherId),
+                (@tenantId, 'Mon', 2, 'Math', @classBId, '8-B', @otherTeacherId)
                 """,
                 new { tenantId, classAId, classBId, teacherId, otherTeacherId });
         });
@@ -619,15 +619,15 @@ public class AiSearchAuthorizationServiceTests(PostgresFixture fx)
             var teacherId = Guid.NewGuid();
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId)",
                 new { teacherUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, N'Meena', @teacherUserId)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'Meena', @teacherUserId)",
                 new { teacherId, tenantId, teacherUserId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId)
-                VALUES (@classId, @tenantId, N'8A', 0, @teacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "StudentCount", "ClassTeacherId")
+                VALUES (@classId, @tenantId, '8A', 0, @teacherId)
                 """,
                 new { classId, tenantId, teacherId });
         });

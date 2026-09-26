@@ -178,10 +178,10 @@ public class ParentGuardianLoginTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             await conn.ExecuteAsync(
-                "UPDATE dbo.Students SET GuardianPhone = @phone WHERE Id = @id",
+                "UPDATE \"dbo\".\"Students\" SET \"GuardianPhone\" = @phone WHERE \"Id\" = @id",
                 new { phone = sharedPhone, id });
             await conn.ExecuteAsync(
-                "UPDATE dbo.Users SET Phone = @phone WHERE StudentId = @adm",
+                "UPDATE \"dbo\".\"Users\" SET \"Phone\" = @phone WHERE \"StudentId\" = @adm",
                 new { phone = sharedPhone, adm });
         }
 
@@ -218,14 +218,14 @@ public class ParentGuardianLoginTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Gender, Email, GuardianEmail, GuardianPhone, GuardianName, Status)
-                VALUES (@studentId, @tenantId, @adm, N'Rahul Sharma', N'M', N'rahul@patch.test', @parentEmail, @phone, N'Vaibhav Dubey', N'active');
-                INSERT dbo.Users (Id, TenantId, Email, Phone, IsPlatform, Status, StudentId, MustSetPassword, Name)
-                VALUES (@studentUserId, @tenantId, N'rahul@patch.test', @phone, 0, N'active', @adm, 0, N'Rahul Sharma');
-                INSERT dbo.UserRoles (UserId, Role) VALUES (@studentUserId, N'student');
-                INSERT dbo.Users (Id, TenantId, Email, Phone, IsPlatform, Status, StudentId, MustSetPassword, Name)
-                VALUES (@parentUserId, @tenantId, @parentEmail, NULL, 0, N'active', @adm, 1, N'Vaibhav Dubey');
-                INSERT dbo.UserRoles (UserId, Role) VALUES (@parentUserId, N'student.parent');
+                INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Gender", "Email", "GuardianEmail", "GuardianPhone", "GuardianName", "Status")
+                VALUES (@studentId, @tenantId, @adm, 'Rahul Sharma', 'M', 'rahul@patch.test', @parentEmail, @phone, 'Vaibhav Dubey', 'active');
+                INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "Phone", "IsPlatform", "Status", "StudentId", "MustSetPassword", "Name")
+                VALUES (@studentUserId, @tenantId, 'rahul@patch.test', @phone, false, 'active', @adm, false, 'Rahul Sharma');
+                INSERT INTO "dbo"."UserRoles" ("UserId", "Role") VALUES (@studentUserId, 'student');
+                INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "Phone", "IsPlatform", "Status", "StudentId", "MustSetPassword", "Name")
+                VALUES (@parentUserId, @tenantId, @parentEmail, NULL, false, 'active', @adm, true, 'Vaibhav Dubey');
+                INSERT INTO "dbo"."UserRoles" ("UserId", "Role") VALUES (@parentUserId, 'student.parent');
                 """,
                 new { studentId, tenantId, adm, parentEmail, phone = sharedPhone, studentUserId, parentUserId });
         }
@@ -264,11 +264,11 @@ public class ParentGuardianLoginTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Email, GuardianEmail, GuardianPhone, GuardianName, Status)
-                VALUES (@studentId, @tenantId, @adm, N'Ward Phone', @studentEmail, @parentEmail, @phone, N'Dad', N'active');
-                INSERT dbo.Users (Id, TenantId, Email, Phone, IsPlatform, Status, StudentId, MustSetPassword, Name)
-                VALUES (@parentUserId, @tenantId, @parentEmail, @phone, 0, N'active', @adm, 1, N'Dad');
-                INSERT dbo.UserRoles (UserId, Role) VALUES (@parentUserId, N'student.parent');
+                INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Email", "GuardianEmail", "GuardianPhone", "GuardianName", "Status")
+                VALUES (@studentId, @tenantId, @adm, 'Ward Phone', @studentEmail, @parentEmail, @phone, 'Dad', 'active');
+                INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "Phone", "IsPlatform", "Status", "StudentId", "MustSetPassword", "Name")
+                VALUES (@parentUserId, @tenantId, @parentEmail, @phone, false, 'active', @adm, true, 'Dad');
+                INSERT INTO "dbo"."UserRoles" ("UserId", "Role") VALUES (@parentUserId, 'student.parent');
                 """,
                 new { studentId, tenantId, adm, studentEmail, parentEmail, phone = sharedPhone, parentUserId });
         }

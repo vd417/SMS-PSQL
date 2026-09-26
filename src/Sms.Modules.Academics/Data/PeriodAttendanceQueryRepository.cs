@@ -417,13 +417,13 @@ public static class PeriodAttendanceAggregateSql
                  = upper(left(to_char(par."Date", 'DY'), 3))
              AND lower(trim(ts."Subject")) = lower(trim(par."Subject"))
             WHERE par."Date" >= @From AND par."Date" <= @To
-              AND (@ClassId IS NULL OR par."ClassId" = @ClassId)
-              AND (@Grade IS NULL OR c."Grade" = @Grade)
-              AND (@Section IS NULL OR c."Section" = @Section)
-              AND (@StudentId IS NULL OR par."StudentId" = @StudentId)
-              AND (@Subject IS NULL
-                   OR lower(trim(par."Subject")) = lower(trim(@Subject)))
-              AND (@TeacherId IS NULL OR ts."TeacherId" = @TeacherId);
+              AND (@ClassId::uuid IS NULL OR par."ClassId" = @ClassId::uuid)
+              AND (@Grade::text IS NULL OR c."Grade" = @Grade::text)
+              AND (@Section::text IS NULL OR c."Section" = @Section::text)
+              AND (@StudentId::uuid IS NULL OR par."StudentId" = @StudentId::uuid)
+              AND (@Subject::text IS NULL
+                   OR lower(trim(par."Subject")) = lower(trim(@Subject::text)))
+              AND (@TeacherId::uuid IS NULL OR ts."TeacherId" = @TeacherId::uuid);
             """;
 
         var parameters = DateRangeParameters(from, to);

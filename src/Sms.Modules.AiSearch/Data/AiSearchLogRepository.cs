@@ -10,9 +10,9 @@ public sealed class AiSearchLogRepository(IDbConnectionFactory factory) : BaseRe
 {
     public Task<int> InsertAsync(AiSearchLogEntry entry, CancellationToken ct = default) =>
         ExecuteInlineAsync(
-            @"INSERT INTO dbo.AiSearchLog
-                (Id, TenantId, UserId, Role, Question, DetectedLanguage, DetectedIntent, ResultCount, Success, At)
+            @"INSERT INTO ""dbo"".""AiSearchLog""
+                (""Id"", ""TenantId"", ""UserId"", ""Role"", ""Question"", ""DetectedLanguage"", ""DetectedIntent"", ""ResultCount"", ""Success"", ""At"")
               VALUES
-                (NEWID(), @TenantId, @UserId, @Role, @Question, @DetectedLanguage, @DetectedIntent, @ResultCount, @Success, @At)",
+                (gen_random_uuid(), @TenantId, @UserId, @Role, @Question, @DetectedLanguage, @DetectedIntent, @ResultCount, @Success, @At)",
             entry, ct);
 }

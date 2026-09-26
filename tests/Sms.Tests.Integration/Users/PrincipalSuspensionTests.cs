@@ -48,7 +48,7 @@ public class PrincipalSuspensionTests(PostgresFixture fx)
     {
         var factory = PlatformFactory();
         await using var c = await factory.OpenAsync();
-        await c.ExecuteAsync("INSERT dbo.Tenants (Id, Name, Slug, Status) VALUES (@t,'T',@s,'active')",
+        await c.ExecuteAsync("INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\", \"Status\") VALUES (@t,'T',@s,'active')",
             new { t = tenantId, s = "t-" + tenantId.ToString("N") });
     }
 
@@ -57,9 +57,9 @@ public class PrincipalSuspensionTests(PostgresFixture fx)
         var factory = PlatformFactory();
         await using var c = await factory.OpenAsync();
         var userId = await c.QuerySingleAsync<Guid>(
-            "INSERT dbo.Users (Id, TenantId, Email, Status, IsPlatform) OUTPUT inserted.Id VALUES (NEWID(),@t,@e,@st,0)",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Status\", \"IsPlatform\") VALUES (gen_random_uuid(),@t,@e,@st,false) RETURNING \"Id\"",
             new { t = tenantId, e = $"u{Guid.NewGuid():N}@x.com", st = status });
-        await c.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@u,@r)", new { u = userId, r = role });
+        await c.ExecuteAsync("INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@u,@r)", new { u = userId, r = role });
         return userId;
     }
 
@@ -68,10 +68,10 @@ public class PrincipalSuspensionTests(PostgresFixture fx)
         var factory = PlatformFactory();
         await using var c = await factory.OpenAsync();
         var userId = await c.QuerySingleAsync<Guid>(
-            "INSERT dbo.Users (Id, TenantId, Email, Status, IsPlatform) OUTPUT inserted.Id VALUES (NEWID(),@t,@e,@st,0)",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Status\", \"IsPlatform\") VALUES (gen_random_uuid(),@t,@e,@st,false) RETURNING \"Id\"",
             new { t = tenantId, e = $"u{Guid.NewGuid():N}@x.com", st = status });
         foreach (var role in roles)
-            await c.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@u,@r)", new { u = userId, r = role });
+            await c.ExecuteAsync("INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@u,@r)", new { u = userId, r = role });
         return userId;
     }
 

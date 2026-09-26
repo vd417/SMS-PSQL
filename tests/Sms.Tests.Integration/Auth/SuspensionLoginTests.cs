@@ -37,12 +37,12 @@ public class SuspensionLoginTests(PostgresFixture fx)
         var email = $"u{Guid.NewGuid():N}@x.com";
         var factory = PlatformFactory();
         await using var c = await factory.OpenAsync();
-        await c.ExecuteAsync("INSERT dbo.Tenants (Id, Name, Slug, Status) VALUES (@t,'T',@s,'active')",
+        await c.ExecuteAsync("INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\", \"Status\") VALUES (@t,'T',@s,'active')",
             new { t = tenantId, s = "t-" + tenantId.ToString("N") });
         var userId = await c.QuerySingleAsync<Guid>(
-            "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Status, IsPlatform) OUTPUT inserted.Id VALUES (NEWID(),@t,@e,@h,'inactive',0)",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Status\", \"IsPlatform\") VALUES (gen_random_uuid(),@t,@e,@h,'inactive',false) RETURNING \"Id\"",
             new { t = tenantId, e = email, h = hasher.Hash("Pass123!") });
-        await c.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@u,@r)", new { u = userId, r = role });
+        await c.ExecuteAsync("INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@u,@r)", new { u = userId, r = role });
         return email;
     }
 

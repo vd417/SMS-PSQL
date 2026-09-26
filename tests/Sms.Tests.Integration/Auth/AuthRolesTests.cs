@@ -56,9 +56,9 @@ public class AuthRolesTests(PostgresFixture fx)
         await using (var c = await factory.OpenAsync())
         {
             userId = await c.QuerySingleAsync<Guid>(
-                "INSERT dbo.Users (Id, Email, PasswordHash, IsPlatform) OUTPUT inserted.Id VALUES (NEWID(),@e,@h,1)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"Email\", \"PasswordHash\", \"IsPlatform\") VALUES (gen_random_uuid(),@e,@h,true) RETURNING \"Id\"",
                 new { e = email, h = hasher.Hash("Pass123!") });
-            await c.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@u,'owner'),(@u,'support')",
+            await c.ExecuteAsync("INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@u,'owner'),(@u,'support')",
                 new { u = userId });
         }
 
@@ -82,12 +82,12 @@ public class AuthRolesTests(PostgresFixture fx)
         Guid userId;
         await using (var c = await factory.OpenAsync())
         {
-            await c.ExecuteAsync("INSERT dbo.Tenants (Id, Name, Slug) VALUES (@t,'T',@s)",
+            await c.ExecuteAsync("INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\") VALUES (@t,'T',@s)",
                 new { t = tenantId, s = "t-" + tenantId.ToString("N") });
             userId = await c.QuerySingleAsync<Guid>(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, IsPlatform) OUTPUT inserted.Id VALUES (NEWID(),@t,@e,@h,0)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"IsPlatform\") VALUES (gen_random_uuid(),@t,@e,@h,false) RETURNING \"Id\"",
                 new { t = tenantId, e = email, h = hasher.Hash("Pass123!") });
-            await c.ExecuteAsync("INSERT dbo.UserRoles (UserId, Role) VALUES (@u,'school.admin')", new { u = userId });
+            await c.ExecuteAsync("INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@u,'school.admin')", new { u = userId });
         }
 
         await using var app = App();

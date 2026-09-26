@@ -30,8 +30,8 @@ public class SetPasswordClearsMustSetPasswordTests(PostgresFixture fx)
             await conn.OpenAsync();
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId, Email, PasswordHash, Name, MustSetPassword) " +
-                "VALUES (@userId, @tenantId, @email, @hash, 'New Teacher', 1)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"PasswordHash\", \"Name\", \"MustSetPassword\") " +
+                "VALUES (@userId, @tenantId, @email, @hash, 'New Teacher', true)",
                 new { userId, tenantId, email = $"n{Guid.NewGuid():N}@x.com", hash = hasher.Hash("Temp1234!") });
         }
 
