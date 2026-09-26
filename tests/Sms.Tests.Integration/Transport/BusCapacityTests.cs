@@ -1,4 +1,3 @@
-using System.Data.SqlTypes;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
@@ -183,10 +182,11 @@ public class BusCapacityTests(PostgresFixture fx)
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
         var routeId = Guid.NewGuid();
         Guid busA = Guid.NewGuid(), busB = Guid.NewGuid();
-        // Force a deterministic ascending order regardless of generation order. SQL Server's
-        // uniqueidentifier ORDER BY does not sort by the same byte order as .NET's Guid.CompareTo,
-        // so we compare via SqlGuid (which replicates T-SQL's comparison rules) rather than Guid.CompareTo.
-        if (new SqlGuid(busB).CompareTo(new SqlGuid(busA)) < 0) (busA, busB) = (busB, busA);
+        // Force a deterministic ascending order regardless of generation order. Postgres orders a
+        // uuid column by its canonical byte representation, which is exactly what ordinal comparison
+        // of the lowercase hyphenated string form ("d" format) gives — not .NET's Guid.CompareTo
+        // (different internal layout) and not SQL Server's uniqueidentifier ordering (SqlGuid).
+        if (string.CompareOrdinal(busB.ToString(), busA.ToString()) < 0) (busA, busB) = (busB, busA);
 
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
@@ -219,7 +219,7 @@ public class BusCapacityTests(PostgresFixture fx)
 
         candidates.Should().HaveCount(2);
         candidates.Should().BeInAscendingOrder(c => c.BusId,
-            Comparer<Guid>.Create((a, b) => new SqlGuid(a).CompareTo(new SqlGuid(b))));
+            Comparer<Guid>.Create((a, b) => string.CompareOrdinal(a.ToString(), b.ToString())));
         candidates.Single(c => c.BusId == busA).Occupied.Should().Be(1);
         candidates.Single(c => c.BusId == busB).Occupied.Should().Be(0);
     }
