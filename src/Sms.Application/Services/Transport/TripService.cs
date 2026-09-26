@@ -30,6 +30,7 @@ public interface ITripService
     Task<ApiResult> ConfirmStopArrivalAsync(Guid tripId, Guid stopId, CancellationToken ct = default);
     Task<ApiResult> CompleteStopAsync(Guid tripId, Guid stopId, CancellationToken ct = default);
     Task<ApiResult> MarkSchoolArrivedAsync(Guid tripId, CancellationToken ct = default);
+    Task<ApiResult<TripStopsResponse>> GetStopProgressAsync(Guid tripId, CancellationToken ct = default);
 }
 
 /// Every mutation that changes a trip's live state (start/ping/end) also pushes a fleet snapshot
@@ -104,7 +105,20 @@ public sealed class TripService(
         if (tenant.UserId is not { } uid)
             return ApiResult<TripResponse?>.Fail(new Error("forbidden", "no user context"), 403);
         var trip = await repo.GetCurrentAsync(uid, ct);
-        return ApiResult<TripResponse?>.Ok(trip is null ? null : WithActiveBroadcaster(trip));
+        if (trip is null) return ApiResult<TripResponse?>.Ok(null);
+        var currentStopId = await repo.GetCurrentStopIdAsync(trip.Id, ct);
+        return ApiResult<TripResponse?>.Ok(WithActiveBroadcaster(trip) with { CurrentStopId = currentStopId });
+    }
+
+    public async Task<ApiResult<TripStopsResponse>> GetStopProgressAsync(Guid tripId, CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { } tid || tenant.UserId is not { } uid)
+            return ApiResult<TripStopsResponse>.Fail(new Error("forbidden", "no tenant/user context"), 403);
+        if (await repo.GetParticipantRoleAsync(tid, tripId, uid, ct) is null)
+            return ApiResult<TripStopsResponse>.Fail(new Error("forbidden", "not your trip"), 403);
+        return await repo.GetStopProgressAsync(tid, tripId, ct) is { } progress
+            ? ApiResult<TripStopsResponse>.Ok(progress)
+            : ApiResult<TripStopsResponse>.Fail(new Error("not_found", "trip not found"), 404);
     }
 
     public async Task<ApiResult> IngestPingsAsync(Guid tripId, BulkPingRequest req, CancellationToken ct = default)

@@ -14,6 +14,7 @@ public sealed record TripResponse(
     DateTime? DriverLastPingAt = null, DateTime? ConductorLastPingAt = null)
 {
     public string? ActiveBroadcaster { get; init; }
+    public Guid? CurrentStopId { get; init; }
 }
 public sealed record StartTripRequest(Guid? RouteId, string? BusNo, string Direction);
 public sealed record PingItem(double Lat, double Lng, double SpeedKmh, double Heading, DateTime At, double? Accuracy = null);
@@ -30,6 +31,8 @@ public sealed record StaffRosterStudentResponse(Guid Id, string Name, Guid? Stop
 public sealed record StaffBusRouteSummaryResponse(string BusNo, string RouteName, string? Shift, int StudentsAssigned);
 public sealed record StaleTripRow(Guid TripId, Guid BusId, Guid TenantId, DateTime? LastPingAt);
 public sealed record BusAssignmentRow(Guid BusId, Guid? RouteId, Guid? DriverUserId, Guid? ConductorUserId);
+public sealed record TripStopProgressItem(Guid StopId, string Name, int Seq, DateTime? ArrivedAt, DateTime? ConfirmedAt, DateTime? DepartedAt);
+public sealed record TripStopsResponse(Guid TripId, Guid? CurrentStopId, DateTime? SchoolArrivedAt, IReadOnlyList<TripStopProgressItem> Stops);
 
 public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
@@ -289,6 +292,28 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
 
     public async Task<Guid?> GetCurrentStopIdAsync(Guid tripId, CancellationToken ct = default) =>
         (await QueryInlineAsync<Guid?>("SELECT \"CurrentStopId\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId", new { tripId }, ct)).FirstOrDefault();
+
+    private sealed record TripStopHeaderRow(Guid? RouteId, Guid? CurrentStopId, DateTime? SchoolArrivedAt);
+
+    /// Every stop of the trip's route in Seq order, left-joined to this trip's persisted
+    /// TripStopProgress — the authoritative arrival/departure state the staff app renders.
+    public async Task<TripStopsResponse?> GetStopProgressAsync(Guid tenantId, Guid tripId, CancellationToken ct = default)
+    {
+        var head = (await QueryInlineAsync<TripStopHeaderRow>(
+            "SELECT \"RouteId\", \"CurrentStopId\", \"SchoolArrivedAt\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId AND \"TenantId\" = @tenantId",
+            new { tripId, tenantId }, ct)).FirstOrDefault();
+        if (head is null) return null;
+        if (head.RouteId is not { } routeId)
+            return new TripStopsResponse(tripId, head.CurrentStopId, head.SchoolArrivedAt, []);
+
+        var stops = await QueryInlineAsync<TripStopProgressItem>(
+            @"SELECT rs.""Id"" AS ""StopId"", rs.""Name"", rs.""Seq"", p.""ArrivedAt"", p.""ConfirmedAt"", p.""DepartedAt""
+              FROM ""dbo"".""RouteStops"" rs
+              LEFT JOIN ""dbo"".""TripStopProgress"" p ON p.""StopId"" = rs.""Id"" AND p.""TripId"" = @tripId
+              WHERE rs.""RouteId"" = @routeId AND rs.""TenantId"" = @tenantId
+              ORDER BY rs.""Seq""", new { tripId, routeId, tenantId }, ct);
+        return new TripStopsResponse(tripId, head.CurrentStopId, head.SchoolArrivedAt, stops);
+    }
 
     /// True when this trip is a still-live pickup trip — the only state a driver may mark
     /// "school-arrived" from (a drop trip, or a trip already ended/arrived, is rejected).
