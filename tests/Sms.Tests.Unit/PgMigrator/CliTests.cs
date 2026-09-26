@@ -51,6 +51,16 @@ public class CliTests
         o.BackupConfirmed.Should().BeTrue();
     }
 
+    [Fact]
+    public void Ddl_lock_timeout_defaults_to_the_runner_default_and_can_be_set()
+    {
+        Cli.Parse(["migrate"], "Host=env", Base, out _)!.DdlLockTimeout.Should().BeNull();
+        Cli.Parse(["migrate", "--ddl-lock-timeout-seconds", "45"], "Host=env", Base, out _)!
+            .DdlLockTimeout.Should().Be(TimeSpan.FromSeconds(45));
+        Cli.Parse(["migrate", "--ddl-lock-timeout-seconds", "0"], "Host=env", Base, out var error).Should().BeNull();
+        error.Should().NotBeNullOrWhiteSpace();
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("upgrade")]

@@ -55,7 +55,9 @@ jobs:
           roles=$(docker compose exec -T db psql -U sms -d sms_dev -tAc \
             "SELECT DISTINCT a.usename || '|' || r.rolsuper || '|' || r.rolbypassrls
                FROM pg_stat_activity a JOIN pg_roles r ON r.rolname = a.usename
-              WHERE a.datname = 'sms_dev' AND a.client_addr IS NOT NULL")
+              WHERE a.datname = 'sms_dev' AND a.client_addr IS NOT NULL
+                AND host(a.client_addr) NOT IN ('127.0.0.1', '::1')")
+          # Loopback excluded: the db healthcheck's pg_isready probes connect as sms over 127.0.0.1.
           echo "API sessions: $roles"
           test "$roles" = "sms_app|false|false"
           ! docker compose logs api | grep -q "bypasses row-level security"

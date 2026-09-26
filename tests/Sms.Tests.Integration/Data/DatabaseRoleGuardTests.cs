@@ -33,6 +33,19 @@ public class DatabaseRoleGuardTests(PostgresFixture fx)
     }
 
     [Fact]
+    public void Api_refuses_to_start_outside_development_when_the_role_cannot_be_verified()
+    {
+        // Nothing listens on port 1: the role check can never run, so startup must fail closed
+        // rather than serve traffic with RLS enforcement unverified.
+        using var app = App("Host=127.0.0.1;Port=1;Database=sms;Username=sms_app;Password=x;Timeout=1");
+
+        var start = () => app.CreateClient();
+
+        start.Should().Throw<Exception>()
+            .Where(e => e.ToString().Contains("Could not verify the database role"));
+    }
+
+    [Fact]
     public async Task Api_starts_when_connected_as_sms_app()
     {
         await using var app = App(fx.ConnectionString);

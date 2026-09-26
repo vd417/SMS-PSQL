@@ -2,7 +2,15 @@ using Npgsql;
 
 namespace Sms.PgMigrator;
 
-public sealed record MigratorOptions(string BaselineDirectory, string MigrationsDirectory, TimeSpan LockTimeout, bool BackupConfirmed);
+/// DdlLockTimeout: how long one migration statement may wait for a table lock (Postgres
+/// lock_timeout, default 10 s) before the migration fails and rolls back, instead of queueing
+/// forever behind a long-running query while every later query on that table queues behind it.
+public sealed record MigratorOptions(
+    string BaselineDirectory, string MigrationsDirectory, TimeSpan LockTimeout, bool BackupConfirmed,
+    TimeSpan? DdlLockTimeout = null)
+{
+    public static readonly TimeSpan DefaultDdlLockTimeout = TimeSpan.FromSeconds(10);
+}
 
 public sealed record AppliedMigration(int Version, string Name, string Checksum, DateTime AppliedAt);
 
@@ -128,6 +136,8 @@ public sealed class SchemaMigrator(string connectionString, MigratorOptions opti
             await using var tx = await conn.BeginTransactionAsync(ct);
             try
             {
+                var lockTimeoutMs = (long)(options.DdlLockTimeout ?? MigratorOptions.DefaultDdlLockTimeout).TotalMilliseconds;
+                await ExecAsync(conn, tx, $"SET LOCAL lock_timeout = {lockTimeoutMs}", ct);
                 await ExecAsync(conn, tx, m.Sql, ct);
                 await using var record = new NpgsqlCommand(
                     "INSERT INTO dbo.schema_migrations (version, name, checksum) VALUES (@v, @n, @c)", conn, tx);

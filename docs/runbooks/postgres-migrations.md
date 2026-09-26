@@ -31,6 +31,10 @@ Exit codes: `0` ok, `1` usage error, `2` refused/failed (the message says what s
   rolled back, **not** recorded, and later migrations don't run. Fix the file and re-run.
 - Runs against the same database are serialised by a Postgres advisory lock. A second deploy waits
   (default 60 s, `--lock-timeout-seconds`), then no-ops because everything is applied.
+- Each migration runs with `SET LOCAL lock_timeout` (default 10 s, `--ddl-lock-timeout-seconds`): a
+  statement that can't get its table lock fails and rolls back instead of queueing behind a
+  long-running query (and making every later query on that table queue behind it). Re-run at a
+  quieter time, or raise the timeout deliberately.
 - Editing or deleting an applied migration is refused (checksum/missing-file check). Add a new
   migration instead.
 - Forward-only: there are no down migrations. Recovery from a bad *applied* migration is either a

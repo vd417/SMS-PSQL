@@ -184,6 +184,28 @@ public sealed class PgMigratorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Migration_blocked_by_a_table_lock_fails_fast_instead_of_queueing_forever()
+    {
+        var db = await BaselineOnlyDbAsync();
+        await db.ExecAsync("CREATE TABLE dbo.busy (id int);");
+        Migration("0001_alter_busy.sql", "ALTER TABLE dbo.busy ADD COLUMN extra int;");
+        await using var holder = new NpgsqlConnection(db.ConnectionString);
+        await holder.OpenAsync();
+        await using var tx = await holder.BeginTransactionAsync();
+        await using (var take = new NpgsqlCommand("LOCK TABLE dbo.busy IN ACCESS SHARE MODE", holder, tx))
+            await take.ExecuteNonQueryAsync();
+
+        // A long-running reader holds the table: without a lock_timeout the ALTER would wait
+        // forever (and every later query on the table would queue behind it). The runner's
+        // default per-migration lock_timeout is 10 s; allow generous slack before calling it a hang.
+        var run = () => Runner(db.ConnectionString).MigrateAsync().WaitAsync(TimeSpan.FromSeconds(40));
+
+        (await run.Should().ThrowAsync<MigrationException>())
+            .WithMessage("*0001_alter_busy.sql*NOT recorded*lock timeout*");
+        (await db.AppliedVersionsAsync()).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Init_refuses_a_database_that_already_has_the_baseline()
     {
         var db = await BaselineOnlyDbAsync();

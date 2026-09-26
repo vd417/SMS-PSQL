@@ -4,7 +4,7 @@ namespace Sms.PgMigrator;
 
 public sealed record CliOptions(
     string Command, string ConnectionString, string BaselineDirectory, string MigrationsDirectory,
-    TimeSpan LockTimeout, bool BackupConfirmed);
+    TimeSpan LockTimeout, bool BackupConfirmed, TimeSpan? DdlLockTimeout = null);
 
 /// Entry point. Exit codes: 0 success, 1 usage error, 2 refused or failed (the message says what
 /// state the database is in). See docs/runbooks/postgres-migrations.md.
@@ -18,7 +18,8 @@ public static class Cli
         """
         Usage: Sms.PgMigrator <init|migrate|status> [--connection "<npgsql connection string>"]
                               [--baseline-dir <dir>] [--migrations-dir <dir>]
-                              [--lock-timeout-seconds <n>] [--backup-confirmed]
+                              [--lock-timeout-seconds <n>] [--ddl-lock-timeout-seconds <n>]
+                              [--backup-confirmed]
           init     empty database    -> baseline (db/postgres/*.sql) + every migration
           migrate  existing database -> pending migrations (db/postgres/migrations/*.sql) only
           status   read-only: applied and pending migrations
@@ -37,7 +38,7 @@ public static class Cli
         }
 
         var migrator = new SchemaMigrator(o.ConnectionString,
-            new MigratorOptions(o.BaselineDirectory, o.MigrationsDirectory, o.LockTimeout, o.BackupConfirmed), Console.Out);
+            new MigratorOptions(o.BaselineDirectory, o.MigrationsDirectory, o.LockTimeout, o.BackupConfirmed, o.DdlLockTimeout), Console.Out);
         try
         {
             switch (o.Command)
@@ -73,6 +74,7 @@ public static class Cli
         var baseline = Path.Combine(baseDirectory, "baseline");
         var migrations = Path.Combine(baseDirectory, "migrations");
         var lockSeconds = 60;
+        int? ddlLockSeconds = null;
         var backupConfirmed = false;
 
         for (var i = 1; i < args.Length; i++)
@@ -95,6 +97,7 @@ public static class Cli
                 case "--baseline-dir": baseline = value; break;
                 case "--migrations-dir": migrations = value; break;
                 case "--lock-timeout-seconds" when int.TryParse(value, out var s) && s > 0: lockSeconds = s; break;
+                case "--ddl-lock-timeout-seconds" when int.TryParse(value, out var d) && d > 0: ddlLockSeconds = d; break;
                 default:
                     error = $"Unknown option '{flag}' or invalid value '{value}'.";
                     return null;
@@ -108,6 +111,7 @@ public static class Cli
             return null;
         }
 
-        return new CliOptions(args[0], connection, baseline, migrations, TimeSpan.FromSeconds(lockSeconds), backupConfirmed);
+        return new CliOptions(args[0], connection, baseline, migrations, TimeSpan.FromSeconds(lockSeconds), backupConfirmed,
+            ddlLockSeconds is { } d2 ? TimeSpan.FromSeconds(d2) : null);
     }
 }
