@@ -7,7 +7,9 @@ services:
       POSTGRES_PASSWORD: "Local_Dev_Pass123!"
     ports: ["5432:5432"]
     volumes:
-      - db-data:/var/lib/postgresql/data
+      # postgres 18+ images keep data in a major-version subdirectory and refuse to start with a
+      # mount at /var/lib/postgresql/data; the single mount must be /var/lib/postgresql.
+      - db-data:/var/lib/postgresql
       # Files here run once, in name order, only against a brand-new (empty) data volume.
       - ./db/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
