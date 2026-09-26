@@ -1602,8 +1602,7 @@ Run: `SMS_TEST_PG_PASSWORD=12345678 dotnet build tests/Sms.Tests.Integration && 
 
 Expected:
 - the 3 `ClientDeleteTests` FAIL with a 500;
-- `Init_applies…` FAILS: `applied.Should().StartWith([1, 2])` finds an empty list;
-- `Migrate_brings…` FAILS the same way.
+- both `RealMigrationsTests` FAIL, because there are no real migrations yet (the `migrations` output folder is missing or empty).
 
 - [ ] **Step 4: Write migration 0001**
 
