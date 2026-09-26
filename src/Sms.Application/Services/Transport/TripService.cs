@@ -11,6 +11,11 @@ namespace Sms.Application.Services.Transport;
 public interface ITripService
 {
     Task<ApiResult<TripResponse>> StartAsync(StartTripRequest req, CancellationToken ct = default);
+    /// Admin/CRM operator path: does not require the caller to be the bus's assigned driver
+    /// or conductor. DriverId is the bus's assigned driver when one exists; when the bus has
+    /// no assigned driver, DriverId falls back to the calling operator's own user id
+    /// (pre-existing behaviour, preserved on purpose for buses with no staff assignment yet).
+    Task<ApiResult<TripResponse>> StartAsOperatorAsync(StartTripRequest req, CancellationToken ct = default);
     Task<ApiResult<TripResponse?>> GetCurrentAsync(CancellationToken ct = default);
     Task<ApiResult<StaffTripAssignmentResponse>> GetAssignmentAsync(CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<StaffRosterStudentResponse>>> GetRosterAsync(Guid tripId, CancellationToken ct = default);
@@ -57,9 +62,32 @@ public sealed class TripService(
             return ApiResult<TripResponse>.Fail(new Error("not_assigned", "you are not assigned to this bus"), 403);
 
         var effective = req with { RouteId = req.RouteId ?? bus.RouteId };
+        return await StartCoreAsync(tid, driverUserId, effective, ct);
+    }
+
+    public async Task<ApiResult<TripResponse>> StartAsOperatorAsync(StartTripRequest req, CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { } tid || tenant.UserId is not { } uid)
+            return ApiResult<TripResponse>.Fail(new Error("forbidden", "no tenant/user context"), 403);
+        if (string.IsNullOrWhiteSpace(req.BusNo))
+            return ApiResult<TripResponse>.Fail(new Error("bus_no_required", "bus_no is required"), 422);
+        if (await repo.GetBusAssignmentByNoAsync(tid, req.BusNo, ct) is not { } bus)
+            return ApiResult<TripResponse>.Fail(new Error("bus_not_found", "no bus with that number in this school"), 404);
+        // No assignment check here — the operator path is trusted (admin/CRM), unlike the
+        // staff-facing StartAsync. DriverId is the bus's assigned driver when there is one;
+        // a bus with no driver assigned yet falls back to the calling operator's own user id,
+        // preserving this endpoint's pre-existing behaviour rather than rejecting it outright.
+        var driverUserId = bus.DriverUserId ?? uid;
+        var effective = req with { RouteId = req.RouteId ?? bus.RouteId };
+        return await StartCoreAsync(tid, driverUserId, effective, ct);
+    }
+
+    private async Task<ApiResult<TripResponse>> StartCoreAsync(
+        Guid tid, Guid driverUserId, StartTripRequest req, CancellationToken ct)
+    {
         // dbo.Trip_Start returns no row (instead of inserting) when the bus already has a live
         // trip; it fills ConductorId from Buses.ConductorStaffId itself.
-        if (await repo.StartAsync(tid, driverUserId, effective, ct) is not { } trip)
+        if (await repo.StartAsync(tid, driverUserId, req, ct) is not { } trip)
             return ApiResult<TripResponse>.Fail(new Error("bus_already_active", "This bus already has an active trip"), 409);
         await fleetBroadcaster.BroadcastFleetAsync(tid, ct);
         await live.PublishAsync(tid, LiveEventTypes.Transport, ct: ct);

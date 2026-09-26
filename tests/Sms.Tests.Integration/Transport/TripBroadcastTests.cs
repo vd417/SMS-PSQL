@@ -341,10 +341,6 @@ public class TripBroadcastTests(PostgresFixture fx)
                 "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
         }
-        // The admin/CRM start path reuses TripService.StartAsync, which now requires the
-        // caller to be the bus's assigned driver or conductor — assign the principal as the
-        // bus's driver so this operator path still works like it did before that check existed.
-        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, principalId);
 
         var admin = PrincipalClient(app, tenantId, principalId);
         var start = await Data(await admin.PostAsJsonAsync($"/v1/transport/buses/{busId}/trip/start",
@@ -363,5 +359,52 @@ public class TripBroadcastTests(PostgresFixture fx)
         var position = fleet.PositionCalls.Should().ContainSingle(c => c.BusId == busId).Subject;
         position.Snapshot.Lat.Should().Be(pingLat);
         position.Snapshot.Lng.Should().Be(pingLng);
+    }
+
+    [Fact]
+    public async Task Admin_starts_a_bus_trip_and_the_assigned_driver_is_attributed_not_the_principal()
+    {
+        var (app, _, _) = App();
+        await using var _dispose = app;
+        var tenantId = Guid.NewGuid();
+        var principalId = Guid.NewGuid();
+        var driverId = Guid.NewGuid();
+        var busNo = $"KA-{Guid.NewGuid():N}"[..12];
+
+        await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
+        var busId = await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, driverId);
+
+        var admin = PrincipalClient(app, tenantId, principalId);
+        var trip = await Data(await admin.PostAsJsonAsync($"/v1/transport/buses/{busId}/trip/start",
+            new { direction = "pickup" }), HttpStatusCode.Created);
+
+        trip.GetProperty("driver_id").GetGuid().Should().Be(driverId, "the bus's assigned driver is the source of truth, not the operator");
+    }
+
+    [Fact]
+    public async Task Admin_starts_a_bus_trip_on_a_bus_with_no_driver_and_the_principal_is_attributed()
+    {
+        var (app, _, _) = App();
+        await using var _dispose = app;
+        var tenantId = Guid.NewGuid();
+        var principalId = Guid.NewGuid();
+        var busId = Guid.NewGuid();
+        var busNo = $"KA-{Guid.NewGuid():N}"[..12];
+
+        await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
+                new { Id = busId, TenantId = tenantId, BusNo = busNo });
+        }
+
+        var admin = PrincipalClient(app, tenantId, principalId);
+        var trip = await Data(await admin.PostAsJsonAsync($"/v1/transport/buses/{busId}/trip/start",
+            new { direction = "pickup" }), HttpStatusCode.Created);
+
+        trip.GetProperty("driver_id").GetGuid().Should().Be(principalId, "a bus with no assigned driver falls back to the operator");
     }
 }
