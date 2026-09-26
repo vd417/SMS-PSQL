@@ -40,6 +40,40 @@ public sealed class PlanUpgradeRequestRepository(IDbConnectionFactory factory) :
             new { TenantIds = csv }, ct);
     }
 
+    /// Moves a request to approved only if it is still awaiting approval (paid online or pending
+    /// offline), in one conditional UPDATE. Exactly one of several concurrent approvals wins; the
+    /// others get null, so approval side effects (email, audit) happen once.
+    public async Task<PlanUpgradeRequestResponse?> TryApproveAsync(
+        Guid id, Guid? reviewedByUserId, CancellationToken ct = default)
+    {
+        var claimed = await ExecuteInlineAsync(
+            """
+            UPDATE "dbo"."PlanUpgradeRequests" SET
+                "Status" = @approved,
+                "ReviewedByUserId" = COALESCE(@reviewedByUserId, "ReviewedByUserId"),
+                "UpdatedAt" = now()
+            WHERE "Id" = @id AND "Status" = ANY(@awaiting)
+            """,
+            new
+            {
+                id,
+                reviewedByUserId,
+                approved = PlanUpgradeStatuses.Approved,
+                awaiting = new[] { PlanUpgradeStatuses.PaidPendingApproval, PlanUpgradeStatuses.PendingOffline },
+            }, ct);
+        return claimed == 1 ? await GetAsync(id, ct) : null;
+    }
+
+    /// Undoes <see cref="TryApproveAsync"/> when the approval's follow-up steps fail, returning the
+    /// request to the status it was claimed from so the approval can be retried.
+    public Task<int> ReleaseApprovalAsync(Guid id, string awaitingStatus, CancellationToken ct = default) =>
+        ExecuteInlineAsync(
+            """
+            UPDATE "dbo"."PlanUpgradeRequests" SET "Status" = @awaitingStatus, "UpdatedAt" = now()
+            WHERE "Id" = @id AND "Status" = @approved
+            """,
+            new { id, awaitingStatus, approved = PlanUpgradeStatuses.Approved }, ct);
+
     public Task<PlanUpgradeRequestResponse?> SetStatusAsync(
         Guid id, string status, Guid? reviewedByUserId, string? notes, CancellationToken ct = default) =>
         QuerySingleProcAsync<PlanUpgradeRequestResponse>("dbo.PlanUpgradeRequest_SetStatus", new

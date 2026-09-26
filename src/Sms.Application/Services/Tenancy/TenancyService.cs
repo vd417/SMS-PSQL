@@ -8,7 +8,6 @@ using Sms.Modules.Tenancy.Data;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Authz;
 using Sms.Shared.Kernel.Results;
-using System.Globalization;
 using System.Text;
 
 namespace Sms.Application.Services.Tenancy;
@@ -80,8 +79,7 @@ public sealed class TenancyService(
     IUserProvisioningDao users,
     UserProvisioningRepository platformUsers,
     IAuthService auth,
-    IEmailQueue emailQueue,
-    IInvoicePdfGenerator invoicePdf) : ITenancyService
+    ClientBillingEmails billingEmails) : ITenancyService
 {
     private static readonly HashSet<string> CatreRoles = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -303,32 +301,8 @@ public sealed class TenancyService(
             invoice = await invoices.SetAmountAsync(openInvoices[0].Id, amount, ct) ?? openInvoices[0];
         }
 
-        if (createdInvoice && invoice is not null && !string.IsNullOrWhiteSpace(client.ContactEmail))
-        {
-            var amountText = invoice.Amount.ToString("0.00", CultureInfo.InvariantCulture);
-            var due = invoice.Due.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            var billableNote = string.Equals(plan.Pricing, "per_student", StringComparison.OrdinalIgnoreCase)
-                ? $" ({seats} students × ₹{(plan.PerStudent ?? 0).ToString("0.##", CultureInfo.InvariantCulture)})"
-                : "";
-            var subs = await subscriptions.ListAsync(client.Id, "active", ct);
-            var pdf = invoicePdf.Generate(InvoicePdfGenerator.From(invoice, client, plan, subs.FirstOrDefault()));
-            var fileName = $"Catre-Invoice-{invoice.Id:N}.pdf";
-            var body =
-                $"Hello{(string.IsNullOrWhiteSpace(client.ContactName) ? "" : " " + client.ContactName)},\n\n" +
-                $"{client.Name} is now an active Catre client on the {client.PlanName ?? plan.Name} plan.\n\n" +
-                $"Invoice amount: ₹{amountText}{billableNote}\n" +
-                $"Due date: {due}\n" +
-                $"Status: {invoice.Status}\n\n" +
-                "Please find the full invoice PDF attached (plan, students, usage & charges).\n\n" +
-                "— Catre Technology";
-            emailQueue.Enqueue(new EmailMessage(
-                client.ContactEmail.Trim(),
-                $"Invoice for {client.Name} — ₹{amountText}",
-                body,
-                pdf,
-                fileName,
-                "application/pdf"));
-        }
+        if (createdInvoice && invoice is not null)
+            await billingEmails.QueueActivationInvoiceAsync(client, invoice, plan, seats, ct);
     }
 
     public async Task<ApiResult<ClientResponse>> ChangeClientPlanAsync(Guid id, ChangePlanRequest req, CancellationToken ct = default)
@@ -408,37 +382,17 @@ public sealed class TenancyService(
 
     public async Task<ApiResult> SendInvoiceEmailAsync(Guid id, CancellationToken ct = default)
     {
-        var built = await BuildInvoicePdfAsync(id, ct);
-        if (built.Error is not null)
-            return ApiResult.Fail(built.Error, built.StatusCode);
-        var (pdf, fileName, inv) = built.Data!;
+        var inv = await invoices.GetAsync(id, ct);
+        if (inv is null)
+            return ApiResult.Fail(new Error("not_found", "resource not found"), 404);
         var client = await clients.GetAsync(inv.TenantId, ct);
         if (client is null)
             return ApiResult.Fail(new Error("not_found", "client not found"), 404);
         if (string.IsNullOrWhiteSpace(client.ContactEmail))
             return ApiResult.Fail(new Error("invalid_request", "school has no contact email"), 422);
 
-        var amountText = inv.Amount.ToString("0.00", CultureInfo.InvariantCulture);
-        var due = inv.Due.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        var owner = string.IsNullOrWhiteSpace(client.ContactName) ? "" : " " + client.ContactName;
-        var body =
-            $"Hello{owner},\n\n" +
-            $"Please find attached the Catre Technology invoice for {client.Name}.\n\n" +
-            $"School: {client.Name}\n" +
-            $"Plan: {inv.PlanName ?? client.PlanName}\n" +
-            $"Students: {client.StudentsCount}\n" +
-            $"Amount: ₹{amountText}\n" +
-            $"Due: {due}\n" +
-            $"Status: {inv.Status}\n\n" +
-            "Full plan, usage and billing details are in the PDF.\n\n" +
-            "— Catre Technology";
-        emailQueue.Enqueue(new EmailMessage(
-            client.ContactEmail.Trim(),
-            $"Catre Invoice — {client.Name} — ₹{amountText}",
-            body,
-            pdf,
-            fileName,
-            "application/pdf"));
+        var plan = client.PlanId is Guid planId ? await plans.GetAsync(planId, ct) : null;
+        await billingEmails.QueueInvoiceAsync(client, inv, plan, ct);
         return ApiResult.Ok();
     }
 
@@ -457,11 +411,7 @@ public sealed class TenancyService(
         if (client.PlanId is Guid planId)
             plan = await plans.GetAsync(planId, ct);
 
-        var subs = await subscriptions.ListAsync(client.Id, "active", ct);
-        var sub = subs.FirstOrDefault();
-
-        var pdf = invoicePdf.Generate(InvoicePdfGenerator.From(inv, client, plan, sub));
-        var fileName = $"Catre-Invoice-{inv.Id:N}.pdf";
+        var (pdf, fileName) = await billingEmails.RenderInvoicePdfAsync(inv, client, plan, ct);
         return ApiResult<(byte[], string, InvoiceResponse)>.Ok((pdf, fileName, inv));
     }
 
