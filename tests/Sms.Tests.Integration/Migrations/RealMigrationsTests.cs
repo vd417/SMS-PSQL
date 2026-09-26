@@ -41,6 +41,9 @@ public sealed class RealMigrationsTests : IAsyncLifetime
             .Should().BeTrue("0002 drops the dead worked example");
         (await db.ScalarAsync<bool>("SELECT to_regprocedure('dbo.tripping_bulkinsert(uuid,uuid,text)') IS NOT NULL"))
             .Should().BeTrue("the live TripPing_BulkInsert function must be untouched");
+        (await db.ScalarAsync<string>(
+            """SELECT string_agg(conname, ',' ORDER BY conname) FROM pg_constraint WHERE conrelid = 'dbo."PlatformMetricsSnapshot"'::regclass AND contype IN ('p', 'u')"""))
+            .Should().Be("PK_PlatformMetricsSnapshot", "0003 drops the redundant inline UNIQUE on the primary-key column (SQL Server has only the PK)");
     }
 
     [Fact]
