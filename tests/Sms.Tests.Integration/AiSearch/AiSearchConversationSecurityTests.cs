@@ -129,21 +129,21 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
                 "SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId)",
                 new { teacherUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, N'Meena', @teacherUserId)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'Meena', @teacherUserId)",
                 new { teacherId, tenantId, teacherUserId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "StudentCount", "ClassTeacherId")
                 VALUES (@classId, @tenantId, @className, 0, @teacherId)
                 """,
                 new { classId, tenantId, teacherId, className });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.TimetableSlots (TenantId, [Day], Period, Subject, ClassId, ClassName, TeacherId)
-                VALUES (@tenantId, 'Mon', 1, N'Math', @classId, @className, @teacherId)
+                INSERT INTO "dbo"."TimetableSlots" ("TenantId", "Day", "Period", "Subject", "ClassId", "ClassName", "TeacherId")
+                VALUES (@tenantId, 'Mon', 1, 'Math', @classId, @className, @teacherId)
                 """,
                 new { tenantId, classId, teacherId, className });
         });
@@ -157,8 +157,8 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
         var admissionNo = $"ADM-{Guid.NewGuid():N}"[..20];
         await Seed(conn => conn.ExecuteAsync(
             """
-            INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-            VALUES (@id, @tenantId, @admissionNo, @name, @grade, @section, @classLabel, N'active')
+            INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+            VALUES (@id, @tenantId, @admissionNo, @name, @grade, @section, @classLabel, 'active')
             """,
             new { id, tenantId, admissionNo, name, grade, section, classLabel }));
         return id;
@@ -166,7 +166,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
 
     private async Task MoveStudent(Guid studentId, string grade, string section, string classLabel) =>
         await Seed(conn => conn.ExecuteAsync(
-            "UPDATE dbo.Students SET Grade = @grade, Section = @section, ClassLabel = @classLabel WHERE Id = @studentId",
+            "UPDATE \"dbo\".\"Students\" SET \"Grade\" = @grade, \"Section\" = @section, \"ClassLabel\" = @classLabel WHERE \"Id\" = @studentId",
             new { studentId, grade, section, classLabel }));
 
     /// <summary>
@@ -247,8 +247,8 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
 
         var parentId = await Query(conn => conn.QuerySingleAsync<Guid>(
             """
-            SELECT Id FROM dbo.Users
-            WHERE TenantId = @tenantId AND LOWER(LTRIM(RTRIM(Email))) = LOWER(LTRIM(RTRIM(@email)))
+            SELECT "Id" FROM "dbo"."Users"
+            WHERE "TenantId" = @tenantId AND lower(trim("Email")) = lower(trim(@email))
             """,
             new { email = parentEmail, tenantId }));
 
@@ -268,7 +268,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
 
         // Sever the parent-child link directly.
         await Seed(conn => conn.ExecuteAsync(
-            "DELETE FROM dbo.ParentStudentLinks WHERE ParentUserId = @parentId AND StudentId = @childId",
+            "DELETE FROM \"dbo\".\"ParentStudentLinks\" WHERE \"ParentUserId\" = @parentId AND \"StudentId\" = @childId",
             new { parentId, childId }));
 
         classifier.Result = new AiClassificationResult("en", "PersonLookup", Filters(studentName: null));
@@ -316,8 +316,8 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
 
         var parentId = await Query(conn => conn.QuerySingleAsync<Guid>(
             """
-            SELECT Id FROM dbo.Users
-            WHERE TenantId = @tenantId AND LOWER(LTRIM(RTRIM(Email))) = LOWER(LTRIM(RTRIM(@email)))
+            SELECT "Id" FROM "dbo"."Users"
+            WHERE "TenantId" = @tenantId AND lower(trim("Email")) = lower(trim(@email))
             """,
             new { email = parentEmail, tenantId }));
 
@@ -330,7 +330,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, SubjectsCsv) VALUES (@teacherId, @tenantId, N'Rahul Sharma', N'Mathematics')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"SubjectsCsv\") VALUES (@teacherId, @tenantId, 'Rahul Sharma', 'Mathematics')",
                 new { teacherId, tenantId });
         });
 
@@ -378,7 +378,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantA::text, false)", new { tenantA });
             teacherIdInA = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@teacherIdInA, @tenantA, N'Rahul Sharma')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\") VALUES (@teacherIdInA, @tenantA, 'Rahul Sharma')",
                 new { teacherIdInA, tenantA });
         });
 
@@ -420,7 +420,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             teacherRowId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@teacherRowId, @tenantId, N'Rahul Sharma')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\") VALUES (@teacherRowId, @tenantId, 'Rahul Sharma')",
                 new { teacherRowId, tenantId });
         });
 
@@ -491,7 +491,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, SubjectsCsv) VALUES (@teacherId, @tenantId, N'Rahul Sharma', N'Mathematics')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"SubjectsCsv\") VALUES (@teacherId, @tenantId, 'Rahul Sharma', 'Mathematics')",
                 new { teacherId, tenantId });
         });
         await InsertStudent(tenantId, "Rahul Verma", "8", "A", "8A");
@@ -553,7 +553,7 @@ public class AiSearchConversationSecurityTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             teacherId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@teacherId, @tenantId, N'Rahul Sharma')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\") VALUES (@teacherId, @tenantId, 'Rahul Sharma')",
                 new { teacherId, tenantId });
         });
 

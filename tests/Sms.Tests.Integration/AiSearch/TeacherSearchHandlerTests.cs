@@ -49,7 +49,7 @@ public class TeacherSearchHandlerTests(PostgresFixture fx)
 
     private static async Task InsertTeacher(NpgsqlConnection conn, Guid id, Guid tenantId, string name) =>
         await conn.ExecuteAsync(
-            "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@id, @tenantId, @name)",
+            "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\") VALUES (@id, @tenantId, @name)",
             new { id, tenantId, name });
 
     private static AiAuthorizationResult AdminAuth(string? name) => new(

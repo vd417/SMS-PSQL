@@ -55,8 +55,8 @@ public class StudentSearchHandlerTests(PostgresFixture fx)
         NpgsqlConnection conn, Guid id, Guid tenantId, string name, string admissionNoPrefix) =>
         await conn.ExecuteAsync(
             """
-            INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-            VALUES (@id, @tenantId, @adm, @name, N'8', N'A', N'8A', N'active')
+            INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+            VALUES (@id, @tenantId, @adm, @name, '8', 'A', '8A', 'active')
             """,
             new { id, tenantId, adm = $"{admissionNoPrefix}-{Guid.NewGuid():N}"[..20], name });
 
@@ -237,8 +237,8 @@ public class StudentDetailsHandlerTests(PostgresFixture fx)
         NpgsqlConnection conn, Guid id, Guid tenantId, string name, string admissionNoPrefix) =>
         await conn.ExecuteAsync(
             """
-            INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-            VALUES (@id, @tenantId, @adm, @name, N'8', N'A', N'8A', N'active')
+            INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+            VALUES (@id, @tenantId, @adm, @name, '8', 'A', '8A', 'active')
             """,
             new { id, tenantId, adm = $"{admissionNoPrefix}-{Guid.NewGuid():N}"[..20], name });
 

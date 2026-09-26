@@ -65,10 +65,10 @@ public class DailyAttendanceSummaryHandlerTests(PostgresFixture fx)
     {
         await conn.ExecuteAsync(
             """
-            INSERT dbo.PeriodAttendanceRecords
-                (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status)
+            INSERT INTO "dbo"."PeriodAttendanceRecords"
+                ("Id", "TenantId", "ClassId", "StudentId", "Date", "Period", "Subject", "Status")
             VALUES
-                (NEWID(), @tenantId, @classId, @studentId, @date, 1, N'Math', @status)
+                (gen_random_uuid(), @tenantId, @classId, @studentId, @date, 1, 'Math', @status)
             """,
             new { tenantId, classId = Guid.NewGuid(), studentId, date = date.ToDateTime(TimeOnly.MinValue), status });
     }
@@ -182,16 +182,16 @@ public class DailyAttendanceSummaryHandlerTests(PostgresFixture fx)
         {
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-                VALUES (@student1, @tenantId, @adm1, N'Daily Compact Match', N'8', N'A', @storedClassLabel, N'active')
+                INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+                VALUES (@student1, @tenantId, @adm1, 'Daily Compact Match', '8', 'A', @storedClassLabel, 'active')
                 """,
                 new { student1, tenantId, adm1 = $"ADM-DAF-{Guid.NewGuid():N}"[..20], storedClassLabel });
 
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.PeriodAttendanceRecords (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status)
-                VALUES (NEWID(), @tenantId, @classId, @student1, @date, 1, N'Math', N'present')
+                INSERT INTO "dbo"."PeriodAttendanceRecords" ("Id", "TenantId", "ClassId", "StudentId", "Date", "Period", "Subject", "Status")
+                VALUES (gen_random_uuid(), @tenantId, @classId, @student1, @date, 1, 'Math', 'present')
                 """,
                 new { tenantId, classId, student1, date = today.ToDateTime(TimeOnly.MinValue) });
         });

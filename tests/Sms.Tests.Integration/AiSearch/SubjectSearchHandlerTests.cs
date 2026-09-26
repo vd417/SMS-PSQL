@@ -72,29 +72,29 @@ public class SubjectSearchHandlerTests(PostgresFixture fx)
         {
             // Student belongs to class 9-A, whose homeroom subject is Mathematics.
             await conn.ExecuteAsync(
-                "INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status) " +
-                "VALUES (@studentId, @tenantId, @adm, N'Ankit', N'9', N'A', N'9-A', N'active')",
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Grade\", \"Section\", \"ClassLabel\", \"Status\") " +
+                "VALUES (@studentId, @tenantId, @adm, 'Ankit', '9', 'A', '9-A', 'active')",
                 new { studentId, tenantId, adm = $"ADM-SS1-{Guid.NewGuid():N}"[..20] });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.Classes (Id, TenantId, Name, Grade, Section, Subject) " +
-                "VALUES (@classAId, @tenantId, N'9-A', N'9', N'A', N'Mathematics'), " +
-                "(@classBId, @tenantId, N'9-B', N'9', N'B', N'History')",
+                "INSERT INTO \"dbo\".\"Classes\" (\"Id\", \"TenantId\", \"Name\", \"Grade\", \"Section\", \"Subject\") " +
+                "VALUES (@classAId, @tenantId, '9-A', '9', 'A', 'Mathematics'), " +
+                "(@classBId, @tenantId, '9-B', '9', 'B', 'History')",
                 new { classAId, classBId, tenantId });
 
             await conn.ExecuteAsync(
-                "INSERT dbo.Subjects (Id, TenantId, Name, Short) VALUES " +
-                "(NEWID(), @tenantId, N'Mathematics', N'Math'), " +
-                "(NEWID(), @tenantId, N'Science', N'Sci'), " +
-                "(NEWID(), @tenantId, N'History', N'Hist')",
+                "INSERT INTO \"dbo\".\"Subjects\" (\"Id\", \"TenantId\", \"Name\", \"Short\") VALUES " +
+                "(gen_random_uuid(), @tenantId, 'Mathematics', 'Math'), " +
+                "(gen_random_uuid(), @tenantId, 'Science', 'Sci'), " +
+                "(gen_random_uuid(), @tenantId, 'History', 'Hist')",
                 new { tenantId });
 
             // A Science timetable slot for the student's own class (9-A) and a History slot for
             // the other class (9-B) — only the 9-A subjects must come back.
             await conn.ExecuteAsync(
-                "INSERT dbo.TimetableSlots (Id, TenantId, [Day], Period, Subject, ClassId, ClassName) " +
-                "VALUES (NEWID(), @tenantId, N'Mon', 1, N'Science', @classAId, N'9-A'), " +
-                "(NEWID(), @tenantId, N'Mon', 1, N'History', @classBId, N'9-B')",
+                "INSERT INTO \"dbo\".\"TimetableSlots\" (\"Id\", \"TenantId\", \"Day\", \"Period\", \"Subject\", \"ClassId\", \"ClassName\") " +
+                "VALUES (gen_random_uuid(), @tenantId, 'Mon', 1, 'Science', @classAId, '9-A'), " +
+                "(gen_random_uuid(), @tenantId, 'Mon', 1, 'History', @classBId, '9-B')",
                 new { tenantId, classAId, classBId });
         });
 

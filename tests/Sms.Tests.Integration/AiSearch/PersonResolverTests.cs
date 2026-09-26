@@ -77,9 +77,9 @@ public class PersonResolverTests(PostgresFixture fx)
         await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         return await conn.QuerySingleAsync<Guid>(
             """
-            SELECT Id FROM dbo.Users
-            WHERE TenantId = @tenantId
-              AND LOWER(LTRIM(RTRIM(Email))) = LOWER(LTRIM(RTRIM(@email)))
+            SELECT "Id" FROM "dbo"."Users"
+            WHERE "TenantId" = @tenantId
+              AND lower(trim("Email")) = lower(trim(@email))
             """,
             new { email, tenantId });
     }
@@ -98,14 +98,14 @@ public class PersonResolverTests(PostgresFixture fx)
             var teacherId = Guid.NewGuid();
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId)",
                 new { teacherUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, N'Meena', @teacherUserId)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'Meena', @teacherUserId)",
                 new { teacherId, tenantId, teacherUserId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, Grade, Section, StudentCount, ClassTeacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "Grade", "Section", "StudentCount", "ClassTeacherId")
                 VALUES (@classId, @tenantId, @className, @grade, @section, 0, @teacherId)
                 """,
                 new { classId, tenantId, teacherId, className, grade, section });
@@ -119,8 +119,8 @@ public class PersonResolverTests(PostgresFixture fx)
         var admissionNo = $"ADM-{Guid.NewGuid():N}"[..20];
         await conn.ExecuteAsync(
             """
-            INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-            VALUES (@id, @tenantId, @admissionNo, @name, @grade, @section, @classLabel, N'active')
+            INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+            VALUES (@id, @tenantId, @admissionNo, @name, @grade, @section, @classLabel, 'active')
             """,
             new { id, tenantId, admissionNo, name, grade, section, classLabel });
         return id;
@@ -128,12 +128,12 @@ public class PersonResolverTests(PostgresFixture fx)
 
     private static async Task InsertTeacher(NpgsqlConnection conn, Guid tenantId, string name) =>
         await conn.ExecuteAsync(
-            "INSERT dbo.Teachers (Id, TenantId, Name) VALUES (@id, @tenantId, @name)",
+            "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\") VALUES (@id, @tenantId, @name)",
             new { id = Guid.NewGuid(), tenantId, name });
 
     private static async Task InsertStaff(NpgsqlConnection conn, Guid tenantId, string name) =>
         await conn.ExecuteAsync(
-            "INSERT dbo.Staff (Id, TenantId, Name) VALUES (@id, @tenantId, @name)",
+            "INSERT INTO \"dbo\".\"Staff\" (\"Id\", \"TenantId\", \"Name\") VALUES (@id, @tenantId, @name)",
             new { id = Guid.NewGuid(), tenantId, name });
 
     private static async Task<Guid> InsertAdmin(
@@ -141,10 +141,10 @@ public class PersonResolverTests(PostgresFixture fx)
     {
         var id = Guid.NewGuid();
         await conn.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Email, Name, Status) VALUES (@id, @tenantId, @email, @name, 'active')",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"Name\", \"Status\") VALUES (@id, @tenantId, @email, @name, 'active')",
             new { id, tenantId, email, name });
         await conn.ExecuteAsync(
-            "INSERT dbo.UserRoles (UserId, Role) VALUES (@id, @role)", new { id, role });
+            "INSERT INTO \"dbo\".\"UserRoles\" (\"UserId\", \"Role\") VALUES (@id, @role)", new { id, role });
         return id;
     }
 
@@ -391,7 +391,7 @@ public class PersonResolverTests(PostgresFixture fx)
 
         // Student moves to a different class the teacher does not teach.
         await SeedInTenant(tenantId, conn => conn.ExecuteAsync(
-            "UPDATE dbo.Students SET Grade = N'9', Section = N'B', ClassLabel = N'9-B' WHERE Id = @studentId",
+            "UPDATE \"dbo\".\"Students\" SET \"Grade\" = '9', \"Section\" = 'B', \"ClassLabel\" = '9-B' WHERE \"Id\" = @studentId",
             new { studentId }));
 
         var stillInScope = await IsStillInScope(app, tenantId, teacherUserId, studentId, auth.AllowedClassNames!);

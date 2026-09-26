@@ -58,8 +58,8 @@ public class PersonLookupHandlerTests(PostgresFixture fx)
         var admissionNo = $"ADM-{Guid.NewGuid():N}"[..20];
         await conn.ExecuteAsync(
             """
-            INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-            VALUES (@id, @tenantId, @admissionNo, @name, @grade, @section, @classLabel, N'active')
+            INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+            VALUES (@id, @tenantId, @admissionNo, @name, @grade, @section, @classLabel, 'active')
             """,
             new { id, tenantId, admissionNo, name, grade, section, classLabel });
         return id;
@@ -70,7 +70,7 @@ public class PersonLookupHandlerTests(PostgresFixture fx)
     {
         var id = Guid.NewGuid();
         await conn.ExecuteAsync(
-            "INSERT dbo.Teachers (Id, TenantId, Name, SubjectsCsv) VALUES (@id, @tenantId, @name, @subjectsCsv)",
+            "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"SubjectsCsv\") VALUES (@id, @tenantId, @name, @subjectsCsv)",
             new { id, tenantId, name, subjectsCsv });
         return id;
     }

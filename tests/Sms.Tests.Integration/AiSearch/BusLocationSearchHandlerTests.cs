@@ -55,7 +55,7 @@ public class BusLocationSearchHandlerTests(PostgresFixture fx)
         NpgsqlConnection conn, Guid id, Guid tenantId, string admissionNo, string name) =>
         await conn.ExecuteAsync(
             """
-            INSERT dbo.Students (Id, TenantId, AdmissionNo, Name)
+            INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name")
             VALUES (@id, @tenantId, @admissionNo, @name)
             """,
             new { id, tenantId, admissionNo, name });
@@ -66,8 +66,8 @@ public class BusLocationSearchHandlerTests(PostgresFixture fx)
         var id = Guid.NewGuid();
         await conn.ExecuteAsync(
             """
-            INSERT dbo.Users (Id, TenantId, Email, Phone, IsPlatform, Status, StudentId, MustSetPassword, Name)
-            VALUES (@id, @tenantId, @email, NULL, 0, N'active', @admissionNo, 1, N'Parent')
+            INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "Phone", "IsPlatform", "Status", "StudentId", "MustSetPassword", "Name")
+            VALUES (@id, @tenantId, @email, NULL, false, 'active', @admissionNo, true, 'Parent')
             """,
             new { id, tenantId, email = $"parent{Guid.NewGuid():N}@home.test", admissionNo });
         return id;
@@ -78,7 +78,7 @@ public class BusLocationSearchHandlerTests(PostgresFixture fx)
         var id = Guid.NewGuid();
         await conn.ExecuteAsync(
             """
-            INSERT dbo.Buses (Id, TenantId, BusNo)
+            INSERT INTO "dbo"."Buses" ("Id", "TenantId", "BusNo")
             VALUES (@id, @tenantId, @busNo)
             """,
             new { id, tenantId, busNo });
@@ -88,8 +88,8 @@ public class BusLocationSearchHandlerTests(PostgresFixture fx)
     private static async Task AssignBus(NpgsqlConnection conn, Guid tenantId, Guid studentId, Guid busId) =>
         await conn.ExecuteAsync(
             """
-            INSERT dbo.StudentBusAssignments (Id, TenantId, StudentId, BusId)
-            VALUES (NEWID(), @tenantId, @studentId, @busId)
+            INSERT INTO "dbo"."StudentBusAssignments" ("Id", "TenantId", "StudentId", "BusId")
+            VALUES (gen_random_uuid(), @tenantId, @studentId, @busId)
             """,
             new { tenantId, studentId, busId });
 

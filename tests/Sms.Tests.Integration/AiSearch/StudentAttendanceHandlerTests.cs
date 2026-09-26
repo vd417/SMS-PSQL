@@ -83,28 +83,28 @@ public class StudentAttendanceHandlerTests(PostgresFixture fx)
         {
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-                VALUES (@studentId, @tenantId, @adm, N'Ravi Kumar', N'8', N'A', N'8A', N'active')
+                INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+                VALUES (@studentId, @tenantId, @adm, 'Ravi Kumar', '8', 'A', '8A', 'active')
                 """,
                 new { studentId, tenantId, adm = $"ADM-SA1-{Guid.NewGuid():N}"[..20] });
 
             var date = today.ToDateTime(TimeOnly.MinValue);
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.PeriodAttendanceRecords (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status)
-                VALUES (NEWID(), @tenantId, @classId, @studentId, @date, 1, N'Math', N'present')
+                INSERT INTO "dbo"."PeriodAttendanceRecords" ("Id", "TenantId", "ClassId", "StudentId", "Date", "Period", "Subject", "Status")
+                VALUES (gen_random_uuid(), @tenantId, @classId, @studentId, @date, 1, 'Math', 'present')
                 """,
                 new { tenantId, classId, studentId, date });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.PeriodAttendanceRecords (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status)
-                VALUES (NEWID(), @tenantId, @classId, @studentId, @date, 2, N'English', N'late')
+                INSERT INTO "dbo"."PeriodAttendanceRecords" ("Id", "TenantId", "ClassId", "StudentId", "Date", "Period", "Subject", "Status")
+                VALUES (gen_random_uuid(), @tenantId, @classId, @studentId, @date, 2, 'English', 'late')
                 """,
                 new { tenantId, classId, studentId, date });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.PeriodAttendanceRecords (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status)
-                VALUES (NEWID(), @tenantId, @classId, @studentId, @date, 3, N'Science', N'absent')
+                INSERT INTO "dbo"."PeriodAttendanceRecords" ("Id", "TenantId", "ClassId", "StudentId", "Date", "Period", "Subject", "Status")
+                VALUES (gen_random_uuid(), @tenantId, @classId, @studentId, @date, 3, 'Science', 'absent')
                 """,
                 new { tenantId, classId, studentId, date });
         });

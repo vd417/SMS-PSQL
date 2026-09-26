@@ -121,21 +121,21 @@ public class ClassAttendanceHandlerTests(PostgresFixture fx)
             var teacherId = Guid.NewGuid();
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId)",
                 new { teacherUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, N'Meena', @teacherUserId)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'Meena', @teacherUserId)",
                 new { teacherId, tenantId, teacherUserId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId)
-                VALUES (@classId, @tenantId, N'8A', 0, @teacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "StudentCount", "ClassTeacherId")
+                VALUES (@classId, @tenantId, '8A', 0, @teacherId)
                 """,
                 new { classId, tenantId, teacherId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.TimetableSlots (TenantId, [Day], Period, Subject, ClassId, ClassName, TeacherId)
-                VALUES (@tenantId, 'Mon', 1, N'Math', @classId, N'8A', @teacherId)
+                INSERT INTO "dbo"."TimetableSlots" ("TenantId", "Day", "Period", "Subject", "ClassId", "ClassName", "TeacherId")
+                VALUES (@tenantId, 'Mon', 1, 'Math', @classId, '8A', @teacherId)
                 """,
                 new { tenantId, classId, teacherId });
         });
@@ -173,28 +173,28 @@ public class ClassAttendanceHandlerTests(PostgresFixture fx)
         {
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-                VALUES (@student1, @tenantId, @adm1, N'Class Present', N'8', N'A', @className, N'active')
+                INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+                VALUES (@student1, @tenantId, @adm1, 'Class Present', '8', 'A', @className, 'active')
                 """,
                 new { student1, tenantId, adm1 = $"ADM-CA1-{Guid.NewGuid():N}"[..20], className });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-                VALUES (@student2, @tenantId, @adm2, N'Class Absent', N'8', N'A', @className, N'active')
+                INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+                VALUES (@student2, @tenantId, @adm2, 'Class Absent', '8', 'A', @className, 'active')
                 """,
                 new { student2, tenantId, adm2 = $"ADM-CA2-{Guid.NewGuid():N}"[..20], className });
 
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.PeriodAttendanceRecords (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status)
-                VALUES (NEWID(), @tenantId, @classId, @student1, @date, 1, N'Math', N'present')
+                INSERT INTO "dbo"."PeriodAttendanceRecords" ("Id", "TenantId", "ClassId", "StudentId", "Date", "Period", "Subject", "Status")
+                VALUES (gen_random_uuid(), @tenantId, @classId, @student1, @date, 1, 'Math', 'present')
                 """,
                 new { tenantId, classId, student1, date = today.ToDateTime(TimeOnly.MinValue) });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.PeriodAttendanceRecords (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status)
-                VALUES (NEWID(), @tenantId, @classId, @student2, @date, 1, N'Math', N'absent')
+                INSERT INTO "dbo"."PeriodAttendanceRecords" ("Id", "TenantId", "ClassId", "StudentId", "Date", "Period", "Subject", "Status")
+                VALUES (gen_random_uuid(), @tenantId, @classId, @student2, @date, 1, 'Math', 'absent')
                 """,
                 new { tenantId, classId, student2, date = today.ToDateTime(TimeOnly.MinValue) });
         });
@@ -252,16 +252,16 @@ public class ClassAttendanceHandlerTests(PostgresFixture fx)
         {
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-                VALUES (@student1, @tenantId, @adm1, N'Compact Match', N'8', N'A', @storedClassLabel, N'active')
+                INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+                VALUES (@student1, @tenantId, @adm1, 'Compact Match', '8', 'A', @storedClassLabel, 'active')
                 """,
                 new { student1, tenantId, adm1 = $"ADM-CAF-{Guid.NewGuid():N}"[..20], storedClassLabel });
 
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.PeriodAttendanceRecords (Id, TenantId, ClassId, StudentId, [Date], Period, Subject, Status)
-                VALUES (NEWID(), @tenantId, @classId, @student1, @date, 1, N'Math', N'present')
+                INSERT INTO "dbo"."PeriodAttendanceRecords" ("Id", "TenantId", "ClassId", "StudentId", "Date", "Period", "Subject", "Status")
+                VALUES (gen_random_uuid(), @tenantId, @classId, @student1, @date, 1, 'Math', 'present')
                 """,
                 new { tenantId, classId, student1, date = today.ToDateTime(TimeOnly.MinValue) });
         });

@@ -50,8 +50,8 @@ public class HomeworkSearchHandlerTests(PostgresFixture fx)
         NpgsqlConnection conn, Guid id, Guid tenantId, Guid studentId, string title) =>
         await conn.ExecuteAsync(
             """
-            INSERT dbo.Homework (Id, TenantId, StudentId, Title, Status, Priority)
-            VALUES (@id, @tenantId, @studentId, @title, N'todo', N'med')
+            INSERT INTO "dbo"."Homework" ("Id", "TenantId", "StudentId", "Title", "Status", "Priority")
+            VALUES (@id, @tenantId, @studentId, @title, 'todo', 'med')
             """,
             new { id, tenantId, studentId, title });
 

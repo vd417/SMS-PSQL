@@ -21,21 +21,21 @@ public sealed class AiAttendanceAggregateRepository(IDbConnectionFactory factory
 {
     private const string AggregateSelect = @"
 SELECT
-    COUNT(*) AS Total,
-    SUM(CASE WHEN att.Positive > 0 THEN 1 ELSE 0 END) AS Present,
-    SUM(CASE WHEN att.Marked > 0 AND att.Positive = 0 THEN 1 ELSE 0 END) AS Absent,
-    CAST(CASE WHEN SUM(att.Marked) > 0
-              THEN ROUND(100.0 * SUM(att.Positive) / NULLIF(SUM(att.Marked), 0), 2)
-              ELSE 0 END AS decimal(5,2)) AS Pct
-FROM dbo.Students s
+    CAST(COUNT(*) AS int) AS ""Total"",
+    CAST(COALESCE(SUM(CASE WHEN att.""Positive"" > 0 THEN 1 ELSE 0 END), 0) AS int) AS ""Present"",
+    CAST(COALESCE(SUM(CASE WHEN att.""Marked"" > 0 AND att.""Positive"" = 0 THEN 1 ELSE 0 END), 0) AS int) AS ""Absent"",
+    CAST(CASE WHEN SUM(att.""Marked"") > 0
+              THEN ROUND(100.0 * SUM(att.""Positive"") / NULLIF(SUM(att.""Marked""), 0), 2)
+              ELSE 0 END AS decimal(5,2)) AS ""Pct""
+FROM ""dbo"".""Students"" s
 LEFT JOIN (
-    SELECT par.StudentId, COUNT(*) AS Marked,
-           SUM(CASE WHEN par.Status IN (N'present', N'late') THEN 1 ELSE 0 END) AS Positive
-    FROM dbo.PeriodAttendanceRecords par
-    WHERE par.TenantId = @tenantId AND par.[Date] = @date
-    GROUP BY par.StudentId
-) att ON att.StudentId = s.Id
-WHERE s.TenantId = @tenantId AND s.Status = N'active'";
+    SELECT par.""StudentId"", COUNT(*) AS ""Marked"",
+           SUM(CASE WHEN par.""Status"" IN ('present', 'late') THEN 1 ELSE 0 END) AS ""Positive""
+    FROM ""dbo"".""PeriodAttendanceRecords"" par
+    WHERE par.""TenantId"" = @tenantId AND par.""Date"" = @date
+    GROUP BY par.""StudentId""
+) att ON att.""StudentId"" = s.""Id""
+WHERE s.""TenantId"" = @tenantId AND s.""Status"" = 'active'";
 
     public async Task<AttendanceAggregate> SchoolWideAsync(Guid tenantId, DateOnly date, CancellationToken ct = default)
     {
@@ -49,8 +49,8 @@ WHERE s.TenantId = @tenantId AND s.Status = N'active'";
     public async Task<AttendanceAggregate> ForClassAsync(
         Guid tenantId, string className, string? section, DateOnly date, CancellationToken ct = default)
     {
-        var sql = AggregateSelect + " AND s.ClassLabel = @className" +
-                  (section is null ? "" : " AND s.Section = @section");
+        var sql = AggregateSelect + " AND s.\"ClassLabel\" = @className" +
+                  (section is null ? "" : " AND s.\"Section\" = @section");
         var rows = await QueryInlineAsync<AttendanceAggregate>(
             sql, new { tenantId, date = date.ToDateTime(TimeOnly.MinValue), className, section }, ct);
         return rows.FirstOrDefault() ?? new AttendanceAggregate(0, 0, 0, 0);
@@ -69,8 +69,8 @@ WHERE s.TenantId = @tenantId AND s.Status = N'active'";
     {
         var rows = await QueryInlineAsync<string>(
             """
-            SELECT DISTINCT ClassLabel FROM dbo.Students
-            WHERE TenantId = @tenantId AND Status = N'active' AND ClassLabel IS NOT NULL
+            SELECT DISTINCT "ClassLabel" FROM "dbo"."Students"
+            WHERE "TenantId" = @tenantId AND "Status" = 'active' AND "ClassLabel" IS NOT NULL
             """,
             new { tenantId }, ct);
         return rows.ToList();

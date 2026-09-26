@@ -110,18 +110,18 @@ public class PersonLookupConversationWorkedExampleTests(PostgresFixture fx)
             await conn.ExecuteAsync(
                 "SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, SubjectsCsv) VALUES (@teacherId, @tenantId, N'Rahul Sharma', N'Mathematics')",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"SubjectsCsv\") VALUES (@teacherId, @tenantId, 'Rahul Sharma', 'Mathematics')",
                 new { teacherId, tenantId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId)
-                VALUES (NEWID(), @tenantId, N'8A', 0, @teacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "StudentCount", "ClassTeacherId")
+                VALUES (gen_random_uuid(), @tenantId, '8A', 0, @teacherId)
                 """,
                 new { tenantId, teacherId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId)
-                VALUES (NEWID(), @tenantId, N'8B', 0, @teacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "StudentCount", "ClassTeacherId")
+                VALUES (gen_random_uuid(), @tenantId, '8B', 0, @teacherId)
                 """,
                 new { tenantId, teacherId });
         });

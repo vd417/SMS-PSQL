@@ -115,18 +115,18 @@ public class AiSearchSecurityTests(PostgresFixture fx)
     private async Task<Guid> ParentUserId(string email, Guid tenantId) => await Query(conn =>
         conn.QuerySingleAsync<Guid>(
             """
-            SELECT Id FROM dbo.Users
-            WHERE TenantId = @tenantId
-              AND LOWER(LTRIM(RTRIM(Email))) = LOWER(LTRIM(RTRIM(@email)))
+            SELECT "Id" FROM "dbo"."Users"
+            WHERE "TenantId" = @tenantId
+              AND lower(trim("Email")) = lower(trim(@email))
             """,
             new { email, tenantId }));
 
     private async Task<Guid> StudentUserId(string admissionNo, Guid tenantId) => await Query(conn =>
         conn.QuerySingleAsync<Guid>(
             """
-            SELECT Id FROM dbo.Users
-            WHERE TenantId = @tenantId
-              AND LOWER(LTRIM(RTRIM(StudentId))) = LOWER(LTRIM(RTRIM(@admissionNo)))
+            SELECT "Id" FROM "dbo"."Users"
+            WHERE "TenantId" = @tenantId
+              AND lower(trim("StudentId")) = lower(trim(@admissionNo))
             """,
             new { admissionNo, tenantId }));
 
@@ -138,8 +138,8 @@ public class AiSearchSecurityTests(PostgresFixture fx)
             {
                 await conn.ExecuteAsync(
                     """
-                    INSERT dbo.Students (Id, TenantId, AdmissionNo, Name, Grade, Section, ClassLabel, Status)
-                    VALUES (NEWID(), @tenantId, @adm, @name, @grade, @section, @classLabel, N'active')
+                    INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Grade", "Section", "ClassLabel", "Status")
+                    VALUES (gen_random_uuid(), @tenantId, @adm, @name, @grade, @section, @classLabel, 'active')
                     """,
                     new
                     {
@@ -161,21 +161,21 @@ public class AiSearchSecurityTests(PostgresFixture fx)
             var teacherId = Guid.NewGuid();
             var classId = Guid.NewGuid();
             await conn.ExecuteAsync(
-                "INSERT dbo.Users (Id, TenantId) VALUES (@teacherUserId, @tenantId)",
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@teacherUserId, @tenantId)",
                 new { teacherUserId, tenantId });
             await conn.ExecuteAsync(
-                "INSERT dbo.Teachers (Id, TenantId, Name, UserId) VALUES (@teacherId, @tenantId, N'Meena', @teacherUserId)",
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'Meena', @teacherUserId)",
                 new { teacherId, tenantId, teacherUserId });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Classes (Id, TenantId, Name, StudentCount, ClassTeacherId)
+                INSERT INTO "dbo"."Classes" ("Id", "TenantId", "Name", "StudentCount", "ClassTeacherId")
                 VALUES (@classId, @tenantId, @className, 0, @teacherId)
                 """,
                 new { classId, tenantId, teacherId, className });
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.TimetableSlots (TenantId, [Day], Period, Subject, ClassId, ClassName, TeacherId)
-                VALUES (@tenantId, 'Mon', 1, N'Math', @classId, @className, @teacherId)
+                INSERT INTO "dbo"."TimetableSlots" ("TenantId", "Day", "Period", "Subject", "ClassId", "ClassName", "TeacherId")
+                VALUES (@tenantId, 'Mon', 1, 'Math', @classId, @className, @teacherId)
                 """,
                 new { tenantId, classId, teacherId, className });
         });
@@ -375,7 +375,7 @@ public class AiSearchSecurityTests(PostgresFixture fx)
             "en", "WriteRequestDetected", Filters(studentName: "Rahul", className: "8A")));
 
         var before = await Query(conn => conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM dbo.Students WHERE TenantId = @tenantId", new { tenantId }));
+            "SELECT COUNT(*) FROM \"dbo\".\"Students\" WHERE \"TenantId\" = @tenantId", new { tenantId }));
 
         // The most privileged caller available: a refusal here proves the block is not role-derived.
         var body = await Search(Admin(app, tenantId), phrasing);
@@ -386,7 +386,7 @@ public class AiSearchSecurityTests(PostgresFixture fx)
         body.GetProperty("data").ValueKind.Should().Be(JsonValueKind.Null);
 
         var after = await Query(conn => conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM dbo.Students WHERE TenantId = @tenantId", new { tenantId }));
+            "SELECT COUNT(*) FROM \"dbo\".\"Students\" WHERE \"TenantId\" = @tenantId", new { tenantId }));
         after.Should().Be(before);
     }
 
@@ -410,9 +410,9 @@ public class AiSearchSecurityTests(PostgresFixture fx)
             new AiClassificationResult("en", "Unsupported", Filters(studentName: injection, className: injection)));
 
         var tenantBefore = await Query(conn => conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM dbo.Students WHERE TenantId = @tenantId", new { tenantId }));
+            "SELECT COUNT(*) FROM \"dbo\".\"Students\" WHERE \"TenantId\" = @tenantId", new { tenantId }));
         var globalBefore = await Query(conn => conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM dbo.Students"));
+            "SELECT COUNT(*) FROM \"dbo\".\"Students\""));
         tenantBefore.Should().Be(4);
 
         var body = await Search(Admin(app, tenantId), injection);
@@ -422,9 +422,9 @@ public class AiSearchSecurityTests(PostgresFixture fx)
         body.GetProperty("data").ValueKind.Should().Be(JsonValueKind.Null);
 
         var tenantAfter = await Query(conn => conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM dbo.Students WHERE TenantId = @tenantId", new { tenantId }));
+            "SELECT COUNT(*) FROM \"dbo\".\"Students\" WHERE \"TenantId\" = @tenantId", new { tenantId }));
         var globalAfter = await Query(conn => conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM dbo.Students"));
+            "SELECT COUNT(*) FROM \"dbo\".\"Students\""));
         tenantAfter.Should().Be(tenantBefore);
         globalAfter.Should().Be(globalBefore);
 
