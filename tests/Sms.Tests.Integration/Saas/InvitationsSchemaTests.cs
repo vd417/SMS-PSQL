@@ -19,24 +19,26 @@ public class InvitationsSchemaTests(PostgresFixture fx)
 
         await using var c = await factory.OpenAsync();
         await c.ExecuteAsync(
-            "INSERT dbo.Tenants (Id, Name, Slug, Status, Tier) VALUES (@id,'T',@s,'active','gold')",
+            "INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\", \"Status\", \"Tier\") VALUES (@id,'T',@s,'active','gold')",
             new { id = tenantId, s = $"t{tenantId:N}" });
         await c.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId, Email, IsPlatform, Status) VALUES (@id,@tid,@email,0,'pending')",
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Email\", \"IsPlatform\", \"Status\") VALUES (@id,@tid,@email,false,'pending')",
             new { id = userId, tid = tenantId, email = "invitee@x.com" });
 
         var expiresAt = DateTime.UtcNow.AddHours(24);
         var id = await c.QuerySingleAsync<Guid>(
-            new CommandDefinition("dbo.Invitations_Create",
+            new CommandDefinition(
+                "SELECT * FROM dbo.invitations_create(" +
+                "tenantid => @TenantId, userid => @UserId, email => @Email, phone => @Phone, " +
+                "rolelabel => @RoleLabel, invitedbyuserid => @InvitedByUserId, expiresat => @ExpiresAt)",
                 new
                 {
                     TenantId = tenantId, UserId = userId, Email = "invitee@x.com", Phone = (string?)null,
                     RoleLabel = "Teacher", InvitedByUserId = (Guid?)null, ExpiresAt = expiresAt,
-                },
-                commandType: System.Data.CommandType.StoredProcedure));
+                }));
 
         var row = await c.QuerySingleAsync<(Guid Id, Guid UserId, string RoleLabel)>(
-            "SELECT Id, UserId, RoleLabel FROM dbo.Invitations WHERE Id = @id", new { id });
+            "SELECT \"Id\", \"UserId\", \"RoleLabel\" FROM \"dbo\".\"Invitations\" WHERE \"Id\" = @id", new { id });
         row.UserId.Should().Be(userId);
         row.RoleLabel.Should().Be("Teacher");
     }

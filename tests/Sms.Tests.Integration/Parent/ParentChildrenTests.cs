@@ -73,9 +73,9 @@ public class ParentChildrenTests(PostgresFixture fx)
         await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         return await conn.QuerySingleAsync<Guid>(
             """
-            SELECT Id FROM dbo.Users
-            WHERE TenantId = @tenantId
-              AND LOWER(LTRIM(RTRIM(Email))) = LOWER(LTRIM(RTRIM(@email)))
+            SELECT "Id" FROM "dbo"."Users"
+            WHERE "TenantId" = @tenantId
+              AND lower(trim("Email")) = lower(trim(@email))
             """,
             new { email, tenantId });
     }
@@ -185,11 +185,11 @@ public class ParentChildrenTests(PostgresFixture fx)
         {
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.ParentStudentLinks (ParentUserId, StudentId, TenantId)
+                INSERT INTO "dbo"."ParentStudentLinks" ("ParentUserId", "StudentId", "TenantId")
                 SELECT @parentA, @studentB, @tenantId
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo.ParentStudentLinks
-                    WHERE ParentUserId = @parentA AND StudentId = @studentB);
+                    SELECT 1 FROM "dbo"."ParentStudentLinks"
+                    WHERE "ParentUserId" = @parentA AND "StudentId" = @studentB);
                 """,
                 new { parentA, studentB, tenantId });
         });
@@ -294,9 +294,9 @@ public class ParentChildrenTests(PostgresFixture fx)
         {
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Users (Id, TenantId, Email, Phone, IsPlatform, Status, StudentId, MustSetPassword, Name)
-                VALUES (@parentUserId, @tenantId, @parentEmail, NULL, 0, N'active', NULL, 1, N'No Kids');
-                INSERT dbo.UserRoles (UserId, Role) VALUES (@parentUserId, N'student.parent');
+                INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "Phone", "IsPlatform", "Status", "StudentId", "MustSetPassword", "Name")
+                VALUES (@parentUserId, @tenantId, @parentEmail, NULL, false, 'active', NULL, true, 'No Kids');
+                INSERT INTO "dbo"."UserRoles" ("UserId", "Role") VALUES (@parentUserId, 'student.parent');
                 """,
                 new { parentUserId, tenantId, parentEmail });
         });
@@ -340,8 +340,8 @@ public class ParentChildrenTests(PostgresFixture fx)
         {
             links = await conn.ExecuteScalarAsync<int>(
                 """
-                SELECT COUNT(*) FROM dbo.ParentStudentLinks
-                WHERE ParentUserId = @parentId AND StudentId = @studentId AND TenantId = @tenantId
+                SELECT COUNT(*) FROM "dbo"."ParentStudentLinks"
+                WHERE "ParentUserId" = @parentId AND "StudentId" = @studentId AND "TenantId" = @tenantId
                 """,
                 new { parentId, studentId, tenantId });
         });
@@ -371,7 +371,7 @@ public class ParentChildrenTests(PostgresFixture fx)
         await Seed(async conn =>
         {
             await conn.ExecuteAsync(
-                "DELETE FROM dbo.ParentStudentLinks WHERE ParentUserId = @parentId AND StudentId = @studentId",
+                "DELETE FROM \"dbo\".\"ParentStudentLinks\" WHERE \"ParentUserId\" = @parentId AND \"StudentId\" = @studentId",
                 new { parentId, studentId });
         });
 
@@ -407,9 +407,9 @@ public class ParentChildrenTests(PostgresFixture fx)
         {
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Users (Id, TenantId, Email, Phone, IsPlatform, Status, StudentId, MustSetPassword, Name)
-                VALUES (@orphanParentId, @tenantId, @email, NULL, 0, N'active', @admission, 1, N'Admission Parent');
-                INSERT dbo.UserRoles (UserId, Role) VALUES (@orphanParentId, N'student.parent');
+                INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "Phone", "IsPlatform", "Status", "StudentId", "MustSetPassword", "Name")
+                VALUES (@orphanParentId, @tenantId, @email, NULL, false, 'active', @admission, true, 'Admission Parent');
+                INSERT INTO "dbo"."UserRoles" ("UserId", "Role") VALUES (@orphanParentId, 'student.parent');
                 """,
                 new
                 {

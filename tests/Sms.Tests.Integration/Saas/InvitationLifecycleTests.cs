@@ -42,7 +42,8 @@ public class InvitationLifecycleTests(PostgresFixture fx)
         var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var id = Guid.NewGuid();
         await using var c = await factory.OpenAsync();
-        await c.ExecuteAsync("INSERT dbo.Tenants (Id, Name, Slug, Status, Tier) VALUES (@id,'T',@s,'active','gold')",
+        await c.ExecuteAsync(
+            "INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\", \"Status\", \"Tier\") VALUES (@id,'T',@s,'active','gold')",
             new { id, s = $"t{id:N}" });
         return id;
     }
@@ -53,7 +54,7 @@ public class InvitationLifecycleTests(PostgresFixture fx)
         var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         return await c.QuerySingleAsync<(Guid, string)>(
-            "SELECT Id, Status FROM dbo.Users WHERE Email = @email", new { email });
+            "SELECT \"Id\", \"Status\" FROM \"dbo\".\"Users\" WHERE \"Email\" = @email", new { email });
     }
 
     private async Task<(DateTime ExpiresAt, DateTime? AcceptedAt, string RoleLabel)> GetInvitationByEmailAsync(string email)
@@ -62,7 +63,7 @@ public class InvitationLifecycleTests(PostgresFixture fx)
         var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         return await c.QuerySingleAsync<(DateTime, DateTime?, string)>(
-            "SELECT ExpiresAt, AcceptedAt, RoleLabel FROM dbo.Invitations WHERE Email = @email", new { email });
+            "SELECT \"ExpiresAt\", \"AcceptedAt\", \"RoleLabel\" FROM \"dbo\".\"Invitations\" WHERE \"Email\" = @email", new { email });
     }
 
     private static string Sha256Hex(string s) =>
@@ -101,7 +102,7 @@ public class InvitationLifecycleTests(PostgresFixture fx)
         var ctx = new TenantContext(); ctx.Set(null, Guid.NewGuid(), true);
         var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using (var c = await factory.OpenAsync())
-            await c.ExecuteAsync("UPDATE dbo.OtpCodes SET CodeHash=@h WHERE Identifier=@id",
+            await c.ExecuteAsync("UPDATE \"dbo\".\"OtpCodes\" SET \"CodeHash\"=@h WHERE \"Identifier\"=@id",
                 new { id = email, h = Sha256Hex("123456") });
 
         var anon = app.CreateClient();

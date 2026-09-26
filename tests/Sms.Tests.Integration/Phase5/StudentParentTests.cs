@@ -69,9 +69,9 @@ public class StudentParentTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             await conn.ExecuteAsync(
                 """
-                INSERT dbo.Users (Id, TenantId, StudentId, IsPlatform, Status, Name)
-                VALUES (@studentUserId, @tenantId, @admission, 0, N'active', N'Homework Kid');
-                INSERT dbo.UserRoles (UserId, Role) VALUES (@studentUserId, N'student');
+                INSERT INTO "dbo"."Users" ("Id", "TenantId", "StudentId", "IsPlatform", "Status", "Name")
+                VALUES (@studentUserId, @tenantId, @admission, false, 'active', 'Homework Kid');
+                INSERT INTO "dbo"."UserRoles" ("UserId", "Role") VALUES (@studentUserId, 'student');
                 """,
                 new { studentUserId, tenantId, admission });
         }
@@ -122,9 +122,9 @@ public class StudentParentTests(PostgresFixture fx)
             await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
             parentUserId = await conn.QuerySingleAsync<Guid>(
                 """
-                SELECT Id FROM dbo.Users
-                WHERE TenantId = @tenantId
-                  AND LOWER(LTRIM(RTRIM(Email))) = LOWER(LTRIM(RTRIM(@parentEmail)))
+                SELECT "Id" FROM "dbo"."Users"
+                WHERE "TenantId" = @tenantId
+                  AND lower(trim("Email")) = lower(trim(@parentEmail))
                 """,
                 new { tenantId, parentEmail });
         }

@@ -59,7 +59,7 @@ public class OtpLoginTests(PostgresFixture fx)
         // recomputing the hash for each candidate is impractical; instead overwrite with a known code.
         await using (var c = await factory.OpenAsync())
             await c.ExecuteAsync(
-                "UPDATE dbo.OtpCodes SET CodeHash = @h WHERE Identifier = @id",
+                "UPDATE \"dbo\".\"OtpCodes\" SET \"CodeHash\" = @h WHERE \"Identifier\" = @id",
                 new { id = email, h = Sha256Hex("123456") });
 
         var verify = await client.PostAsJsonAsync("/v1/auth/otp/verify",

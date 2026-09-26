@@ -19,7 +19,7 @@ public class SessionContextTests(PostgresFixture fx)
 
         await using var conn = await factory.OpenAsync();
         var read = await conn.QuerySingleAsync<Guid>(
-            "SELECT CAST(SESSION_CONTEXT(N'TenantId') AS uniqueidentifier)");
+            "SELECT current_setting('app.tenant_id')::uuid");
         read.Should().Be(tid);
     }
 }

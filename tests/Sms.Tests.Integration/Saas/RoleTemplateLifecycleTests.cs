@@ -41,7 +41,8 @@ public class RoleTemplateLifecycleTests(PostgresFixture fx)
         var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         var id = Guid.NewGuid();
         await using var c = await factory.OpenAsync();
-        await c.ExecuteAsync("INSERT dbo.Tenants (Id, Name, Slug, Status, Tier) VALUES (@id,'T',@s,'active','gold')",
+        await c.ExecuteAsync(
+            "INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\", \"Status\", \"Tier\") VALUES (@id,'T',@s,'active','gold')",
             new { id, s = $"t{id:N}" });
         return id;
     }
@@ -52,7 +53,7 @@ public class RoleTemplateLifecycleTests(PostgresFixture fx)
         var factory = new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
         await using var c = await factory.OpenAsync();
         return await c.QuerySingleAsync<int>(
-            "SELECT COUNT(*) FROM dbo.AuditLog WHERE TenantId = @tenantId AND Action = @action",
+            "SELECT COUNT(*) FROM \"dbo\".\"AuditLog\" WHERE \"TenantId\" = @tenantId AND \"Action\" = @action",
             new { tenantId, action });
     }
 

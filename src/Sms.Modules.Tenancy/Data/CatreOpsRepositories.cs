@@ -141,9 +141,9 @@ public sealed class AuditRepository(IDbConnectionFactory factory) : BaseReposito
         p.Add("tenantId", tenantId, DbType.Guid);
         p.Add("action", action, DbType.String);
         p.Add("actorId", actorId, DbType.Guid);
-        p.Add("from", from, DbType.DateTime2);
-        p.Add("to", to, DbType.DateTime2);
-        p.Add("cursorAt", cursorAt, DbType.DateTime2);
+        p.Add("from", from);
+        p.Add("to", to);
+        p.Add("cursorAt", cursorAt);
         p.Add("cursorId", cursorId, DbType.Guid);
         p.Add("take", pageSize + 1);
 

@@ -30,7 +30,7 @@ public class PlatformAdminSeedTests(PostgresFixture fx)
         // them from a context-less connection. Stamp IsPlatform=1 so the row is visible.
         await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
         return await conn.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM dbo.Users WHERE IsPlatform = 1 AND Email = @email", new { email });
+            "SELECT COUNT(*) FROM \"dbo\".\"Users\" WHERE \"IsPlatform\" = true AND \"Email\" = @email", new { email });
     }
 
     private async Task ClearPlatformAdmins()
@@ -40,7 +40,7 @@ public class PlatformAdminSeedTests(PostgresFixture fx)
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
         await conn.OpenAsync();
         await conn.ExecuteAsync("SELECT set_config('app.is_platform', '1', false)");
-        await conn.ExecuteAsync("DELETE FROM dbo.Users WHERE IsPlatform = 1");
+        await conn.ExecuteAsync("DELETE FROM \"dbo\".\"Users\" WHERE \"IsPlatform\" = true");
     }
 
     [Fact]

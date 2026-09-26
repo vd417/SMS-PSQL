@@ -62,7 +62,7 @@ public class PasswordResetTests(PostgresFixture fx)
 
         await using var c = await factory.OpenAsync();
         var count = await c.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM dbo.OtpCodes WHERE Identifier = @id", new { id = email });
+            "SELECT COUNT(*) FROM \"dbo\".\"OtpCodes\" WHERE \"Identifier\" = @id", new { id = email });
         count.Should().BeGreaterThan(0);
     }
 
@@ -80,7 +80,7 @@ public class PasswordResetTests(PostgresFixture fx)
 
         // Overwrite the random stored hash with a known code so the test is deterministic.
         await using (var c = await factory.OpenAsync())
-            await c.ExecuteAsync("UPDATE dbo.OtpCodes SET CodeHash = @h WHERE Identifier = @id",
+            await c.ExecuteAsync("UPDATE \"dbo\".\"OtpCodes\" SET \"CodeHash\" = @h WHERE \"Identifier\" = @id",
                 new { id = email, h = Sha256Hex("123456") });
 
         var reset = await client.PostAsJsonAsync("/v1/auth/password/reset",
@@ -105,7 +105,7 @@ public class PasswordResetTests(PostgresFixture fx)
 
         await client.PostAsJsonAsync("/v1/auth/password/forgot", new { identifier = email });
         await using (var c = await factory.OpenAsync())
-            await c.ExecuteAsync("UPDATE dbo.OtpCodes SET CodeHash = @h WHERE Identifier = @id",
+            await c.ExecuteAsync("UPDATE \"dbo\".\"OtpCodes\" SET \"CodeHash\" = @h WHERE \"Identifier\" = @id",
                 new { id = email, h = Sha256Hex("123456") });
 
         (await client.PostAsJsonAsync("/v1/auth/password/reset",
@@ -124,7 +124,7 @@ public class PasswordResetTests(PostgresFixture fx)
 
         await client.PostAsJsonAsync("/v1/auth/password/forgot", new { identifier = email });
         await using (var c = await factory.OpenAsync())
-            await c.ExecuteAsync("UPDATE dbo.OtpCodes SET CodeHash = @h WHERE Identifier = @id",
+            await c.ExecuteAsync("UPDATE \"dbo\".\"OtpCodes\" SET \"CodeHash\" = @h WHERE \"Identifier\" = @id",
                 new { id = email, h = Sha256Hex("123456") });
 
         (await client.PostAsJsonAsync("/v1/auth/password/reset",
@@ -143,7 +143,7 @@ public class PasswordResetTests(PostgresFixture fx)
 
         await client.PostAsJsonAsync("/v1/auth/password/forgot", new { identifier = email });
         await using (var c = await factory.OpenAsync())
-            await c.ExecuteAsync("UPDATE dbo.OtpCodes SET CodeHash = @h WHERE Identifier = @id",
+            await c.ExecuteAsync("UPDATE \"dbo\".\"OtpCodes\" SET \"CodeHash\" = @h WHERE \"Identifier\" = @id",
                 new { id = email, h = Sha256Hex("123456") });
 
         // POST with no code field — should return 401, not 500

@@ -499,7 +499,8 @@ AS $$
         RETURNING 1
     )
     SELECT (SELECT count(*) FROM ins_users)::int,
-           ((SELECT count(*) FROM dedup) - (SELECT count(*) FROM ins_users))::int;
+           ((SELECT count(*) FROM jsonb_to_recordset(users_bulkcreate.Rows::jsonb) AS r("Email" varchar(256), "Phone" varchar(32), "Role" varchar(64)))
+            - (SELECT count(*) FROM ins_users))::int;
 $$;
 
 CREATE OR REPLACE FUNCTION dbo.users_listbytenant(TenantId uuid)
