@@ -40,13 +40,15 @@ public class M0084_IdentityLinkTests(PostgresFixture fx)
         await conn.ExecuteAsync("SELECT set_config('app.is_platform', @v::text, false)", new { v = 0 });
 
         await conn.ExecuteAsync(
-            "INSERT dbo.Users (Id, TenantId) VALUES (@userId, @tenantId)", new { userId, tenantId });
+            "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\") VALUES (@userId, @tenantId)", new { userId, tenantId });
         await conn.ExecuteAsync(
-            "INSERT dbo.Teachers (TenantId, Name, UserId) VALUES (@tenantId, 'A', @userId)", new { tenantId, userId });
+            "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"UserId\") VALUES (@tenantId, 'A', @userId)",
+            new { tenantId, userId });
 
         var act = () => conn.ExecuteAsync(
-            "INSERT dbo.Teachers (TenantId, Name, UserId) VALUES (@tenantId, 'B', @userId)", new { tenantId, userId });
+            "INSERT INTO \"dbo\".\"Teachers\" (\"TenantId\", \"Name\", \"UserId\") VALUES (@tenantId, 'B', @userId)",
+            new { tenantId, userId });
 
-        await act.Should().ThrowAsync<Microsoft.Data.SqlClient.SqlException>();
+        (await act.Should().ThrowAsync<Npgsql.PostgresException>()).Which.SqlState.Should().Be("23505");
     }
 }
