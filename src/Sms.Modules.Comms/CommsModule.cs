@@ -541,6 +541,7 @@ public static class CommsModule
     public static IServiceCollection AddCommsModule(this IServiceCollection services)
     {
         services.AddScoped<CommsRepository>();
+        services.AddScoped<PtmRepository>();
         services.AddScoped<UserAppSettingsRepository>();
         return services;
     }
