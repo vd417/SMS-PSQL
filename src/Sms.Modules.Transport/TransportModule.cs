@@ -96,11 +96,10 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
             new { tripId }, ct)).Any();
 
     // TripPingTvp (SQL Server table-valued parameter) has no 1:1 Postgres equivalent -- pings are
-    // JSON-serialized and decomposed server-side via jsonb_to_recordset(), same strategy as
-    // 08_sample_procedure_conversions.sql's worked TripPing_BulkInsert example (that example used
-    // a differently-punctuated function name that the real call site's naming convention would
-    // never resolve to -- dbo.tripping_bulkinsert, in 14_transport_procs.sql, is the one actually
-    // wired up here).
+    // JSON-serialized and decomposed server-side via jsonb_to_recordset(). The function actually
+    // wired up here is dbo.tripping_bulkinsert (14_transport_procs.sql); the differently-named
+    // worked example from 08_sample_procedure_conversions.sql (dbo.trip_ping_bulk_insert), which
+    // this call could never resolve to, was dropped by migration 0002.
     public Task IngestPingsAsync(Guid tenantId, Guid tripId, IReadOnlyList<PingItem> pings, CancellationToken ct = default)
     {
         var rowsJson = JsonSerializer.Serialize(pings.Select(p => new

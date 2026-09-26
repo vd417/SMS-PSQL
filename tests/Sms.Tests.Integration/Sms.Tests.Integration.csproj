@@ -34,9 +34,4 @@
     <ProjectReference Include="..\..\db\Sms.PgMigrator\Sms.PgMigrator.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- PostgresFixture applies these, in name order, to each fresh per-test-run database. -->
-    <None Include="..\..\db\postgres\*.sql" CopyToOutputDirectory="PreserveNewest" LinkBase="postgres-schema" />
-  </ItemGroup>
-
 </Project>
