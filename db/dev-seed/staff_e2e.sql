@@ -74,13 +74,18 @@ INSERT INTO "dbo"."StudentBusAssignments" ("Id", "TenantId", "StudentId", "BusId
   ('a0000000-0000-4000-8000-000000000604', 'a0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000504', 'a0000000-0000-4000-8000-000000000401', 'a0000000-0000-4000-8000-000000000314', 'a0000000-0000-4000-8000-000000000301')
 ON CONFLICT ("Id") DO UPDATE SET "BusId" = EXCLUDED."BusId", "StopId" = EXCLUDED."StopId", "RouteId" = EXCLUDED."RouteId";
 
--- One open task per staff member.
-INSERT INTO "dbo"."StaffTasks" ("Id", "TenantId", "StaffId", "Title", "Detail", "Priority", "Done", "DueLabel")
+-- One open task per staff member, in dbo."Tasks" (what TaskService reads; dbo."StaffTasks" is a
+-- legacy table no endpoint reads). Assigned directly to each login; self-created (no FK on
+-- CreatedByUserId). Re-runs reset the task to pending.
+INSERT INTO "dbo"."Tasks" ("Id", "TenantId", "Title", "Detail", "AssignedToUserId", "Priority", "Status", "DueDate", "CreatedByUserId")
 SELECT ('a0000000-0000-4000-8000-0000000007' || lpad(n::text, 2, '0'))::uuid, 'a0000000-0000-4000-8000-000000000001',
-       ('a0000000-0000-4000-8000-0000000002' || lpad(n::text, 2, '0'))::uuid,
-       'E2E task for staff ' || n, 'Seeded for the end-to-end check.', CASE WHEN n = 1 THEN 'urgent' ELSE 'normal' END, false, 'Today'
+       'E2E task for staff ' || n, 'Seeded for the end-to-end check.',
+       ('a0000000-0000-4000-8000-0000000001' || lpad(n::text, 2, '0'))::uuid,
+       CASE WHEN n = 1 THEN 'urgent' ELSE 'normal' END, 'pending', CURRENT_DATE,
+       ('a0000000-0000-4000-8000-0000000001' || lpad(n::text, 2, '0'))::uuid
 FROM generate_series(1, 6) AS n
-ON CONFLICT ("Id") DO UPDATE SET "Title" = EXCLUDED."Title", "Done" = false;
+ON CONFLICT ("Id") DO UPDATE SET "Title" = EXCLUDED."Title", "AssignedToUserId" = EXCLUDED."AssignedToUserId",
+  "Status" = 'pending', "DueDate" = EXCLUDED."DueDate", "PhotoUrl" = NULL, "CompletedByUserId" = NULL, "CompletedAt" = NULL;
 
 -- Leave entitlements for the current year (casual 12, sick 10, earned 15) for every staff login.
 INSERT INTO "dbo"."LeaveEntitlements" ("Id", "TenantId", "RequesterId", "Type", "Year", "TotalDays")
