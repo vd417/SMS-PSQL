@@ -55,12 +55,15 @@ public sealed class FleetSnapshotBuilder(BusRepository repo, ITenantContext tena
                 etaMinutes = position.EtaMinutes;
             }
 
+            var travelingTeachers = await repo.ListTravelingTeachersAsync(r.BusId, ct);
+
             list.Add(new FleetBusResponse(
                 r.BusId, r.RouteId, r.BusNo, r.RouteName, r.Driver, r.DriverPhone,
                 r.StopCount, r.StudentsRiding, status,
                 lat, lng, speed, nextStop, lastPing,
                 teacherRow?.TeacherUserId, teacherRow?.TeacherName, Capacity: r.Capacity,
-                TrackingStatus: trackingStatus, Heading: heading, EtaMinutes: etaMinutes));
+                TrackingStatus: trackingStatus, Heading: heading, EtaMinutes: etaMinutes,
+                TravelingTeachers: travelingTeachers));
         }
 
         return list;
