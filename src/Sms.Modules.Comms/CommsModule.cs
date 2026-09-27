@@ -509,13 +509,33 @@ LIMIT 1", new { tenantId, userId }, ct);
         return rows.FirstOrDefault()?.Id;
     }
 
+    /// <summary>
+    /// The stored-audience values that satisfy a generic (student/parent app) audience query:
+    /// school-wide values plus the singular and plural form of the requested audience.
+    /// Deliberately excludes targeted deliveries (grades/defaulters/specific) — those are
+    /// scoped emails/SMS, not school-wide announcements, and must never leak to every parent/student.
+    /// </summary>
+    internal static string[] AudienceAliases(string audience)
+    {
+        var trimmed = audience.Trim().ToLowerInvariant();
+        var (singular, plural) = trimmed switch
+        {
+            "parent" or "parents" => ("parent", "parents"),
+            "student" or "students" => ("student", "students"),
+            "teacher" or "teachers" => ("teacher", "teachers"),
+            _ => (trimmed, trimmed),
+        };
+        return ["everyone", "all", singular, plural];
+    }
+
     public Task<IReadOnlyList<AnnouncementResponse>> ListAnnouncementsAsync(string? audience, CancellationToken ct = default) =>
         QueryInlineAsync<AnnouncementResponse>(@"
 SELECT a.""Id"", a.""TenantId"", a.""Title"", a.""Body"", a.""Date"", COALESCE(u.""Name"", a.""Role"") AS ""From"", a.""Role"", a.""Type"", a.""Pinned"", a.""Audience""
 FROM ""dbo"".""Announcements"" a
 LEFT JOIN ""dbo"".""Users"" u ON u.""Id"" = a.""CreatorUserId""
-WHERE (@audience::text IS NULL OR a.""Audience"" IS NULL OR a.""Audience"" = @audience::text)
-ORDER BY a.""Date"" DESC", new { audience }, ct);
+WHERE (@audience::text IS NULL OR a.""Audience"" IS NULL OR btrim(a.""Audience"") = '' OR lower(btrim(a.""Audience"")) = ANY(@accepted::text[]))
+ORDER BY a.""Date"" DESC",
+            new { audience, accepted = audience is null ? Array.Empty<string>() : AudienceAliases(audience) }, ct);
 
     public Task<AnnouncementResponse?> CreateAnnouncementAsync(
         Guid tenantId, CreateAnnouncementRequest r, Guid? creatorUserId, string? role, CancellationToken ct = default) =>
