@@ -517,10 +517,19 @@ LEFT JOIN ""dbo"".""Users"" u ON u.""Id"" = a.""CreatorUserId""
 WHERE (@audience::text IS NULL OR a.""Audience"" IS NULL OR a.""Audience"" = @audience::text)
 ORDER BY a.""Date"" DESC", new { audience }, ct);
 
-    public Task<AnnouncementResponse?> CreateAnnouncementAsync(
-        Guid tenantId, CreateAnnouncementRequest r, Guid? creatorUserId, string? role, CancellationToken ct = default) =>
-        QuerySingleProcAsync<AnnouncementResponse>("dbo.Announcement_Create",
-            new { TenantId = tenantId, r.Title, r.Body, From = role, Role = role, CreatorUserId = creatorUserId, r.Type, r.Audience }, ct);
+    // B-5: store/return the creator's display name as "From", falling back to the role claim
+    // exactly like ListAnnouncementsAsync's COALESCE(u."Name", a."Role") - not the bare role.
+    public async Task<AnnouncementResponse?> CreateAnnouncementAsync(
+        Guid tenantId, CreateAnnouncementRequest r, Guid? creatorUserId, string? role, CancellationToken ct = default)
+    {
+        var creatorName = creatorUserId is { } uid
+            ? (await QueryInlineAsync<string?>(
+                "SELECT \"Name\" FROM \"dbo\".\"Users\" WHERE \"Id\" = @uid", new { uid }, ct)).FirstOrDefault()
+            : null;
+        var from = string.IsNullOrWhiteSpace(creatorName) ? role : creatorName;
+        return await QuerySingleProcAsync<AnnouncementResponse>("dbo.Announcement_Create",
+            new { TenantId = tenantId, r.Title, r.Body, From = from, Role = role, CreatorUserId = creatorUserId, r.Type, r.Audience }, ct);
+    }
 
     public Task<int> SaveAnnouncementDeliveryAsync(
         Guid id, string recipientsJson, string? attachmentFileName, string? attachmentContentType,
