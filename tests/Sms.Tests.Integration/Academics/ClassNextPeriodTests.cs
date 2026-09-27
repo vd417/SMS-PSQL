@@ -27,8 +27,11 @@ public class ClassNextPeriodTests(PostgresFixture fx)
         });
         var tenantId = Guid.NewGuid();
         var classId = Guid.NewGuid();
-        var today3LetterDay = DateTime.UtcNow.ToString("ddd"); // e.g. "Mon"
-        var future = DateTime.UtcNow.AddHours(1).ToString("HH:mm");
+        // B-1: next_period is computed against the school-local (Asia/Kolkata) day/time, not
+        // UTC, since TimetableSlots store school-local wall-clock values.
+        var localNow = SchoolClock.ToSchoolLocal(DateTime.UtcNow);
+        var today3LetterDay = localNow.ToString("ddd"); // e.g. "Mon"
+        var future = localNow.AddHours(1).ToString("HH:mm");
 
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
