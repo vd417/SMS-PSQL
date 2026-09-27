@@ -14,7 +14,7 @@ public interface IPtmService
 {
     Task<ApiResult<IReadOnlyList<PtmMeetingResponse>>> ListAsync(
         ClaimsPrincipal caller, string? status, string? from, string? to, Guid? teacherId, Guid? studentId,
-        CancellationToken ct = default);
+        string? scope = null, CancellationToken ct = default);
     Task<ApiResult<PtmMeetingResponse>> CreateAsync(
         CreatePtmRequest req, ClaimsPrincipal caller, CancellationToken ct = default);
     Task<ApiResult<PtmMeetingResponse>> UpdateAsync(
@@ -29,12 +29,19 @@ public sealed class PtmService(PtmRepository repo, ISisService sis, ClassReposit
 
     public async Task<ApiResult<IReadOnlyList<PtmMeetingResponse>>> ListAsync(
         ClaimsPrincipal caller, string? status, string? from, string? to, Guid? teacherId, Guid? studentId,
-        CancellationToken ct = default)
+        string? scope = null, CancellationToken ct = default)
     {
         if (tenant.TenantId is not { } tid)
             return ApiResult<IReadOnlyList<PtmMeetingResponse>>.Fail(new Error("forbidden", "no tenant context"), 403);
 
         var roles = caller.FindAll("role").Select(c => c.Value).ToList();
+        var isFamily = AppLoginRole.IsParent(roles) || AppLoginRole.IsStudent(roles);
+
+        // A caller who holds both a staff role and a parent/student role (e.g. a teacher who is
+        // also a parent) can force the family list with ?scope=family, even though the
+        // classification order below would otherwise route them through the staff branch.
+        if (scope == "family" && isFamily)
+            return await ListForFamilyAsync(tid, ct);
 
         if (RoleChecks.IsManagerTier(caller))
         {
@@ -59,21 +66,25 @@ public sealed class PtmService(PtmRepository repo, ISisService sis, ClassReposit
                 await repo.ListForStaffAsync(tid, teacherOwnId, null, status, fromDate, toDate, ct));
         }
 
-        if (AppLoginRole.IsParent(roles) || AppLoginRole.IsStudent(roles))
-        {
-            // The caller's own roster row (student login) plus every linked child (parent login).
-            var ids = new List<Guid>();
-            var mine = await sis.GetMyStudentAsync(ct);
-            if (mine.IsSuccess) ids.Add(mine.Data!.Id);
-            var kids = await sis.ListMyChildrenAsync(ct);
-            if (kids.IsSuccess) ids.AddRange(kids.Data!.Select(k => k.Id));
-            if (ids.Count == 0) return ApiResult<IReadOnlyList<PtmMeetingResponse>>.Ok([]);
-
-            return ApiResult<IReadOnlyList<PtmMeetingResponse>>.Ok(
-                await repo.ListForStudentsAsync(tid, ids.Distinct().ToArray(), ct));
-        }
+        if (isFamily)
+            return await ListForFamilyAsync(tid, ct);
 
         return ApiResult<IReadOnlyList<PtmMeetingResponse>>.Fail(new Error("forbidden", "forbidden"), 403);
+    }
+
+    private async Task<ApiResult<IReadOnlyList<PtmMeetingResponse>>> ListForFamilyAsync(
+        Guid tid, CancellationToken ct)
+    {
+        // The caller's own roster row (student login) plus every linked child (parent login).
+        var ids = new List<Guid>();
+        var mine = await sis.GetMyStudentAsync(ct);
+        if (mine.IsSuccess) ids.Add(mine.Data!.Id);
+        var kids = await sis.ListMyChildrenAsync(ct);
+        if (kids.IsSuccess) ids.AddRange(kids.Data!.Select(k => k.Id));
+        if (ids.Count == 0) return ApiResult<IReadOnlyList<PtmMeetingResponse>>.Ok([]);
+
+        return ApiResult<IReadOnlyList<PtmMeetingResponse>>.Ok(
+            await repo.ListForStudentsAsync(tid, ids.Distinct().ToArray(), ct));
     }
 
     public async Task<ApiResult<PtmMeetingResponse>> CreateAsync(
@@ -133,6 +144,13 @@ public sealed class PtmService(PtmRepository repo, ISisService sis, ClassReposit
 
         var roles = caller.FindAll("role").Select(c => c.Value).ToList();
 
+        // A caller who holds both a staff role and a parent role (e.g. a teacher who is also a
+        // parent) uses the parent path when the body is status-only, even though the
+        // classification order below would otherwise route them through the staff branch.
+        var isStatusOnly = req is { Subject: null, Date: null, Time: null, Mode: null };
+        if (isStatusOnly && AppLoginRole.IsParent(roles))
+            return await UpdateAsParentAsync(id, tid, req, ct);
+
         if (RoleChecks.IsManagerTier(caller) || roles.Contains(Policies.Teacher))
         {
             Guid? ownTeacherId = null;
@@ -174,21 +192,25 @@ public sealed class PtmService(PtmRepository repo, ISisService sis, ClassReposit
         }
 
         if (AppLoginRole.IsParent(roles))
-        {
-            if (req.Status is null || !Statuses.Contains(req.Status))
-                return ApiResult<PtmMeetingResponse>.Fail(
-                    new Error("invalid_status", "status must be 'pending' or 'confirmed'"), 422);
-
-            // Unlinked and missing meetings look the same, so ids of other families' meetings don't leak.
-            var meeting = await repo.GetAsync(id, tid, ct);
-            if (meeting is null || !await sis.IsLinkedToCallerAsync(meeting.Child, ct))
-                return ApiResult<PtmMeetingResponse>.Fail(new Error("not_found", "resource not found"), 404);
-
-            await repo.SetStatusAsync(id, tid, req.Status, ct);
-            return ApiResult<PtmMeetingResponse>.Ok((await repo.GetAsync(id, tid, ct))!);
-        }
+            return await UpdateAsParentAsync(id, tid, req, ct);
 
         return ApiResult<PtmMeetingResponse>.Fail(new Error("forbidden", "forbidden"), 403);
+    }
+
+    private async Task<ApiResult<PtmMeetingResponse>> UpdateAsParentAsync(
+        Guid id, Guid tid, UpdatePtmRequest req, CancellationToken ct)
+    {
+        if (req.Status is null || !Statuses.Contains(req.Status))
+            return ApiResult<PtmMeetingResponse>.Fail(
+                new Error("invalid_status", "status must be 'pending' or 'confirmed'"), 422);
+
+        // Unlinked and missing meetings look the same, so ids of other families' meetings don't leak.
+        var meeting = await repo.GetAsync(id, tid, ct);
+        if (meeting is null || !await sis.IsLinkedToCallerAsync(meeting.Child, ct))
+            return ApiResult<PtmMeetingResponse>.Fail(new Error("not_found", "resource not found"), 404);
+
+        await repo.SetStatusAsync(id, tid, req.Status, ct);
+        return ApiResult<PtmMeetingResponse>.Ok((await repo.GetAsync(id, tid, ct))!);
     }
 
     public async Task<ApiResult> DeleteAsync(Guid id, ClaimsPrincipal caller, CancellationToken ct = default)

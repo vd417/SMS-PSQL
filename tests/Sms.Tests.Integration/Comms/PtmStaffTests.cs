@@ -45,7 +45,7 @@ public class PtmStaffTests(PostgresFixture fx)
     }
 
     [Fact]
-    public async Task Teacher_cannot_create_for_other_teacher()
+    public async Task Teacher_create_forces_own_teacher_id()
     {
         await using var app = App();
         var seed = await SeedAsync();
@@ -280,19 +280,61 @@ public class PtmStaffTests(PostgresFixture fx)
             m.TryGetProperty(key, out _).Should().BeTrue($"key '{key}' should be present");
     }
 
+    [Fact]
+    public async Task Teacher_who_is_also_parent_uses_family_scope_for_linked_child()
+    {
+        await using var app = App();
+        var seed = await SeedAsync();
+        var teacher2 = Client(app, seed.Teacher2UserId, seed.TenantId, "school.teacher");
+        var dual = Client(app, seed.DualUserId, seed.TenantId, "school.teacher", "parent");
+
+        // Meeting is run by a DIFFERENT teacher (Teacher2), for the dual user's own child (Student2).
+        var create = await teacher2.PostAsJsonAsync("/v1/ptm", new
+        {
+            student_id = seed.Student2Id, subject = "Science", date = "2026-10-11", time = "11:30", mode = "Video call",
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        using var createDoc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
+        var id = createDoc.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+
+        // Without scope=family, classification order is unchanged: the teacher role wins, so the
+        // dual user's own staff list (no meetings of their own) is returned, not the child's.
+        var staffList = await dual.GetAsync("/v1/ptm");
+        staffList.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var staffDoc = JsonDocument.Parse(await staffList.Content.ReadAsStringAsync());
+        staffDoc.RootElement.GetProperty("data").EnumerateArray().Should().BeEmpty();
+
+        var familyList = await dual.GetAsync("/v1/ptm?scope=family");
+        familyList.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var familyDoc = JsonDocument.Parse(await familyList.Content.ReadAsStringAsync());
+        var items = familyDoc.RootElement.GetProperty("data").EnumerateArray().ToList();
+        items.Should().ContainSingle();
+        items[0].GetProperty("id").GetGuid().Should().Be(id);
+
+        var confirm = await dual.PatchAsJsonAsync($"/v1/ptm/{id}", new { status = "confirmed" });
+        confirm.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
+        await conn.OpenAsync();
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @TenantId::text, false)", new { seed.TenantId });
+        var status = await conn.QuerySingleAsync<string>(
+            "SELECT \"Status\" FROM \"dbo\".\"PtmMeetings\" WHERE \"Id\" = @id", new { id });
+        status.Should().Be("confirmed");
+    }
+
     private static async Task<string?> ErrorCodeAsync(HttpResponseMessage res)
     {
         using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
         return doc.RootElement.GetProperty("error").GetProperty("code").GetString();
     }
 
-    private static HttpClient Client(WebApplicationFactory<Program> app, Guid userId, Guid tenantId, string role)
+    private static HttpClient Client(WebApplicationFactory<Program> app, Guid userId, Guid tenantId, params string[] roles)
     {
         var jwt = new JwtTokenService(
             new JwtOptions { Issuer = "sms", Audience = "sms-apps", SigningKey = Key, AccessTokenMinutes = 15 },
             new SystemClock());
         var client = app.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new("Bearer", jwt.IssueAccess(userId, tenantId, [role], isPlatform: false));
+        client.DefaultRequestHeaders.Authorization = new("Bearer", jwt.IssueAccess(userId, tenantId, roles, isPlatform: false));
         return client;
     }
 
@@ -300,7 +342,7 @@ public class PtmStaffTests(PostgresFixture fx)
     {
         var s = new PtmStaffSeed(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
-            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var admission1 = $"PTMS/{s.Student1Id.ToString()[..8]}";
         var admission2 = $"PTMS/{s.Student2Id.ToString()[..8]}";
         await using var conn = new NpgsqlConnection(fx.ConnectionString);
@@ -311,24 +353,27 @@ INSERT INTO ""dbo"".""Users"" (""Id"", ""TenantId"", ""StudentId"", ""IsPlatform
     (@Teacher1UserId, @TenantId, NULL, false, 'active'),
     (@Teacher2UserId, @TenantId, NULL, false, 'active'),
     (@AdminUserId, @TenantId, NULL, false, 'active'),
-    (@ParentUserId, @TenantId, NULL, false, 'active');
+    (@ParentUserId, @TenantId, NULL, false, 'active'),
+    (@DualUserId, @TenantId, NULL, false, 'active');
 INSERT INTO ""dbo"".""Teachers"" (""Id"", ""TenantId"", ""Name"", ""UserId"") VALUES
     (@Teacher1Id, @TenantId, 'Mr. Teacher One', @Teacher1UserId),
-    (@Teacher2Id, @TenantId, 'Ms. Teacher Two', @Teacher2UserId);
+    (@Teacher2Id, @TenantId, 'Ms. Teacher Two', @Teacher2UserId),
+    (@DualTeacherId, @TenantId, 'Ms. Teacher-Parent', @DualUserId);
 INSERT INTO ""dbo"".""Students"" (""Id"", ""TenantId"", ""AdmissionNo"", ""Name"", ""Status"") VALUES
     (@Student1Id, @TenantId, @admission1, 'Student One', 'active'),
     (@Student2Id, @TenantId, @admission2, 'Student Two', 'active');
-INSERT INTO ""dbo"".""ParentStudentLinks"" (""ParentUserId"", ""StudentId"", ""TenantId"")
-VALUES (@ParentUserId, @Student1Id, @TenantId);",
+INSERT INTO ""dbo"".""ParentStudentLinks"" (""ParentUserId"", ""StudentId"", ""TenantId"") VALUES
+    (@ParentUserId, @Student1Id, @TenantId),
+    (@DualUserId, @Student2Id, @TenantId);",
             new
             {
-                s.TenantId, s.Teacher1UserId, s.Teacher2UserId, s.AdminUserId, s.ParentUserId,
-                s.Teacher1Id, s.Teacher2Id, s.Student1Id, s.Student2Id, admission1, admission2,
+                s.TenantId, s.Teacher1UserId, s.Teacher2UserId, s.AdminUserId, s.ParentUserId, s.DualUserId,
+                s.Teacher1Id, s.Teacher2Id, s.Student1Id, s.Student2Id, s.DualTeacherId, admission1, admission2,
             });
         return s;
     }
 
     private sealed record PtmStaffSeed(
         Guid TenantId, Guid Teacher1UserId, Guid Teacher2UserId, Guid AdminUserId, Guid ParentUserId,
-        Guid Teacher1Id, Guid Teacher2Id, Guid Student1Id, Guid Student2Id, Guid Unused);
+        Guid Teacher1Id, Guid Teacher2Id, Guid Student1Id, Guid Student2Id, Guid DualUserId, Guid DualTeacherId);
 }

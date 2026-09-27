@@ -12,8 +12,8 @@ public sealed class PtmController(IPtmService ptm) : ApiControllerBase
     [HttpGet("ptm")]
     public async Task<IActionResult> List(
         [FromQuery] string? status, [FromQuery] string? from, [FromQuery] string? to,
-        [FromQuery] Guid? teacher_id, [FromQuery] Guid? student_id, CancellationToken ct) =>
-        FromResult(await ptm.ListAsync(User, status, from, to, teacher_id, student_id, ct));
+        [FromQuery] Guid? teacher_id, [FromQuery] Guid? student_id, [FromQuery] string? scope, CancellationToken ct) =>
+        FromResult(await ptm.ListAsync(User, status, from, to, teacher_id, student_id, scope, ct));
 
     [HttpPost("ptm")]
     public async Task<IActionResult> Create([FromBody] CreatePtmRequest req, CancellationToken ct) =>
