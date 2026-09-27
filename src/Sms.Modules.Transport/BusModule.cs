@@ -380,7 +380,7 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
             $@"SELECT b.""Id"" AS ""BusId"", b.""BusNo"", b.""RouteId"", b.""RouteName"", b.""DriverStaffId"", b.""Driver"", b.""DriverPhone"",
                 CAST({StopCountSql} AS int) AS ""StopCount"",
                 CAST((SELECT COUNT(*) FROM ""dbo"".""StudentBusAssignments"" sba WHERE sba.""BusId"" = b.""Id"") AS int) AS ""StudentsAssigned"",
-                a.""TeacherUserId"", COALESCE(u.""Name"", tch.""Name"") AS ""TeacherName"", b.""Capacity""
+                a.""TeacherUserId"", COALESCE(u.""Name"", tch.""Name"") AS ""TeacherName"", b.""Capacity"", b.""ConductorStaffId""
               FROM ""dbo"".""Buses"" b
               LEFT JOIN ""dbo"".""BusAssignments"" a ON a.""BusId"" = b.""Id""
               LEFT JOIN ""dbo"".""Users"" u ON u.""Id"" = a.""TeacherUserId""
