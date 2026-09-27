@@ -24,7 +24,7 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
             SELECT "Id", "TenantId", "Email", "StudentId", "Phone", "PasswordHash", "IsPlatform", "Status", "Name", "MustSetPassword", "CreatedAt", "PhotoUrl"
             FROM "dbo"."Users" WHERE "Email" IS NOT NULL
             AND lower(trim("Email")) = lower(trim(@Email))
-            ORDER BY CASE WHEN "IsPlatform" THEN 0 ELSE 1 END, "CreatedAt"
+            ORDER BY CASE WHEN "IsPlatform" THEN 0 ELSE 1 END, "CreatedAt", "Id"
             """,
             new { Email = email }, ct);
 
@@ -33,7 +33,7 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
             """
             SELECT "Id", "TenantId", "Email", "StudentId", "Phone", "PasswordHash", "IsPlatform", "Status", "Name", "MustSetPassword", "CreatedAt", "PhotoUrl"
             FROM "dbo"."Users" WHERE "Phone" = @Phone
-            ORDER BY CASE WHEN "IsPlatform" THEN 0 ELSE 1 END, "CreatedAt"
+            ORDER BY CASE WHEN "IsPlatform" THEN 0 ELSE 1 END, "CreatedAt", "Id"
             """,
             new { Phone = phone }, ct);
 
