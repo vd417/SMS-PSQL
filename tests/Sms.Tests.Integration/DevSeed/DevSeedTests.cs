@@ -100,4 +100,69 @@ public class DevSeedTests(PostgresFixture fx)
         q.Parameters.AddWithValue("id", probeId);
         ((long)(await q.ExecuteScalarAsync())!).Should().Be(0);
     }
+
+    [Fact]
+    public async Task B6_rider_stop_ids_are_route_stop_ids()
+    {
+        await SeedRunner.RunAsync(fx.ConnectionString, SeedData.Build(new PasswordHasher()));
+
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
+        await conn.OpenAsync();
+        await using (var tenantCmd = new NpgsqlCommand(
+            "SELECT set_config('app.tenant_id', @tenant::text, false)", conn))
+        {
+            tenantCmd.Parameters.AddWithValue("tenant", SeedData.MainTenantId.ToString());
+            await tenantCmd.ExecuteNonQueryAsync();
+        }
+        await using var cmd = new NpgsqlCommand(
+            """SELECT "StopId" FROM "dbo"."StudentBusAssignments" WHERE "TenantId" = @tenant""", conn);
+        cmd.Parameters.AddWithValue("tenant", SeedData.MainTenantId);
+        var stopIds = new List<Guid>();
+        await using (var reader = await cmd.ExecuteReaderAsync())
+            while (await reader.ReadAsync())
+                stopIds.Add(reader.GetGuid(0));
+        stopIds.Should().HaveCount(5);
+
+        await using var routeStopCmd = new NpgsqlCommand(
+            """SELECT "Id" FROM "dbo"."RouteStops" WHERE "TenantId" = @tenant""", conn);
+        routeStopCmd.Parameters.AddWithValue("tenant", SeedData.MainTenantId);
+        var routeStopIds = new List<Guid>();
+        await using (var reader = await routeStopCmd.ExecuteReaderAsync())
+            while (await reader.ReadAsync())
+                routeStopIds.Add(reader.GetGuid(0));
+        routeStopIds.Should().HaveCount(3);
+
+        stopIds.Should().OnlyContain(id => routeStopIds.Contains(id));
+    }
+
+    [Fact]
+    public async Task NEW2_multi_teacher_sees_other_school_class_after_switch()
+    {
+        await SeedRunner.RunAsync(fx.ConnectionString, SeedData.Build(new PasswordHasher()));
+        using var app = App();
+        var client = app.CreateClient();
+
+        var login = await client.PostAsJsonAsync("/v1/auth/login",
+            new { email = SeedData.MultiEmail, password = SeedData.TeacherPassword });
+        login.StatusCode.Should().Be(HttpStatusCode.OK);
+        var loginData = (await login.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+        var access = loginData.GetProperty("access_token").GetString();
+
+        client.DefaultRequestHeaders.Authorization = new("Bearer", access);
+        var me = (await client.GetFromJsonAsync<JsonElement>("/v1/auth/me")).GetProperty("data");
+        var currentTenant = me.GetProperty("tenant_id").GetGuid();
+        var otherTenant = currentTenant == SeedData.MainTenantId ? SeedData.OtherTenantId : SeedData.MainTenantId;
+
+        var switchResp = await client.PostAsJsonAsync("/v1/me/switch-school", new { tenant_id = otherTenant });
+        switchResp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var switchData = (await switchResp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+        var newAccess = switchData.GetProperty("access_token").GetString();
+
+        client.DefaultRequestHeaders.Authorization = new("Bearer", newAccess);
+        var classesResp = await client.GetAsync("/v1/classes");
+        classesResp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var classes = (await classesResp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+        var names = classes.EnumerateArray().Select(c => c.GetProperty("name").GetString()).ToList();
+        names.Should().ContainSingle().Which.Should().Be("IX-A");
+    }
 }

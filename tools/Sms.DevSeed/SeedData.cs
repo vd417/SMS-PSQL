@@ -89,6 +89,9 @@ public static class SeedData
         AddTeacher("b", main, "teacher.b", "Bharat Menon", TeacherBEmail, "DS-T002", "Science Teacher", "Science", "IX-B");
         AddTeacher("multi", main, "multi.main", "Maya Fernandes", MultiEmail, "DS-T003", "English Teacher", "English", "");
         AddTeacher("other", other, "other.teacher", "Omar Qureshi", OtherTeacherEmail, "OS-T001", "Mathematics Teacher", "Mathematics", "IX-A");
+        // NEW-2: multi@ has a Users row in the other tenant but had no Teachers row or timetable
+        // slot there, so a teacher-scoped /classes returned [] after switch-school.
+        AddTeacher("multi.other", other, "multi.other", "Maya Fernandes", MultiEmail, "OS-T002", "English Teacher", "English", "");
 
         // Classes: StudentCount left at its default on purpose; whether the API reports the live count is a matrix check.
         void AddClass(string key, Guid tenant, string name, string section, string classTeacherKey, string room) =>
@@ -138,6 +141,10 @@ public static class SeedData
             rows.Add(Row("TimetableSlots", ("Id", SeedIds.Of($"slot.other.{day}.1")), ("TenantId", other), ("Day", day),
                 ("Period", 1), ("Subject", "Mathematics"), ("ClassId", C("other.ix-a")), ("ClassName", "IX-A"),
                 ("StartTime", "09:00"), ("EndTime", "09:45"), ("TeacherId", T("other"))));
+        foreach (var day in Days)
+            rows.Add(Row("TimetableSlots", ("Id", SeedIds.Of($"slot.other.{day}.2")), ("TenantId", other), ("Day", day),
+                ("Period", 2), ("Subject", "English"), ("ClassId", C("other.ix-a")), ("ClassName", "IX-A"),
+                ("StartTime", "09:50"), ("EndTime", "10:35"), ("TeacherId", T("multi.other"))));
 
         var exam = SeedIds.Of("exam.ut1");
         rows.Add(Row("Exams", ("Id", exam), ("TenantId", main), ("Name", "Dev Seed Unit Test 1"), ("Type", "unit"),
@@ -180,9 +187,11 @@ public static class SeedData
             ("RouteId", route), ("Driver", "Dev Seed Driver"), ("DriverPhone", "+919000000999"), ("Capacity", 40)));
         rows.Add(Row("BusAssignments", ("Id", SeedIds.Of("busassignment.a")), ("TenantId", main),
             ("TeacherUserId", U("teacher.a")), ("BusId", bus)));
+        // StopId matches RouteStops (not BusStops): a routed bus's /bus/assigned resolves stops
+        // from RouteStops (BusRepository.QueryStopsForBusAsync), so riders must point there (B-6).
         for (var i = 1; i <= 5; i++)
             rows.Add(Row("StudentBusAssignments", ("Id", SeedIds.Of($"studentbus.{i}")), ("TenantId", main),
-                ("StudentId", S("ix-a", i)), ("BusId", bus), ("StopId", SeedIds.Of($"busstop.{(i - 1) % 3 + 1}")), ("RouteId", route)));
+                ("StudentId", S("ix-a", i)), ("BusId", bus), ("StopId", SeedIds.Of($"routestop.{(i - 1) % 3 + 1}")), ("RouteId", route)));
 
         return rows;
     }

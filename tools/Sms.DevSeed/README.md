@@ -23,4 +23,6 @@ dotnet run --project tools/Sms.DevSeed -- --i-know-this-is-dev
 | multi@seed.schooldesk.test | DevSeed-Teacher-2026! | both schools | school.teacher | Exercises /me/schools and switch-school |
 | other.teacher@seed.schooldesk.test | DevSeed-Teacher-2026! | Dev Seed Other School | school.teacher | Cross-tenant negative checks |
 
-Data: classes IX-A and IX-B with 10 students each; a Mon–Fri timetable with periods 1–3; exam "Dev Seed Unit Test 1" with 3 papers; one pending leave from teacher B; one announcement; a geofence at 18.5204, 73.8567 (200 m); bus DS-01 on "Dev Seed Route 1" (3 stops, 5 riders).
+Data: classes IX-A and IX-B with 10 students each; a Mon–Fri timetable with periods 1–3; exam "Dev Seed Unit Test 1" with 3 papers; one pending leave from teacher B; one announcement; a geofence at 18.5204, 73.8567 (200 m); bus DS-01 on "Dev Seed Route 1" (3 stops, 5 riders, each rider's stop pointing at a `RouteStops` id, matching what a routed bus's `/bus/assigned` returns).
+
+In "Dev Seed Other School", `multi@` also has a Teachers row (`OS-T002`, English Teacher) and a Mon–Fri period-2 English slot on the other school's IX-A, so a teacher-scoped `/classes` returns that class after switch-school.
