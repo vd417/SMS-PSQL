@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Sms.Application.Common;
 using Sms.Application.Interfaces.DAO;
 using Sms.Modules.Tenancy.Contracts;
@@ -37,7 +38,9 @@ public sealed class PlanUpgradeService(
     SubscriptionRepository subscriptions,
     PlanUpgradeRequestRepository upgrades,
     AuditRepository audit,
-    IRazorpayGateway razorpay) : IPlanUpgradeService
+    IRazorpayGateway razorpay,
+    ClientBillingEmails billingEmails,
+    ILogger<PlanUpgradeService> logger) : IPlanUpgradeService
 {
     private static readonly HashSet<string> OpenStatuses =
     [
@@ -337,42 +340,102 @@ public sealed class PlanUpgradeService(
             return ApiResult<PlanUpgradeRequestResponse>.Fail(
                 new Error("conflict", "only paid online or pending offline requests can be approved"), 409);
 
-        var client = await clients.ChangePlanAsync(row.TenantId, row.ToPlanId, ct);
-        if (client is null)
-            return ApiResult<PlanUpgradeRequestResponse>.Fail(new Error("not_found", "school not found"), 404);
-
-        var plan = await plans.GetAsync(row.ToPlanId, ct);
-        if (plan is not null)
-        {
-            var seats = CatreMappers.BillableSeats(plan, client.StudentsCount, client.LimitsStudents ?? 0);
-            var amount = CatreMappers.ComputeMonthlyAmount(plan, client.StudentsCount, seats);
-            if (client.Mrr != amount)
-                client = await clients.SetMrrAsync(row.TenantId, amount, ct) ?? client;
-            await subscriptions.SetPlanAsync(row.TenantId, row.ToPlanId, seats, ct);
-        }
-
-        if (row.InvoiceId is { } invId)
-        {
-            var inv = await invoices.GetAsync(invId, ct);
-            if (inv is not null && !string.Equals(inv.Status, "paid", StringComparison.OrdinalIgnoreCase))
-                await invoices.MarkPaidAsync(invId, ct);
-        }
-
-        /* Activation payment: move trial schools to active when payment is approved. */
-        if (string.Equals(client.Status, "trial", StringComparison.OrdinalIgnoreCase))
-            client = await clients.SetStatusAsync(row.TenantId, "active", ct) ?? client;
-
+        /* Claim first: of several concurrent approvals of this request exactly one flips it to
+           approved, and only that one changes the school's plan, invoice and status, writes the
+           audit entry and sends the email. */
+        var awaitingStatus = row.Status;
         var reviewer = tenant.UserId;
-        row = await upgrades.SetStatusAsync(id, PlanUpgradeStatuses.Approved, reviewer, null, ct);
-        if (row is null)
-            return ApiResult<PlanUpgradeRequestResponse>.Fail(new Error("internal_error", "update failed"), 500);
+        var approved = await upgrades.TryApproveAsync(id, reviewer, ct);
+        if (approved is null)
+            return ApiResult<PlanUpgradeRequestResponse>.Fail(
+                new Error("conflict", "only paid online or pending offline requests can be approved"), 409);
+
+        ClientRow client;
+        PlanRow? plan;
+        var seats = 0;
+        bool activatesTrial;
+        try
+        {
+            var changed = await clients.ChangePlanAsync(approved.TenantId, approved.ToPlanId, ct);
+            if (changed is null)
+            {
+                await upgrades.ReleaseApprovalAsync(id, awaitingStatus, CancellationToken.None);
+                return ApiResult<PlanUpgradeRequestResponse>.Fail(new Error("not_found", "school not found"), 404);
+            }
+            client = changed;
+
+            plan = await plans.GetAsync(approved.ToPlanId, ct);
+            if (plan is not null)
+            {
+                seats = CatreMappers.BillableSeats(plan, client.StudentsCount, client.LimitsStudents ?? 0);
+                var amount = CatreMappers.ComputeMonthlyAmount(plan, client.StudentsCount, seats);
+                if (client.Mrr != amount)
+                    client = await clients.SetMrrAsync(approved.TenantId, amount, ct) ?? client;
+                await subscriptions.SetPlanAsync(approved.TenantId, approved.ToPlanId, seats, ct);
+            }
+
+            if (approved.InvoiceId is { } invId)
+            {
+                var inv = await invoices.GetAsync(invId, ct);
+                if (inv is not null && !string.Equals(inv.Status, "paid", StringComparison.OrdinalIgnoreCase))
+                    await invoices.MarkPaidAsync(invId, ct);
+            }
+
+            /* Activation payment: move trial schools to active when payment is approved. */
+            activatesTrial = string.Equals(client.Status, "trial", StringComparison.OrdinalIgnoreCase);
+            if (activatesTrial)
+                client = await clients.SetStatusAsync(approved.TenantId, "active", ct) ?? client;
+        }
+        catch
+        {
+            /* Hand the request back so the approval can simply be retried; every step above is
+               safe to repeat (same plan, same seats, paid stays paid, active stays active). */
+            await upgrades.ReleaseApprovalAsync(id, awaitingStatus, CancellationToken.None);
+            throw;
+        }
+        row = approved;
 
         await audit.InsertAsync(
             reviewer, null, "platform",
             $"Approved plan payment {row.FromPlanName ?? "—"} → {row.ToPlanName}",
             row.TenantName, "plan", row.TenantId, ct);
 
+        /* The approval is committed; a failure to build or queue the email must not turn it into
+           an error the admin can no longer retry (a second approve is a 409). */
+        try
+        {
+            await QueueApprovalEmailAsync(row, client, plan, seats, activatesTrial, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Plan payment {RequestId} for tenant {TenantId} was approved, but its email could not be queued.",
+                row.Id, row.TenantId);
+        }
+
         return ApiResult<PlanUpgradeRequestResponse>.Ok(row);
+    }
+
+    /// Emails the school contact about an approved plan payment, reusing the existing billing
+    /// emails: the activation invoice (as POST /clients/{id}/status sends) when this approval made a
+    /// trial school active, otherwise the now-paid invoice as the payment receipt. Queued only
+    /// after every state change above has succeeded.
+    private async Task QueueApprovalEmailAsync(
+        PlanUpgradeRequestResponse row, ClientRow client, PlanRow? plan, int seats, bool activatedTrial, CancellationToken ct)
+    {
+        var invoice = row.InvoiceId is { } invoiceId ? await invoices.GetAsync(invoiceId, ct) : null;
+        if (invoice is null)
+        {
+            logger.LogWarning("Plan payment {RequestId} for tenant {TenantId} was approved without an invoice; no email sent.",
+                row.Id, row.TenantId);
+            return;
+        }
+
+        var queued = activatedTrial && plan is not null
+            ? await billingEmails.QueueActivationInvoiceAsync(client, invoice, plan, seats, ct)
+            : await billingEmails.QueueInvoiceAsync(client, invoice, plan, ct);
+        if (!queued)
+            logger.LogWarning("Plan payment {RequestId} for tenant {TenantId} was approved, but the school has no contact email; no email sent.",
+                row.Id, row.TenantId);
     }
 
     public async Task<ApiResult<PlanUpgradeRequestResponse>> RejectAsync(

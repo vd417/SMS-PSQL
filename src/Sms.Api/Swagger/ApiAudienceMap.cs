@@ -38,6 +38,7 @@ public static class ApiAudienceMap
         ("v1/me/switch-school", [SchoolAdmin]),
         ("v1/me/children",   [Student]),                // parent app · child's live bus
         ("v1/parents",       [Student]),                // parent app · linked children
+        ("v1/ptm",           [Student, Teacher, SchoolAdmin]), // parent-teacher meetings: parent/student, teacher, admin
         ("v1/me/settings",   [Student, Teacher, SchoolAdmin]),
         ("v1/webhooks/razorpay", All),
         ("health",           All),

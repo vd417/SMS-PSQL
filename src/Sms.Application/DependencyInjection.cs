@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<IMeSchoolsService, MeSchoolsService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IInvitationService, InvitationService>();
+        services.AddScoped<ClientBillingEmails>();
         services.AddScoped<ITenancyService, TenancyService>();
         services.AddScoped<IPlanUpgradeService, PlanUpgradeService>();
         services.AddSingleton<IInvoicePdfGenerator, InvoicePdfGenerator>();
@@ -63,6 +64,7 @@ public static class DependencyInjection
         services.AddScoped<IThreadService, ThreadService>();
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<IComplaintService, ComplaintService>();
+        services.AddScoped<IPtmService, PtmService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IIssueService, IssueService>();
         services.AddScoped<IVehicleCheckService, VehicleCheckService>();
