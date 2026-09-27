@@ -183,11 +183,12 @@ VALUES
         // Call the endpoint
         var attendance = await Data(await principal.GetAsync("/v1/principal/attendance"), HttpStatusCode.OK);
 
-        // Overall totals from period marks: present+late=3, marked=4, pct=75
+        // SD-2/B-2: student_total is the active headcount across both classes (4 + 3 = 7), not
+        // a period-mark count; present_total is unchanged (3 distinct students present/late).
         attendance.GetProperty("present_total").GetInt32().Should().Be(3);
-        attendance.GetProperty("student_total").GetInt32().Should().Be(4);
+        attendance.GetProperty("student_total").GetInt32().Should().Be(7);
         var overallPct = attendance.GetProperty("overall_pct").GetDecimal();
-        overallPct.Should().Be(75.0m);
+        overallPct.Should().Be(42.9m);
 
         // Per-class breakdown
         var classes = attendance.GetProperty("classes");
@@ -210,9 +211,11 @@ VALUES
 
         classB.Should().NotBeNull("Class B should be in the response");
         classB!.Value.GetProperty("present").GetInt32().Should().Be(0);
-        classB.Value.GetProperty("total").GetInt32().Should().Be(0);
+        // SD-2/B-2: total/marked is the class's active headcount (3 students), not a
+        // period-mark count, even though Class B was left unmarked.
+        classB.Value.GetProperty("total").GetInt32().Should().Be(3);
         classB.Value.GetProperty("pct").GetDecimal().Should().Be(0.0m);
-        classB.Value.GetProperty("marked").GetInt32().Should().Be(0);
+        classB.Value.GetProperty("marked").GetInt32().Should().Be(3);
 
         // Staff array is present and contains our teacher
         var staff = attendance.GetProperty("staff");

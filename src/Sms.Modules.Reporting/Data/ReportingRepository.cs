@@ -202,8 +202,12 @@ ORDER BY s.""Name""", null, ct);
         return teachers.Concat(support).OrderBy(s => s.Name).ToList();
     }
 
-    /// School-wide student attendance for principal KPIs from PeriodAttendanceRecords:
-    /// (present + late) / marked periods. Unmarked days return zeros (CRM shows Not marked).
+    /// School-wide student attendance for principal KPIs (SD-2 / B-2): "total" is the active
+    /// student headcount (same basis as /classes student_count - all "dbo"."Students" rows with
+    /// Status = 'active', school-wide), and "present" is the count of DISTINCT students marked
+    /// present or late in ANY period that day (not a raw period-mark count, so a student marked
+    /// in two periods still counts once). Unmarked days return a zero present count against the
+    /// full headcount (CRM shows "Not marked" from the pct, not from a zero total).
     /// Legacy daily AttendanceRecords are excluded.
     private async Task<(int PresentTotal, int StudentTotal)> ResolveStudentTotalsAsync(
         DateTime d, CancellationToken ct)
@@ -212,10 +216,9 @@ ORDER BY s.""Name""", null, ct);
         var toExclusive = d.AddDays(1);
         var rows = await QueryInlineAsync<StudentTotalsRow>(@"
 SELECT
-  CAST(COALESCE((SELECT COUNT(*) FROM ""dbo"".""PeriodAttendanceRecords""
+  CAST(COALESCE((SELECT COUNT(DISTINCT ""StudentId"") FROM ""dbo"".""PeriodAttendanceRecords""
           WHERE ""Date"" >= @from::date AND ""Date"" < @toExclusive::date AND ""Status"" IN ('present', 'late')), 0) AS int) AS ""PresentTotal"",
-  CAST(COALESCE((SELECT COUNT(*) FROM ""dbo"".""PeriodAttendanceRecords""
-          WHERE ""Date"" >= @from::date AND ""Date"" < @toExclusive::date), 0) AS int) AS ""StudentTotal""",
+  CAST((SELECT COUNT(*) FROM ""dbo"".""Students"" WHERE ""Status"" = 'active') AS int) AS ""StudentTotal""",
             new { from, toExclusive }, ct);
 
         var row = rows.Count > 0 ? rows[0] : new StudentTotalsRow(0, 0);
@@ -251,23 +254,34 @@ SELECT
     {
         var d = day.ToDateTime(TimeOnly.MinValue);
         var (startUtc, endUtc) = LocalDayBoundsUtc(day, utcOffset);
+        // SD-2 / B-2: "total"/"marked" = the class's active student headcount, matched to
+        // Students the same way ClassRepository's live count does (Grade+Section, else
+        // ClassLabel/Name); "present" = DISTINCT students marked present/late in that class in
+        // any period that day, not a raw mark count.
         var classes = await QueryInlineAsync<PrincipalClassAttendance>(@"
 SELECT c.""Id"" AS ""ClassId"", c.""Name"" AS ""ClassName"",
-       CAST(COALESCE(a.""Present"", 0) AS int) AS ""Present"",
-       CAST(COALESCE(a.""Marked"", 0) AS int) AS ""Total"",
+       CAST(COALESCE(pr.""Present"", 0) AS int) AS ""Present"",
+       CAST(COALESCE(sc.""Cnt"", 0) AS int) AS ""Total"",
        CAST(CASE
-         WHEN COALESCE(a.""Marked"", 0) > 0
-         THEN ROUND(100.0 * COALESCE(a.""Present"", 0) / a.""Marked"", 1)
+         WHEN COALESCE(sc.""Cnt"", 0) > 0
+         THEN ROUND(100.0 * COALESCE(pr.""Present"", 0) / sc.""Cnt"", 1)
          ELSE 0 END AS decimal(5,1)) AS ""Pct"",
-       CAST(COALESCE(a.""Marked"", 0) AS int) AS ""Marked""
+       CAST(COALESCE(sc.""Cnt"", 0) AS int) AS ""Marked""
 FROM ""dbo"".""Classes"" c
 LEFT JOIN LATERAL (
-  SELECT
-    SUM(CASE WHEN par.""Status"" IN ('present', 'late') THEN 1 ELSE 0 END) AS ""Present"",
-    COUNT(*) AS ""Marked""
+    SELECT CAST(COUNT(*) AS int) AS ""Cnt"" FROM ""dbo"".""Students"" s
+    WHERE s.""Status"" = 'active'
+      AND (
+        (c.""Grade"" IS NOT NULL AND c.""Section"" IS NOT NULL AND s.""Grade"" = c.""Grade"" AND s.""Section"" = c.""Section"")
+        OR (c.""Name"" IS NOT NULL AND s.""ClassLabel"" = c.""Name"")
+      )
+) sc ON true
+LEFT JOIN LATERAL (
+  SELECT CAST(COUNT(DISTINCT par.""StudentId"") AS int) AS ""Present""
   FROM ""dbo"".""PeriodAttendanceRecords"" par
   WHERE par.""ClassId"" = c.""Id"" AND par.""Date"" >= @from::date AND par.""Date"" < @toExclusive::date
-) a ON true
+    AND par.""Status"" IN ('present', 'late')
+) pr ON true
 ORDER BY c.""Name""", new { from = d, toExclusive = d.AddDays(1) }, ct);
 
         var (presentTotal, studentTotal) = await ResolveStudentTotalsAsync(d, ct);
