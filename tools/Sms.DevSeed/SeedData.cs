@@ -153,10 +153,13 @@ public static class SeedData
         foreach (var cls in new[] { "ix-a", "ix-b" })
             rows.Add(Row("ExamClasses", ("Id", SeedIds.Of($"examclass.{cls}")), ("TenantId", main), ("ExamId", exam), ("ClassId", C(cls))));
         void AddPaper(string key, string cls, string name, string subject, DateOnly date, string invigilator) =>
+            // SD-5: CreatedBy = teacher.a so the teacher-side edit flow (PATCH/DELETE, creator-or-
+            // principal) still works against the dev seed instead of falling into the NULL ==
+            // principal-only rule.
             rows.Add(Row("ExamPapers", ("Id", SeedIds.Of($"paper.{key}")), ("TenantId", main), ("ExamId", exam),
                 ("ClassId", C(cls)), ("Name", name), ("Subject", subject), ("SubjectId", SeedIds.Of($"subject.{subject}")),
                 ("Date", date), ("StartTime", "09:00"), ("DurationMin", 60), ("MaxMarks", 50), ("Status", "upcoming"),
-                ("Invigilator1", invigilator), ("Topics", "Algebra")));
+                ("Invigilator1", invigilator), ("Topics", "Algebra"), ("CreatedBy", U("teacher.a"))));
         AddPaper("ix-a.math", "ix-a", "IX-A Mathematics", "Mathematics", new DateOnly(2026, 11, 2), "Asha Kulkarni");
         AddPaper("ix-a.sci", "ix-a", "IX-A Science", "Science", new DateOnly(2026, 11, 3), "Bharat Menon");
         AddPaper("ix-b.math", "ix-b", "IX-B Mathematics", "Mathematics", new DateOnly(2026, 11, 2), "Asha Kulkarni");

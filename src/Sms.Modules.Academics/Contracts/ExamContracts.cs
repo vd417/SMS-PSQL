@@ -24,10 +24,26 @@ public sealed record UpdateExamRequest(
     string? Status, bool? Published, decimal? MarksEnteredPct, IReadOnlyList<Guid>? ClassIds = null);
 
 // ---- ExamPaper (shared resource) ----
+// CreatedBy (SD-5) is a trailing init-only property with a secondary constructor, not a
+// primary-constructor parameter, for the same reason as ExamResponse.ClassIds above: Dapper
+// materializes via a constructor matching the exact column count of whatever query ran, and
+// dbo.ExamPaper_Create/_Update's RETURNS TABLE deliberately still return the original 16
+// columns (only the inline Get/List SELECTs add CreatedBy).
 public sealed record ExamPaperResponse(
     Guid Id, Guid TenantId, Guid? ExamId, Guid? ClassId, string? Name, string? Subject, Guid? SubjectId,
     DateTime? Date, string? StartTime, int? DurationMin, int MaxMarks, string? Room,
-    string? Invigilator1, string? Invigilator2, string Status, string? Topics = null);
+    string? Invigilator1, string? Invigilator2, string Status, string? Topics = null)
+{
+    public Guid? CreatedBy { get; init; }
+
+    public ExamPaperResponse(
+        Guid Id, Guid TenantId, Guid? ExamId, Guid? ClassId, string? Name, string? Subject, Guid? SubjectId,
+        DateTime? Date, string? StartTime, int? DurationMin, int MaxMarks, string? Room,
+        string? Invigilator1, string? Invigilator2, string Status, string? Topics, Guid? CreatedBy)
+        : this(Id, TenantId, ExamId, ClassId, Name, Subject, SubjectId, Date, StartTime, DurationMin, MaxMarks, Room,
+               Invigilator1, Invigilator2, Status, Topics) =>
+        this.CreatedBy = CreatedBy;
+}
 public sealed record CreateExamPaperRequest(
     Guid? ExamId, Guid? ClassId, string? Name, string? Subject, Guid? SubjectId, DateTime? Date,
     string? StartTime, int? DurationMin, int MaxMarks, string? Room, string? Invigilator1, string? Invigilator2,
