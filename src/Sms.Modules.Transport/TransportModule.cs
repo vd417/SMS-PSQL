@@ -144,8 +144,11 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
 
         var durationMin = trip is { StartedAt: { } s, EndedAt: { } e } ? (int)(e - s).TotalMinutes : 0;
         var boarded = await CountBoardedAsync(tripId, ct);
+        // Stops covered = stops the bus actually reached (TripStopProgress arrivals), not stops
+        // where a student boarded — a stop passed with no boarders is still covered, and counting
+        // boardings undercounts it.
         var stops = (await QueryInlineAsync<int>(
-            "SELECT CAST(COUNT(DISTINCT \"StopId\") AS int) FROM \"dbo\".\"Boardings\" WHERE \"TripId\" = @tripId AND \"StopId\" IS NOT NULL",
+            "SELECT CAST(COUNT(*) AS int) FROM \"dbo\".\"TripStopProgress\" WHERE \"TripId\" = @tripId AND \"ArrivedAt\" IS NOT NULL",
             new { tripId }, ct)).First();
 
         return new TripSummaryResponse(tripId, durationMin, Math.Round(metres / 1000, 2), stops, boarded);
@@ -282,11 +285,17 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
               LIMIT 1",
             new { routeId, tripId }, ct)).FirstOrDefault();
 
-    public Task ConfirmStopArrivalAsync(Guid tenantId, Guid tripId, Guid stopId, int seq, DateTime arrivedAt, DateTime confirmedAt, CancellationToken ct = default) =>
+    /// Returns the number of trips whose current stop this call claimed: 1 for the caller that
+    /// wins the arrival, 0 when the stop is already the current stop (a concurrent/duplicate
+    /// confirm) — the caller uses that to avoid a duplicate arrival broadcast.
+    public Task<int> ConfirmStopArrivalAsync(Guid tenantId, Guid tripId, Guid stopId, int seq, DateTime arrivedAt, DateTime confirmedAt, CancellationToken ct = default) =>
         ExecuteProcAsync("dbo.TripStopProgress_ConfirmArrival",
             new { TenantId = tenantId, TripId = tripId, StopId = stopId, Seq = seq, ArrivedAt = arrivedAt, ConfirmedAt = confirmedAt }, ct);
 
-    public Task CompleteStopAsync(Guid tenantId, Guid tripId, Guid stopId, DateTime departedAt, CancellationToken ct = default) =>
+    /// Returns the number of trips whose current stop this call released: 1 for the caller that
+    /// wins the departure, 0 when the stop is no longer the current stop (a concurrent/duplicate
+    /// depart) — the caller uses that to avoid a duplicate completion broadcast.
+    public Task<int> CompleteStopAsync(Guid tenantId, Guid tripId, Guid stopId, DateTime departedAt, CancellationToken ct = default) =>
         ExecuteProcAsync("dbo.TripStopProgress_Complete",
             new { TenantId = tenantId, TripId = tripId, StopId = stopId, DepartedAt = departedAt }, ct);
 

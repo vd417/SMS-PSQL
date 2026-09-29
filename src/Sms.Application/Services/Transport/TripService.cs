@@ -283,7 +283,12 @@ public sealed class TripService(
         if (!StopArrivalRules.IsWithinRadius(distance, _arrivalRadiusMeters))
             return ApiResult.Fail(new Error("too_far", "you are not close enough to this stop to confirm arrival"), 409);
 
-        await repo.ConfirmStopArrivalAsync(tid, tripId, stopId, next.Seq, clock.UtcNow, clock.UtcNow, ct);
+        // Final atomic guard against the check-then-act race: the pre-checks above can both pass for
+        // a driver and a conductor tapping "Arrived" at the same instant. Only the caller that
+        // actually claims the current stop (1 row) broadcasts; the loser gets the same 409 the
+        // already-current pre-check returns and, crucially, does not emit a duplicate fleet event.
+        if (await repo.ConfirmStopArrivalAsync(tid, tripId, stopId, next.Seq, clock.UtcNow, clock.UtcNow, ct) == 0)
+            return ApiResult.Fail(new Error("already_at_stop", "this stop is already confirmed as current"), 409);
         await fleetBroadcaster.BroadcastStopArrivedAsync(bid, tripId, stopId, next.Name, clock.UtcNow, ct);
         return ApiResult.NoContent();
     }
@@ -299,7 +304,11 @@ public sealed class TripService(
         if (await repo.GetCurrentStopIdAsync(tripId, ct) != stopId)
             return ApiResult.Fail(new Error("not_current_stop", "this stop is not the confirmed current stop"), 409);
 
-        await repo.CompleteStopAsync(tid, tripId, stopId, clock.UtcNow, ct);
+        // Final atomic guard against the same check-then-act race as ConfirmStopArrivalAsync: only
+        // the caller that actually releases the current stop (1 row) broadcasts the completion; a
+        // concurrent/duplicate depart gets the same 409 the not-current pre-check returns.
+        if (await repo.CompleteStopAsync(tid, tripId, stopId, clock.UtcNow, ct) == 0)
+            return ApiResult.Fail(new Error("not_current_stop", "this stop is not the confirmed current stop"), 409);
         if (await repo.GetBusIdAsync(tripId, ct) is { } busId && await repo.GetTripRouteIdAsync(tripId, ct) is { } routeId)
         {
             var next = await repo.GetNextIncompleteStopAsync(tripId, routeId, ct);
