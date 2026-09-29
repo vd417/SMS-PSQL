@@ -117,6 +117,9 @@ public static class ServiceCollectionExtensions
             builder.Environment.IsDevelopment()));
         builder.Services.AddSingleton(new ConsoleOtpSender(builder.Environment.IsDevelopment()));
         builder.Services.AddSingleton<IOtpSender, ChannelOtpSender>();
+        // Dev-only: also log invite / first-password setup codes so local sign-in works without
+        // live SMTP (the regular OTP path already does this via EmailOtpSender's logCode flag).
+        builder.Services.AddSingleton(new AuthDiagnosticsOptions(builder.Environment.IsDevelopment()));
         builder.Services.AddHostedService<EmailDispatchWorker>();
         builder.Services.AddHostedService<Sms.Api.Workers.TransportOfflineSweepWorker>();
         builder.Services.AddSingleton<IPaymentGateway, StubPaymentGateway>();
