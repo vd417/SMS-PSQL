@@ -19,7 +19,8 @@ public sealed record BusLiveSnapshotResponse(
     public string? Motion { get; init; }
 }
 public sealed record BusResponse(
-    Guid Id, string BusNo, string? RouteName, string? Driver, string? DriverPhone, IReadOnlyList<BusStopResponse> Stops);
+    Guid Id, string BusNo, string? RouteName, string? Driver, string? DriverPhone, IReadOnlyList<BusStopResponse> Stops,
+    Guid? RouteId = null);
 public sealed record BusRosterEntry(Guid StudentId, string StudentName, string Initials, Guid? StopId, string Status);
 public sealed record BusBoardingItem(Guid StudentId, Guid? StopId, string Status, DateTime? At);
 public sealed record BusBoardingRequest(IReadOnlyList<BusBoardingItem> Records);
@@ -33,7 +34,8 @@ public sealed record FleetBusResponse(
     int StopCount, int StudentsRiding, string Status,
     double? Lat, double? Lng, double? SpeedKmh, string? NextStopName, DateTime? LastPingAt,
     Guid? TeacherUserId = null, string? TeacherName = null, Guid? ConductorStaffId = null, int? Capacity = null,
-    string? TrackingStatus = null, double? Heading = null, int? EtaMinutes = null);
+    string? TrackingStatus = null, double? Heading = null, int? EtaMinutes = null,
+    IReadOnlyList<TravelingTeacherResponse>? TravelingTeachers = null);
 
 public sealed record TransportRouteListItem(Guid Id, string Name, int Stops);
 public sealed record RouteBusCandidate(Guid BusId, int? Capacity, int Occupied);
@@ -72,7 +74,7 @@ public sealed record FleetBusRow(
 
 public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository(factory), IRouteStopSource
 {
-    private sealed record BusRow(Guid Id, string BusNo, string? RouteName, string? Driver, string? DriverPhone);
+    private sealed record BusRow(Guid Id, string BusNo, string? RouteName, string? Driver, string? DriverPhone, Guid? RouteId = null);
     private sealed record RosterRow(Guid StudentId, string StudentName, Guid? StopId, string Status);
     private sealed record BusListRow(
         Guid BusId, string BusNo, Guid? RouteId, string? RouteName, Guid? DriverStaffId,
@@ -89,13 +91,13 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     public async Task<BusResponse?> GetAssignedAsync(Guid teacherUserId, CancellationToken ct = default)
     {
         var bus = (await QueryInlineAsync<BusRow>(
-            @"SELECT b.""Id"", b.""BusNo"", b.""RouteName"", b.""Driver"", b.""DriverPhone""
+            @"SELECT b.""Id"", b.""BusNo"", b.""RouteName"", b.""Driver"", b.""DriverPhone"", b.""RouteId""
               FROM ""dbo"".""Buses"" b JOIN ""dbo"".""BusAssignments"" a ON a.""BusId"" = b.""Id""
               WHERE a.""TeacherUserId"" = @teacherUserId
               LIMIT 1", new { teacherUserId }, ct)).FirstOrDefault();
         if (bus is null) return null;
         var stops = await QueryStopsForBusAsync(bus.Id, ct);
-        return new BusResponse(bus.Id, bus.BusNo, bus.RouteName, bus.Driver, bus.DriverPhone, stops);
+        return new BusResponse(bus.Id, bus.BusNo, bus.RouteName, bus.Driver, bus.DriverPhone, stops, bus.RouteId);
     }
 
     /// True if this teacher (RLS-scoped to the caller's tenant) is the assigned
@@ -142,13 +144,13 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
     public async Task<IReadOnlyList<BusResponse>> ListTravelingBusesForTeacherAsync(Guid teacherUserId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<BusRow>(
-            @"SELECT b.""Id"", b.""BusNo"", b.""RouteName"", b.""Driver"", b.""DriverPhone""
+            @"SELECT b.""Id"", b.""BusNo"", b.""RouteName"", b.""Driver"", b.""DriverPhone"", b.""RouteId""
               FROM ""dbo"".""Buses"" b JOIN ""dbo"".""BusTravelingTeachers"" tt ON tt.""BusId"" = b.""Id""
               WHERE tt.""TeacherUserId"" = @teacherUserId
               ORDER BY b.""BusNo""", new { teacherUserId }, ct);
         var result = new List<BusResponse>();
         foreach (var bus in rows)
-            result.Add(new BusResponse(bus.Id, bus.BusNo, bus.RouteName, bus.Driver, bus.DriverPhone, await QueryStopsForBusAsync(bus.Id, ct)));
+            result.Add(new BusResponse(bus.Id, bus.BusNo, bus.RouteName, bus.Driver, bus.DriverPhone, await QueryStopsForBusAsync(bus.Id, ct), bus.RouteId));
         return result;
     }
 
@@ -380,7 +382,7 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
             $@"SELECT b.""Id"" AS ""BusId"", b.""BusNo"", b.""RouteId"", b.""RouteName"", b.""DriverStaffId"", b.""Driver"", b.""DriverPhone"",
                 CAST({StopCountSql} AS int) AS ""StopCount"",
                 CAST((SELECT COUNT(*) FROM ""dbo"".""StudentBusAssignments"" sba WHERE sba.""BusId"" = b.""Id"") AS int) AS ""StudentsAssigned"",
-                a.""TeacherUserId"", COALESCE(u.""Name"", tch.""Name"") AS ""TeacherName"", b.""Capacity""
+                a.""TeacherUserId"", COALESCE(u.""Name"", tch.""Name"") AS ""TeacherName"", b.""Capacity"", b.""ConductorStaffId""
               FROM ""dbo"".""Buses"" b
               LEFT JOIN ""dbo"".""BusAssignments"" a ON a.""BusId"" = b.""Id""
               LEFT JOIN ""dbo"".""Users"" u ON u.""Id"" = a.""TeacherUserId""

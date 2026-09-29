@@ -55,6 +55,15 @@ public sealed class AcademicsService(
             .Any(r => r == Policies.StudentOrParent ||
                 r.Split('.').LastOrDefault() is "student" or "parent");
 
+    /// SD-5: exam paper PATCH/DELETE is creator-or-principal, deliberately narrower than
+    /// IsLeadership (which also treats admin/owner as leadership) — the approved rule names
+    /// principal specifically.
+    private static bool IsPrincipal(ClaimsPrincipal caller) =>
+        caller.FindAll("role").Any(c => c.Value.Trim().Equals(Policies.Principal, StringComparison.OrdinalIgnoreCase));
+
+    private static Guid? CallerUserId(ClaimsPrincipal caller) =>
+        Guid.TryParse(caller.FindFirst("sub")?.Value, out var id) ? id : null;
+
     private static DateOnly SchoolToday(DateTime utcNow) =>
         DateOnly.FromDateTime(SchoolClock.ToSchoolLocal(utcNow));
 
@@ -847,7 +856,7 @@ public sealed class AcademicsService(
     {
         if (tenant.TenantId is not { } tid)
             return ApiResult<ExamPaperResponse>.Fail(new Error("forbidden", "no tenant context"), 403);
-        var created = await exams.CreateExamPaperAsync(tid, req, ct);
+        var created = await exams.CreateExamPaperAsync(tid, req, tenant.UserId, ct);
         if (created is null)
             return ApiResult<ExamPaperResponse>.Fail(new Error("internal_error", "could not create exam paper"), 500);
         try
@@ -871,18 +880,39 @@ public sealed class AcademicsService(
     }
 
     public async Task<ApiResult<ExamPaperResponse>> UpdateExamPaperAsync(
-        Guid id, UpdateExamPaperRequest req, CancellationToken ct = default)
+        Guid id, UpdateExamPaperRequest req, ClaimsPrincipal caller, CancellationToken ct = default)
     {
+        var existing = await exams.GetExamPaperAsync(id, ct);
+        if (existing is null)
+            return ApiResult<ExamPaperResponse>.Fail(new Error("not_found", "resource not found"), 404);
+        if (!CanEditExamPaper(existing, caller))
+            return ApiResult<ExamPaperResponse>.Fail(new Error("forbidden", "not the creator or a principal"), 403);
+
         var updated = await exams.UpdateExamPaperAsync(id, req, ct);
         return updated is null
             ? ApiResult<ExamPaperResponse>.Fail(new Error("not_found", "resource not found"), 404)
             : ApiResult<ExamPaperResponse>.Ok(updated);
     }
 
-    public async Task<ApiResult> DeleteExamPaperAsync(Guid id, CancellationToken ct = default)
+    public async Task<ApiResult> DeleteExamPaperAsync(Guid id, ClaimsPrincipal caller, CancellationToken ct = default)
     {
+        var existing = await exams.GetExamPaperAsync(id, ct);
+        if (existing is null)
+            return ApiResult.Fail(new Error("not_found", "resource not found"), 404);
+        if (!CanEditExamPaper(existing, caller))
+            return ApiResult.Fail(new Error("forbidden", "not the creator or a principal"), 403);
+
         await exams.DeleteExamPaperAsync(id, ct);
         return ApiResult.NoContent();
+    }
+
+    /// SD-5 (matrix row EXM-05): creator-or-principal. A legacy paper with no CreatedBy
+    /// (pre-migration row) is deliberately principal-only — NULL never counts as "mine".
+    private static bool CanEditExamPaper(ExamPaperResponse paper, ClaimsPrincipal caller)
+    {
+        if (IsPrincipal(caller)) return true;
+        var callerId = CallerUserId(caller);
+        return paper.CreatedBy is { } createdBy && callerId is { } uid && createdBy == uid;
     }
 
     public async Task<ApiResult<IReadOnlyList<GradeResponse>>> ListGradesAsync(
