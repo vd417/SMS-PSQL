@@ -15,7 +15,8 @@ public static class DevSeedGuard
 
         string? db;
         try { db = new NpgsqlConnectionStringBuilder(connectionString).Database; }
-        catch (ArgumentException) { return $"{Cli.ConnectionEnvVar} is not a valid Npgsql connection string."; }
+        catch (Exception ex) when (ex is ArgumentException or FormatException)
+        { return $"{Cli.ConnectionEnvVar} is not a valid Npgsql connection string."; }
 
         if (string.IsNullOrEmpty(db) || !db.EndsWith("_dev", StringComparison.Ordinal))
             return $"Refusing to seed database '{db}': only a database whose name ends in _dev is allowed.";

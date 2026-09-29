@@ -81,24 +81,38 @@ public class DevSeedTests(PostgresFixture fx)
                 { ["Id"] = shadowedId, ["Name"] = "Shadowed", ["Slug"] = shadowSlug, ["Status"] = "active" }),
         };
 
+        var notSeedId = Guid.NewGuid();
         await using (var conn = new NpgsqlConnection(fx.ConnectionString))
         {
             await conn.OpenAsync();
             await using var cmd = new NpgsqlCommand(
                 """INSERT INTO "dbo"."Tenants" ("Id","Name","Slug","Status") VALUES (@id,'Not Seed',@slug,'active') ON CONFLICT DO NOTHING""", conn);
-            cmd.Parameters.AddWithValue("id", Guid.NewGuid());
+            cmd.Parameters.AddWithValue("id", notSeedId);
             cmd.Parameters.AddWithValue("slug", shadowSlug);
             await cmd.ExecuteNonQueryAsync();
         }
 
-        var act = () => SeedRunner.RunAsync(fx.ConnectionString, rows);
+        try
+        {
+            var act = () => SeedRunner.RunAsync(fx.ConnectionString, rows);
 
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*shadowed*");
-        await using var check = new NpgsqlConnection(fx.ConnectionString);
-        await check.OpenAsync();
-        await using var q = new NpgsqlCommand("""SELECT count(*) FROM "dbo"."Tenants" WHERE "Id" = @id""", check);
-        q.Parameters.AddWithValue("id", probeId);
-        ((long)(await q.ExecuteScalarAsync())!).Should().Be(0);
+            await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*shadowed*");
+            await using var check = new NpgsqlConnection(fx.ConnectionString);
+            await check.OpenAsync();
+            await using var q = new NpgsqlCommand("""SELECT count(*) FROM "dbo"."Tenants" WHERE "Id" = @id""", check);
+            q.Parameters.AddWithValue("id", probeId);
+            ((long)(await q.ExecuteScalarAsync())!).Should().Be(0);
+        }
+        finally
+        {
+            // The shadowing "Not Seed" row is inserted outside the runner's transaction, so it survives
+            // the rollback; remove it so it does not accumulate in the shared test database.
+            await using var cleanup = new NpgsqlConnection(fx.ConnectionString);
+            await cleanup.OpenAsync();
+            await using var del = new NpgsqlCommand("""DELETE FROM "dbo"."Tenants" WHERE "Id" = @id""", cleanup);
+            del.Parameters.AddWithValue("id", notSeedId);
+            await del.ExecuteNonQueryAsync();
+        }
     }
 
     [Fact]

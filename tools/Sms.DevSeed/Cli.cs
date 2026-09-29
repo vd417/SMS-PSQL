@@ -24,7 +24,7 @@ public static class Cli
             Console.WriteLine($"Total inserted: {report.TotalInserted}");
             return 0;
         }
-        catch (Exception ex) when (ex is NpgsqlException or InvalidOperationException)
+        catch (Exception ex) when (ex is NpgsqlException or InvalidOperationException or TimeoutException or ArgumentException)
         {
             // Npgsql messages never contain the password; the connection string itself is never printed.
             Console.Error.WriteLine($"FAILED, nothing committed: {ex.Message}");
