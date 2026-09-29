@@ -10,6 +10,7 @@ using OpenTelemetry.Trace;
 using Serilog;
 using Sms.Api.Http;
 using Sms.Api.Hubs;
+using Sms.Api.Logging;
 using Sms.Api.Services;
 using Sms.Api.Swagger;
 using Sms.Application.Services.AiSearch;
@@ -55,7 +56,13 @@ public static class ServiceCollectionExtensions
 {
     public static WebApplicationBuilder ConfigureSmsServices(this WebApplicationBuilder builder)
     {
-        builder.Host.UseSerilog((ctx, cfg) => cfg.ReadFrom.Configuration(ctx.Configuration).WriteTo.Console());
+        // SensitiveQueryRedactionEnricher masks ?access_token= (SignalR's browser JWT transport) and
+        // other credential query parameters in every event before any sink sees it. ReadFrom.Services
+        // lets tests register an extra ILogEventSink; production registers none.
+        builder.Host.UseSerilog((ctx, services, cfg) => cfg.ReadFrom.Configuration(ctx.Configuration)
+            .ReadFrom.Services(services)
+            .Enrich.With<SensitiveQueryRedactionEnricher>()
+            .WriteTo.Console());
 
         var conn = builder.Configuration.GetConnectionString("Sql");
         var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
