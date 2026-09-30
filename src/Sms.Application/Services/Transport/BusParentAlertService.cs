@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Sms.Application.Services.Realtime;
 using Sms.Modules.Comms;
 using Sms.Modules.Transport;
+using Sms.Shared.Kernel.Push;
 
 namespace Sms.Application.Services.Transport;
 
@@ -18,6 +19,8 @@ public interface IBusParentAlertService
 public sealed class BusParentAlertService(
     StudentBusRepository riders,
     CommsRepository comms,
+    DeviceTokenRepository devices,
+    IExpoPushSender push,
     ILiveBroadcaster live,
     ILogger<BusParentAlertService> logger) : IBusParentAlertService
 {
@@ -69,6 +72,12 @@ public sealed class BusParentAlertService(
                     var (title, body) = Copy(kind, rider);
                     await comms.CreateNotificationAsync(tenantId,
                         new CreateNotificationRequest("bus", "bus", title, body, parentId), ct);
+                    // Best-effort device push alongside the in-app notice (never throws — a dead
+                    // token or Expo outage must not break this fan-out or the trip flow).
+                    var tokens = await devices.ListTokensForUserAsync(tenantId, parentId, ct);
+                    if (tokens.Count > 0)
+                        await push.SendAsync(tokens, title, body,
+                            new Dictionary<string, object?> { ["kind"] = kind, ["trip_id"] = tripId }, ct);
                     sent = true;
                 }
             }

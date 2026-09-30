@@ -179,6 +179,10 @@ public static class ServiceCollectionExtensions
         builder.Services.Configure<GoogleRoutesOptions>(builder.Configuration.GetSection(GoogleRoutesOptions.SectionName));
         builder.Services.AddHttpClient("google-routes");
         builder.Services.AddSingleton<IGoogleRoutesClient, GoogleRoutesClient>();
+
+        builder.Services.Configure<Sms.Shared.Kernel.Push.ExpoPushOptions>(builder.Configuration.GetSection(Sms.Shared.Kernel.Push.ExpoPushOptions.SectionName));
+        builder.Services.AddHttpClient("expo");
+        builder.Services.AddSingleton<Sms.Shared.Kernel.Push.IExpoPushSender, Sms.Shared.Kernel.Push.ExpoPushSender>();
         builder.Services.AddScoped<IRouteStopSource>(sp => sp.GetRequiredService<BusRepository>());
         builder.Services.AddScoped<IRouteGeometryStore>(sp => sp.GetRequiredService<RouteGeometryRepository>());
         builder.Services.AddScoped<IRouteGeometryService, RouteGeometryService>();
