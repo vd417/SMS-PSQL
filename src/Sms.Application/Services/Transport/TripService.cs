@@ -130,7 +130,8 @@ public sealed class TripService(
             return ApiResult.Fail(new Error("forbidden", "not your trip"), 403);
         if (!await repo.IsActiveAsync(tripId, ct))
             return ApiResult.Fail(new Error("trip_ended", "this trip has already ended"), 409);
-        return await IngestPingsCoreAsync(tid, tripId, req, heartbeatRole: role, ct);
+        // Live driver/conductor path: eligible to raise parent "bus near stop" alerts.
+        return await IngestPingsCoreAsync(tid, tripId, req, heartbeatRole: role, allowParentAlerts: true, ct);
     }
 
     public async Task<ApiResult> IngestOperatorPingsAsync(Guid tripId, BulkPingRequest req, CancellationToken ct = default)
@@ -138,11 +139,12 @@ public sealed class TripService(
         if (tenant.TenantId is not { } tid)
             return ApiResult.Fail(new Error("forbidden", "no tenant context"), 403);
         // Heartbeat column: treat CRM/admin ingest as driver ping so offline sweep stays correct.
-        return await IngestPingsCoreAsync(tid, tripId, req, heartbeatRole: "driver", ct);
+        // But operator/admin ingest may be backfilled or replayed, so it must NOT raise parent alerts.
+        return await IngestPingsCoreAsync(tid, tripId, req, heartbeatRole: "driver", allowParentAlerts: false, ct);
     }
 
     private async Task<ApiResult> IngestPingsCoreAsync(
-        Guid tid, Guid tripId, BulkPingRequest req, string heartbeatRole, CancellationToken ct)
+        Guid tid, Guid tripId, BulkPingRequest req, string heartbeatRole, bool allowParentAlerts, CancellationToken ct)
     {
         await repo.IngestPingsAsync(tid, tripId, req.Pings, ct);
         await repo.MarkPingAsync(tripId, heartbeatRole, ct);
@@ -152,6 +154,7 @@ public sealed class TripService(
         {
             var snapshot = await buses.GetLiveSnapshotAsync(busId, ct);
             var currentStopId = await repo.GetCurrentStopIdAsync(tripId, ct);
+            (double Lat, double Lng, Guid StopId)? approach = null;
             // Only probe for a next stop when not already sitting at a confirmed one —
             // arrival detection targets the NEXT stop, not the current one (see
             // TripStopRepositoryTests' note that excluding the current stop is the caller's job).
@@ -162,14 +165,18 @@ public sealed class TripService(
                 var distance = TripRepository.Haversine(lat, lng, nextStop.Lat, nextStop.Lng);
                 var withinRadius = StopArrivalRules.IsWithinRadius(distance, _arrivalRadiusMeters);
                 snapshot = snapshot with { NextStopId = nextStop.Id, WithinArrivalRadius = withinRadius, CurrentStopId = currentStopId };
+                approach = (lat, lng, nextStop.Id);
             }
             else
             {
                 snapshot = snapshot with { CurrentStopId = currentStopId };
             }
             await fleetBroadcaster.BroadcastPositionAsync(busId, snapshot, ct);
-            if (snapshot.Lat is { } pingLat && snapshot.Lng is { } pingLng)
-                await parentAlerts.NotifyApproachingStopsAsync(tid, busId, tripId, pingLat, pingLng, ct);
+            // Parent "bus near stop" alert: live driver/conductor path only, the next incomplete
+            // stop only, and only off a fresh/accurate fix (staleness/accuracy gated in the service).
+            if (allowParentAlerts && approach is { } ap)
+                await parentAlerts.NotifyApproachingStopsAsync(
+                    tid, busId, tripId, ap.Lat, ap.Lng, snapshot.Accuracy, snapshot.LastUpdateAt, ap.StopId, ct);
         }
         return ApiResult.NoContent();
     }
