@@ -1464,7 +1464,8 @@ CREATE TABLE "dbo"."Users" (
     "Name" varchar(200),
     "MustSetPassword" boolean DEFAULT false NOT NULL,
     "LastSeenAt" timestamptz,
-    "PhotoUrl" text
+    "PhotoUrl" text,
+    "PersonId" uuid NULL
 );
 
 CREATE TABLE "dbo"."Vehicle" (
