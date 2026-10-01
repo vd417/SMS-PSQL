@@ -465,6 +465,11 @@ BEGIN
       + (SELECT count(*) FROM "dbo"."Staff" st WHERE st."TenantId" = staff_create.TenantId AND st."Status" = 'active')
     ) WHERE "Id" = staff_create.TenantId;
 
+    -- B5: claim this staff member's own email+phone for per-tenant contact uniqueness.
+    -- Raises SMSDC on a different-person conflict, rolling back this create.
+    PERFORM dbo.contact_claims_sync(staff_create.TenantId, 'staff', v_id::text, NULL,
+                                    staff_create.Email, staff_create.Phone);
+
     RETURN QUERY
     SELECT "Id", "TenantId", "Name", "Gender", "Role", "Category", "Department", "Phone", "Shift", "Route",
            "AttendancePct", "Status", "AvatarHue", "EmployeeCode", "Email", CAST(NULL AS varchar(512))
@@ -504,6 +509,12 @@ BEGIN
             (SELECT count(*) FROM "dbo"."Teachers" te WHERE te."TenantId" = v_tenant_id AND te."Status" = 'active')
           + (SELECT count(*) FROM "dbo"."Staff" st WHERE st."TenantId" = v_tenant_id AND st."Status" = 'active')
         ) WHERE "Id" = v_tenant_id;
+
+        -- B5: re-claim this staff member's own (post-update) email+phone for contact uniqueness.
+        -- Raises SMSDC on a different-person conflict, rolling back this update.
+        PERFORM dbo.contact_claims_sync(v_tenant_id, 'staff', staff_update.Id::text, NULL,
+            (SELECT st."Email" FROM "dbo"."Staff" st WHERE st."Id" = staff_update.Id),
+            (SELECT st."Phone" FROM "dbo"."Staff" st WHERE st."Id" = staff_update.Id));
     END IF;
 
     RETURN v_count;
@@ -634,6 +645,11 @@ BEGIN
       + (SELECT count(*) FROM "dbo"."Staff" st WHERE st."TenantId" = teacher_create.TenantId AND st."Status" = 'active')
     ) WHERE "Id" = teacher_create.TenantId;
 
+    -- B5: claim this teacher's own email+phone for per-tenant contact uniqueness.
+    -- Raises SMSDC on a different-person conflict, rolling back this create.
+    PERFORM dbo.contact_claims_sync(teacher_create.TenantId, 'teacher', v_id::text, NULL,
+                                    teacher_create.Email, teacher_create.Phone);
+
     RETURN QUERY
     SELECT "Id", "TenantId", "Name", "Gender", "Department", "Designation", "SubjectsCsv", "ClassTeacher", "Phone", "Email",
            "Exp", "Rating", "AttendancePct", "Result", "Load", "Status", "AvatarHue", "Top", "EmployeeCode",
@@ -673,6 +689,12 @@ BEGIN
             (SELECT count(*) FROM "dbo"."Teachers" te WHERE te."TenantId" = v_tenant_id AND te."Status" = 'active')
           + (SELECT count(*) FROM "dbo"."Staff" st WHERE st."TenantId" = v_tenant_id AND st."Status" = 'active')
         ) WHERE "Id" = v_tenant_id;
+
+        -- B5: re-claim this teacher's own (post-update) email+phone for contact uniqueness.
+        -- Raises SMSDC on a different-person conflict, rolling back this update.
+        PERFORM dbo.contact_claims_sync(v_tenant_id, 'teacher', teacher_update.Id::text, NULL,
+            (SELECT te."Email" FROM "dbo"."Teachers" te WHERE te."Id" = teacher_update.Id),
+            (SELECT te."Phone" FROM "dbo"."Teachers" te WHERE te."Id" = teacher_update.Id));
     END IF;
 
     RETURN v_count;
