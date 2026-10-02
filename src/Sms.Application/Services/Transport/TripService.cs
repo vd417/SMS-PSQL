@@ -39,7 +39,8 @@ public interface ITripService
 public sealed class TripService(
     TripRepository repo, BusRepository buses, ITenantContext tenant,
     ITransportFleetBroadcaster fleetBroadcaster, ILiveBroadcaster live, IClock clock,
-    IConfiguration config, IBusParentAlertService parentAlerts) : ITripService
+    IConfiguration config, IBusParentAlertService parentAlerts,
+    IBusTeacherAlertService teacherAlerts) : ITripService
 {
     // Matches TransportOfflineSweepWorker's Math.Clamp-on-read convention for a config value
     // with a sane default and hard bounds, rather than trusting an unbounded/negative config
@@ -96,6 +97,7 @@ public sealed class TripService(
         {
             await fleetBroadcaster.BroadcastTripStartedAsync(busId, trip.Id, trip.DriverId, trip.ConductorId, trip.Direction, trip.StartedAt ?? clock.UtcNow, ct);
             await parentAlerts.NotifyTripStartedAsync(tid, busId, trip.Id, ct);
+            await teacherAlerts.NotifyTripStartedAsync(tid, busId, trip.Id, ct);
         }
         return ApiResult<TripResponse>.Ok(WithActiveBroadcaster(trip), 201);
     }
@@ -175,8 +177,12 @@ public sealed class TripService(
             // Parent "bus near stop" alert: live driver/conductor path only, the next incomplete
             // stop only, and only off a fresh/accurate fix (staleness/accuracy gated in the service).
             if (allowParentAlerts && approach is { } ap)
+            {
                 await parentAlerts.NotifyApproachingStopsAsync(
                     tid, busId, tripId, ap.Lat, ap.Lng, snapshot.Accuracy, snapshot.LastUpdateAt, ap.StopId, ct);
+                await teacherAlerts.NotifyApproachingStopsAsync(
+                    tid, busId, tripId, ap.Lat, ap.Lng, snapshot.Accuracy, snapshot.LastUpdateAt, ap.StopId, ct);
+            }
         }
         return ApiResult.NoContent();
     }
@@ -204,7 +210,10 @@ public sealed class TripService(
         await fleetBroadcaster.BroadcastFleetAsync(tid, ct);
         await live.PublishAsync(tid, LiveEventTypes.Transport, ct: ct);
         if (busId is { } bid)
+        {
             await fleetBroadcaster.BroadcastTripEndedAsync(bid, tripId, clock.UtcNow, ct);
+            await teacherAlerts.NotifyTripEndedAsync(tid, bid, tripId, ct);
+        }
         return ApiResult<TripSummaryResponse>.Ok(summary);
     }
 
