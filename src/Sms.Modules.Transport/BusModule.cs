@@ -60,6 +60,13 @@ public sealed record BusTeacherAssignmentResponse(
 /// One traveling teacher granted live-view access on a bus, distinct from the single duty teacher.
 public sealed record TravelingTeacherResponse(Guid TeacherUserId, string? TeacherName);
 
+/// A teacher tied to a bus (duty or traveling), for trip-started/ended push fan-out.
+public sealed record BusTeacherRow(Guid TeacherUserId, string BusNo);
+
+/// A traveling teacher mapped to a boarding stop, for the "~1 km away" approaching alert.
+public sealed record BusTeacherStopRow(
+    Guid TeacherUserId, string BusNo, Guid StopId, string? StopName, double? StopLat, double? StopLng);
+
 /// One row of a bus's driver/conductor assignment history — UnassignedAt is null while open.
 public sealed record BusDriverAssignmentResponse(
     Guid Id, Guid StaffId, string StaffName, string Role, DateTime AssignedAt, DateTime? UnassignedAt);
@@ -126,6 +133,48 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
 
     public Task RemoveTravelingTeacherAsync(Guid tenantId, Guid busId, Guid teacherUserId, CancellationToken ct = default) =>
         ExecuteProcAsync("dbo.BusTravelingTeacher_Remove", new { TenantId = tenantId, BusId = busId, TeacherUserId = teacherUserId }, ct);
+
+    /// Teachers tied to a bus — the duty teacher (BusAssignments) and every traveling teacher
+    /// (BusTravelingTeachers), each once (UNION). Recipients of trip started/ended alerts.
+    public Task<IReadOnlyList<BusTeacherRow>> ListBusTeachersAsync(Guid busId, CancellationToken ct = default) =>
+        QueryInlineAsync<BusTeacherRow>(@"
+SELECT a.""TeacherUserId"", b.""BusNo"" FROM ""dbo"".""BusAssignments"" a
+  JOIN ""dbo"".""Buses"" b ON b.""Id"" = a.""BusId"" WHERE a.""BusId"" = @busId
+UNION
+SELECT tt.""TeacherUserId"", b.""BusNo"" FROM ""dbo"".""BusTravelingTeachers"" tt
+  JOIN ""dbo"".""Buses"" b ON b.""Id"" = tt.""BusId"" WHERE tt.""BusId"" = @busId",
+            new { busId }, ct);
+
+    /// Traveling teachers on a bus with a mapped boarding stop, plus that stop's coordinates — the
+    /// recipients of the "~1 km away" approaching alert. Teachers with a null StopId are excluded.
+    public Task<IReadOnlyList<BusTeacherStopRow>> ListStopMappedTeachersAsync(Guid busId, CancellationToken ct = default) =>
+        QueryInlineAsync<BusTeacherStopRow>(@"
+SELECT tt.""TeacherUserId"", b.""BusNo"", tt.""StopId"",
+       COALESCE(rs.""Name"", bs.""Name"") AS ""StopName"",
+       COALESCE(rs.""Lat"", bs.""Lat"") AS ""StopLat"",
+       COALESCE(rs.""Lng"", bs.""Lng"") AS ""StopLng""
+FROM ""dbo"".""BusTravelingTeachers"" tt
+JOIN ""dbo"".""Buses"" b ON b.""Id"" = tt.""BusId""
+LEFT JOIN ""dbo"".""RouteStops"" rs ON rs.""Id"" = tt.""StopId""
+LEFT JOIN ""dbo"".""BusStops"" bs ON bs.""Id"" = tt.""StopId""
+WHERE tt.""BusId"" = @busId AND tt.""StopId"" IS NOT NULL",
+            new { busId }, ct);
+
+    /// Returns true when this (trip, teacher, kind) had not been recorded yet — the teacher mirror
+    /// of TryInsertParentAlertAsync, so repeated pings cannot re-send the same teacher alert.
+    public async Task<bool> TryInsertTeacherAlertAsync(
+        Guid tenantId, Guid tripId, Guid teacherUserId, string kind, CancellationToken ct = default)
+    {
+        var inserted = await ExecuteInlineAsync(@"
+INSERT INTO ""dbo"".""BusTeacherAlerts"" (""Id"", ""TenantId"", ""TripId"", ""TeacherUserId"", ""Kind"")
+SELECT gen_random_uuid(), @tenantId, @tripId, @teacherUserId, @kind
+WHERE NOT EXISTS (
+    SELECT 1 FROM ""dbo"".""BusTeacherAlerts""
+    WHERE ""TripId"" = @tripId AND ""TeacherUserId"" = @teacherUserId AND ""Kind"" = @kind
+);",
+            new { tenantId, tripId, teacherUserId, kind }, ct);
+        return inserted > 0;
+    }
 
     // Users.Name is frequently null even for an accepted-invite teacher (never backfilled from
     // Teachers.Name), so fall back to the linked Teachers row's name rather than showing blank.

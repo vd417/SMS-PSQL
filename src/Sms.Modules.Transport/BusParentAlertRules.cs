@@ -5,6 +5,8 @@ public static class BusParentAlertRules
 {
     public const string TripStarted = "trip_started";
     public const string ApproachingStop = "approaching_stop";
+    /// A trip that has ended — teacher alerts only (parents are not notified on trip end).
+    public const string TripEnded = "trip_ended";
 
     /// Default: notify when the bus is within 1 km of the child's assigned stop.
     public const double DefaultApproachMeters = 1000;
