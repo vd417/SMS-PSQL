@@ -12,7 +12,12 @@ public sealed class FleetSnapshotBuilder(BusRepository repo, ITenantContext tena
     public async Task<IReadOnlyList<FleetBusResponse>> BuildAsync(CancellationToken ct = default)
     {
         var rows = await repo.FleetAsync(ct);
-        var teachers = (await repo.ListBusesAsync(ct)).ToDictionary(b => b.BusId);
+        // A bus can carry more than one BusAssignments row (nothing enforces a single duty
+        // teacher), which makes ListBusesAsync return it more than once; keep the first so the
+        // fleet board never crashes on a duplicate key.
+        var teachers = (await repo.ListBusesAsync(ct))
+            .GroupBy(b => b.BusId)
+            .ToDictionary(g => g.Key, g => g.First());
         var now = clock.UtcNow;
         var gpsAllowed = FeatureGate.Allowed(tenant, features, FeatureCatalog.TransportGps);
         var list = new List<FleetBusResponse>(rows.Count);
