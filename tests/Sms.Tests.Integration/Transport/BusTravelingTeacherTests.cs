@@ -129,4 +129,66 @@ public class BusTravelingTeacherTests(PostgresFixture fx)
         data.GetArrayLength().Should().Be(1);
         data[0].GetProperty("bus_no").GetString().Should().Be("BUS-1");
     }
+
+    private async Task<(Guid BusId, Guid RouteId, Guid Stop1, Guid Stop2, Guid Teacher)> SeedBusWithTwoStops(Guid tenantId)
+    {
+        var busId = Guid.NewGuid();
+        var routeId = Guid.NewGuid();
+        var stop1 = Guid.NewGuid();
+        var stop2 = Guid.NewGuid();
+        var teacher = Guid.NewGuid();
+        await using var conn = new NpgsqlConnection(fx.ConnectionString);
+        await conn.OpenAsync();
+        await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
+        await conn.ExecuteAsync("INSERT INTO \"dbo\".\"Buses\" (\"Id\",\"TenantId\",\"BusNo\",\"RouteId\") VALUES (@Id,@T,'BUS-9',@R)",
+            new { Id = busId, T = tenantId, R = routeId });
+        await conn.ExecuteAsync("INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\",\"TenantId\",\"Name\") VALUES (@R,@T,'R9')",
+            new { R = routeId, T = tenantId });
+        await conn.ExecuteAsync(
+            "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\",\"TenantId\",\"RouteId\",\"Name\",\"Seq\",\"Lat\",\"Lng\") VALUES (@S1,@T,@R,'Gate A',1,12.90,77.60),(@S2,@T,@R,'Gate B',2,12.91,77.60)",
+            new { S1 = stop1, S2 = stop2, T = tenantId, R = routeId });
+        await conn.ExecuteAsync("INSERT INTO \"dbo\".\"Users\" (\"Id\",\"TenantId\",\"Name\",\"Email\") VALUES (@Id,@T,'Chitra',@E)",
+            new { Id = teacher, T = tenantId, E = $"chitra-{teacher}@test.local" });
+        return (busId, routeId, stop1, stop2, teacher);
+    }
+
+    [Fact]
+    public async Task Admin_assigns_a_traveling_teacher_with_a_stop_and_can_update_it()
+    {
+        await using var app = App();
+        var tenantId = Guid.NewGuid();
+        await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
+        var (busId, _, stop1, stop2, teacher) = await SeedBusWithTwoStops(tenantId);
+        var admin = PrincipalClient(app, tenantId);
+
+        var afterAssign = await Data(
+            await admin.PutAsJsonAsync($"/v1/transport/buses/{busId}/traveling-teachers/{teacher}", new { stop_id = stop1 }),
+            HttpStatusCode.OK);
+        var row = afterAssign.EnumerateArray().Single(e => e.GetProperty("teacher_user_id").GetGuid() == teacher);
+        row.GetProperty("stop_id").GetGuid().Should().Be(stop1);
+        row.GetProperty("stop_name").GetString().Should().Be("Gate A");
+
+        // Re-assigning the same teacher updates the stop in place (upsert — still one row).
+        var afterUpdate = await Data(
+            await admin.PutAsJsonAsync($"/v1/transport/buses/{busId}/traveling-teachers/{teacher}", new { stop_id = stop2 }),
+            HttpStatusCode.OK);
+        afterUpdate.GetArrayLength().Should().Be(1);
+        afterUpdate.EnumerateArray().Single().GetProperty("stop_name").GetString().Should().Be("Gate B");
+    }
+
+    [Fact]
+    public async Task Assigning_a_traveling_teacher_without_a_stop_leaves_the_stop_null()
+    {
+        await using var app = App();
+        var tenantId = Guid.NewGuid();
+        await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
+        var (busId, _, _, _, teacher) = await SeedBusWithTwoStops(tenantId);
+        var admin = PrincipalClient(app, tenantId);
+
+        var after = await Data(
+            await admin.PutAsync($"/v1/transport/buses/{busId}/traveling-teachers/{teacher}", null),
+            HttpStatusCode.OK);
+        var row = after.EnumerateArray().Single(e => e.GetProperty("teacher_user_id").GetGuid() == teacher);
+        row.GetProperty("stop_id").ValueKind.Should().Be(JsonValueKind.Null);
+    }
 }

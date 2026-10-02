@@ -58,7 +58,9 @@ public sealed record BusTeacherAssignmentResponse(
     Guid BusId, string BusNo, Guid? TeacherUserId, string? TeacherName);
 
 /// One traveling teacher granted live-view access on a bus, distinct from the single duty teacher.
-public sealed record TravelingTeacherResponse(Guid TeacherUserId, string? TeacherName);
+/// StopId/StopName are the teacher's optional boarding stop (set by admin) for the approach alert.
+public sealed record TravelingTeacherResponse(
+    Guid TeacherUserId, string? TeacherName, Guid? StopId = null, string? StopName = null);
 
 /// A teacher tied to a bus (duty or traveling), for trip-started/ended push fan-out.
 public sealed record BusTeacherRow(Guid TeacherUserId, string BusNo);
@@ -128,8 +130,10 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
         return rows.FirstOrDefault() > 0;
     }
 
-    public Task AddTravelingTeacherAsync(Guid tenantId, Guid busId, Guid teacherUserId, CancellationToken ct = default) =>
-        ExecuteProcAsync("dbo.BusTravelingTeacher_Add", new { TenantId = tenantId, BusId = busId, TeacherUserId = teacherUserId }, ct);
+    public Task AddTravelingTeacherAsync(
+        Guid tenantId, Guid busId, Guid teacherUserId, Guid? stopId = null, CancellationToken ct = default) =>
+        ExecuteProcAsync("dbo.BusTravelingTeacher_Add",
+            new { TenantId = tenantId, BusId = busId, TeacherUserId = teacherUserId, StopId = stopId }, ct);
 
     public Task RemoveTravelingTeacherAsync(Guid tenantId, Guid busId, Guid teacherUserId, CancellationToken ct = default) =>
         ExecuteProcAsync("dbo.BusTravelingTeacher_Remove", new { TenantId = tenantId, BusId = busId, TeacherUserId = teacherUserId }, ct);
@@ -180,10 +184,13 @@ WHERE NOT EXISTS (
     // Teachers.Name), so fall back to the linked Teachers row's name rather than showing blank.
     public Task<IReadOnlyList<TravelingTeacherResponse>> ListTravelingTeachersAsync(Guid busId, CancellationToken ct = default) =>
         QueryInlineAsync<TravelingTeacherResponse>(
-            @"SELECT tt.""TeacherUserId"", COALESCE(u.""Name"", tch.""Name"") AS ""TeacherName""
+            @"SELECT tt.""TeacherUserId"", COALESCE(u.""Name"", tch.""Name"") AS ""TeacherName"",
+                     tt.""StopId"", COALESCE(rs.""Name"", bs.""Name"") AS ""StopName""
               FROM ""dbo"".""BusTravelingTeachers"" tt
               JOIN ""dbo"".""Users"" u ON u.""Id"" = tt.""TeacherUserId""
               LEFT JOIN ""dbo"".""Teachers"" tch ON tch.""UserId"" = tt.""TeacherUserId""
+              LEFT JOIN ""dbo"".""RouteStops"" rs ON rs.""Id"" = tt.""StopId""
+              LEFT JOIN ""dbo"".""BusStops"" bs ON bs.""Id"" = tt.""StopId""
               WHERE tt.""BusId"" = @busId
               ORDER BY COALESCE(u.""Name"", tch.""Name"")", new { busId }, ct);
 
