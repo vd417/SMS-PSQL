@@ -103,9 +103,15 @@ public sealed class StudentBulkImportService(
 
     /// Minimal required-field guard before creating — the backend's own final authority,
     /// independent of whatever the client's Preview step already checked. Deliberately does
-    /// NOT re-implement phone/email format regex or duplicate-vs-roster checks (those stay
-    /// client-only per the design) — only guards against structurally incomplete rows that
-    /// dbo.Student_Create would otherwise silently accept.
+    /// NOT re-implement phone/email format regex here — only guards against structurally
+    /// incomplete rows that dbo.Student_Create would otherwise silently accept.
+    /// Contact-uniqueness is NOT a client-only concern: each row is created through the same
+    /// authoritative B5 path (SisService.CreateStudentAsync -> dbo.Student_Create, which
+    /// PERFORMs dbo.contact_claims_sync on the student's OWN Email). A different-person claim
+    /// on that own email raises the SMSDC sentinel, surfaces as a 409 `conflict`, and is
+    /// recorded per-row as status:"skipped" below — the batch is never aborted. Guardian
+    /// email/phone are denormalized guardian fields and are never claimed (siblings may share
+    /// them); students have no own-phone column, so only the own email is enforced per row.
     private static string? RequiredFieldError(CreateStudentRequest r)
     {
         if (string.IsNullOrWhiteSpace(r.Name)) return "Name is required";
