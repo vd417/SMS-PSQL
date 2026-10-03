@@ -49,6 +49,29 @@ public class PtmTests(PostgresFixture fx)
     }
 
     [Fact]
+    public async Task Scheduling_a_meeting_notifies_the_linked_family()
+    {
+        await using var app = App();
+        var seed = await SeedAsync();
+        var adminClient = Client(app, Guid.NewGuid(), seed.TenantId, "school.admin");
+
+        var create = await adminClient.PostAsJsonAsync("/v1/ptm", new
+        {
+            student_id = seed.LinkedStudentId, teacher_id = seed.TeacherId,
+            subject = "Mathematics", date = "2026-11-05", time = "16:00", mode = "Video call",
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var parentClient = Client(app, seed.ParentUserId, seed.TenantId, "parent");
+        var list = await parentClient.GetAsync("/v1/notifications");
+        list.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var doc = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
+        var titles = doc.RootElement.GetProperty("data").EnumerateArray()
+            .Select(r => r.GetProperty("title").GetString()).ToList();
+        titles.Should().Contain(t => t != null && t.Contains("meeting"));
+    }
+
+    [Fact]
     public async Task Student_lists_own_meetings()
     {
         await using var app = App();

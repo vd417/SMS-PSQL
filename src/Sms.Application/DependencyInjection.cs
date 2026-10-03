@@ -64,6 +64,7 @@ public static class DependencyInjection
         services.AddScoped<IThreadService, ThreadService>();
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<IComplaintService, ComplaintService>();
+        services.AddScoped<PtmCommsNotifier>();
         services.AddScoped<IPtmService, PtmService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IIssueService, IssueService>();
