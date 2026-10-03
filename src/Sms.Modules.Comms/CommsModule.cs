@@ -327,7 +327,7 @@ WHERE incoming.""CorrelationId"" = m.""CorrelationId""
         if (thread is null || thread.IsGroup)
             return false;
 
-        var recipientId = thread.ContactUserId ?? await ResolveContactUserIdAsync(tenantId, thread.Name, sid, ct);
+        var recipientId = thread.ContactUserId ?? await ResolveContactUserIdAsync(tenantId, thread.Name, thread.Role, sid, ct);
         if (recipientId is null || recipientId == sid)
             return false;
 
@@ -393,14 +393,19 @@ WHERE incoming.""CorrelationId"" = m.""CorrelationId""
     private const string ParentSuffix = " (parent)";
 
     private async Task<Guid?> ResolveContactUserIdAsync(
-        Guid tenantId, string contactName, Guid senderId, CancellationToken ct)
+        Guid tenantId, string contactName, string? role, Guid senderId, CancellationToken ct)
     {
         // The admin's "message this student's parent" contact stores the thread name as
-        // "<Student> (parent)" — that never matches a real account name, so strip the suffix
-        // and match the student roster instead (only when the name is unambiguous).
-        string? parentContactName = contactName.EndsWith(ParentSuffix, StringComparison.OrdinalIgnoreCase)
-            ? contactName[..^ParentSuffix.Length].Trim()
-            : null;
+        // "<Student> (parent)"; a thread whose Role is "Student" stores the bare student name.
+        // Neither matches a real account name, so resolve both to the student roster (and thence
+        // the parent), but only when the name is unambiguous. Without the Role branch, a
+        // ContactUserId-less "Student" thread (e.g. created with just a name) would never deliver.
+        string? studentContactName =
+            contactName.EndsWith(ParentSuffix, StringComparison.OrdinalIgnoreCase)
+                ? contactName[..^ParentSuffix.Length].Trim()
+                : string.Equals(role, "Student", StringComparison.OrdinalIgnoreCase)
+                    ? contactName.Trim()
+                    : null;
 
         var rows = await QueryInlineAsync<UserIdRow>(@"
 SELECT x.""Id""
@@ -420,15 +425,15 @@ FROM (
     SELECT pl.""ParentUserId"", 4 AS ""Pri""
     FROM ""dbo"".""Students"" st
     INNER JOIN ""dbo"".""ParentStudentLinks"" pl ON pl.""StudentId"" = st.""Id"" AND pl.""TenantId"" = st.""TenantId""
-    WHERE @parentContactName::text IS NOT NULL
+    WHERE @studentContactName::text IS NOT NULL
       AND st.""TenantId"" = @tenantId
-      AND st.""Name"" = @parentContactName
+      AND st.""Name"" = @studentContactName
       AND pl.""ParentUserId"" <> @senderId
-      AND (SELECT COUNT(1) FROM ""dbo"".""Students"" st2 WHERE st2.""TenantId"" = @tenantId AND st2.""Name"" = @parentContactName) = 1
+      AND (SELECT COUNT(1) FROM ""dbo"".""Students"" st2 WHERE st2.""TenantId"" = @tenantId AND st2.""Name"" = @studentContactName) = 1
 ) x
 WHERE x.""Id"" IS NOT NULL
 ORDER BY x.""Pri""
-LIMIT 1", new { tenantId, contactName, senderId, parentContactName }, ct);
+LIMIT 1", new { tenantId, contactName, senderId, studentContactName }, ct);
         return rows.FirstOrDefault()?.Id;
     }
 

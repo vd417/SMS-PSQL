@@ -171,4 +171,73 @@ public class ChatPresenceTests(PostgresFixture fx)
         }
         found.Should().BeTrue("the parent's reply should have created a mirrored thread in the teacher's inbox");
     }
+
+    [Fact]
+    public async Task Staff_message_to_a_Student_thread_without_ContactUserId_delivers_to_the_parent()
+    {
+        var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("environment", "Production");
+            b.UseSetting("ConnectionStrings:Sql", fx.ConnectionString);
+            b.UseSetting("Jwt:SigningKey", Key);
+        });
+        var tenantId = Guid.NewGuid();
+        var staffUserId = Guid.NewGuid();
+        var parentUserId = Guid.NewGuid();
+        var studentId = Guid.NewGuid();
+        var staffThreadId = Guid.NewGuid();
+
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@staffUserId, @tenantId, 'Front Office')",
+                new { staffUserId, tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@parentUserId, @tenantId, 'Parent Of Arav')",
+                new { parentUserId, tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"ClassLabel\") " +
+                "VALUES (@studentId, @tenantId, 'A2', 'Arav Sharma', 'I-A')",
+                new { studentId, tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"ParentStudentLinks\" (\"ParentUserId\", \"StudentId\", \"TenantId\") VALUES (@parentUserId, @studentId, @tenantId)",
+                new { parentUserId, studentId, tenantId });
+            // The exact shape that failed in prod: a Student-role thread created with only a name,
+            // so ContactUserId and ChildId are both NULL. Delivery must still find the parent.
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"ChatThreads\" (\"Id\", \"TenantId\", \"OwnerUserId\", \"Name\", \"Role\") " +
+                "VALUES (@staffThreadId, @tenantId, @staffUserId, 'Arav Sharma', 'Student')",
+                new { staffThreadId, tenantId, staffUserId });
+        }
+
+        var jwt = new JwtTokenService(
+            new JwtOptions { Issuer = "sms", Audience = "sms-apps", SigningKey = Key, AccessTokenMinutes = 15 },
+            new SystemClock());
+
+        var staffClient = app.CreateClient();
+        staffClient.DefaultRequestHeaders.Authorization = new(
+            "Bearer", jwt.IssueAccess(staffUserId, tenantId, new[] { Policies.SchoolAdmin }, isPlatform: false));
+        var sendRes = await staffClient.PostAsJsonAsync(
+            $"/v1/threads/{staffThreadId}/messages", new { text = "gi" });
+        sendRes.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var parentClient = app.CreateClient();
+        parentClient.DefaultRequestHeaders.Authorization = new(
+            "Bearer", jwt.IssueAccess(parentUserId, tenantId, new[] { Policies.StudentOrParent }, isPlatform: false));
+        var listRes = await parentClient.GetAsync("/v1/threads");
+        listRes.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var doc = JsonDocument.Parse(await listRes.Content.ReadAsStringAsync());
+        var rows = doc.RootElement.GetProperty("data");
+        var delivered = false;
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (row.GetProperty("name").GetString() != "Front Office") continue;
+            delivered = true;
+            row.GetProperty("last_message").GetString().Should().Be("gi");
+        }
+        delivered.Should().BeTrue("a Student-role thread with no ContactUserId must still deliver to the linked parent");
+    }
 }
