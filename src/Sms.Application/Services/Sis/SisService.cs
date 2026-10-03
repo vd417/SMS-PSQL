@@ -2,6 +2,7 @@ using Sms.Application.Common;
 using Sms.Application.Interfaces.DAO;
 using Sms.Modules.Sis.Contracts;
 using Sms.Modules.Sis.Data;
+using Sms.Shared.Kernel.Data;
 using Sms.Shared.Kernel.Http;
 using Sms.Shared.Kernel.Results;
 using Sms.Shared.Kernel.Tenancy;
@@ -103,7 +104,15 @@ public sealed class SisService(
     {
         if (tenant.TenantId is not { } tid)
             return ApiResult<StudentResponse>.Fail(new Error("forbidden", "no tenant context"), 403);
-        var created = (await repo.CreateAsync(tid, req, ct))!;
+        StudentResponse created;
+        try
+        {
+            created = (await repo.CreateAsync(tid, req, ct))!;
+        }
+        catch (ContactConflictException ex)
+        {
+            return ApiResult<StudentResponse>.Fail(ContactConflict(ex), 409);
+        }
 
         // Provision the student's login account alongside the roster record, so
         // admission-ID login/forgot-password resolves immediately — previously
@@ -136,11 +145,27 @@ public sealed class SisService(
             req = req with { PhotoUrl = ImageUrlValidation.Normalize(req.PhotoUrl) };
         }
 
-        var updated = (await repo.UpdateAsync(id, req, ct))!;
+        StudentResponse updated;
+        try
+        {
+            updated = (await repo.UpdateAsync(id, req, ct))!;
+        }
+        catch (ContactConflictException ex)
+        {
+            return ApiResult<StudentResponse>.Fail(ContactConflict(ex), 409);
+        }
         await TrySyncStudentLoginEmailAsync(updated.AdmissionNo, updated.Email, ct);
         await TrySyncParentLoginAsync(updated, ct);
         return ApiResult<StudentResponse>.Ok(updated);
     }
+
+    /// Maps a ContactClaims uniqueness rejection raised by student_create/update (via
+    /// dbo.contact_claims_sync) to the existing friendly `conflict` error (surfaced as HTTP 409).
+    /// Students claim only their OWN email (they have no own phone column; guardian fields are exempt).
+    private static Error ContactConflict(ContactConflictException ex) =>
+        new("conflict", ex.IsPhone
+            ? "A student with this phone number already exists in this school."
+            : "A student with this email already exists in this school.");
 
     public async Task SyncGuardianEmailAsync(Guid studentId, string? guardianEmail, CancellationToken ct = default) =>
         await SyncGuardianContactAsync(studentId, guardianEmail, null, null, ct);

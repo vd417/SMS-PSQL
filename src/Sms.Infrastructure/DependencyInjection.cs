@@ -13,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<IUserProvisioningDao, UserProvisioningDao>();
         services.AddScoped<IInvitationDao, InvitationDao>();
         services.AddScoped<IRoleTemplateDao, RoleTemplateDao>();
+        services.AddScoped<IContactValidator, ContactValidator>();
         return services;
     }
 }

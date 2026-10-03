@@ -120,6 +120,12 @@ BEGIN
     )
     WHERE "Id" = student_create.TenantId;
 
+    -- B5: claim the student's OWN email for per-tenant contact uniqueness (students have no own
+    -- phone column; guardian email/phone are never claimed). Raises SMSDC on a different-person
+    -- conflict, rolling back this create.
+    PERFORM dbo.contact_claims_sync(student_create.TenantId, 'student', v_id::text, NULL,
+                                    student_create.Email, NULL);
+
     RETURN QUERY
     SELECT s."Id", s."TenantId", s."AdmissionNo", s."Name", s."Gender", s."Grade", s."Section", s."ClassLabel", s."Roll",
            s."GuardianName", s."GuardianPhone", s."GuardianEmail", s."AttendancePct", s."FeeStatus", s."FeeDue",
@@ -193,6 +199,11 @@ BEGIN
             SELECT count(*) FROM "dbo"."Students" s WHERE s."TenantId" = v_tenant_id AND s."Status" = 'active'
         )
         WHERE "Id" = v_tenant_id;
+
+        -- B5: re-claim the student's OWN (post-update) email for per-tenant contact uniqueness.
+        -- Guardian fields are never claimed. Raises SMSDC on a different-person conflict.
+        PERFORM dbo.contact_claims_sync(v_tenant_id, 'student', student_update.Id::text, NULL,
+            (SELECT s."Email" FROM "dbo"."Students" s WHERE s."Id" = student_update.Id), NULL);
     END IF;
 
     RETURN QUERY

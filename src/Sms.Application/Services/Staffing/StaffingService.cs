@@ -5,6 +5,7 @@ using Sms.Modules.Staffing.Contracts;
 using Sms.Modules.Staffing.Data;
 using Sms.Modules.Staffing.Profile;
 using Sms.Shared.Kernel.Authz;
+using Sms.Shared.Kernel.Data;
 using Sms.Shared.Kernel.Http;
 using Sms.Shared.Kernel.Results;
 using Sms.Application.Services.Realtime;
@@ -71,8 +72,15 @@ public sealed class StaffingService(
     {
         if (tenant.TenantId is not { } tid)
             return ApiResult<TeacherResponse>.Fail(new Error("forbidden", "no tenant context"), 403);
-        var created = (await teachers.CreateAsync(tid, req, ct))!;
-        return ApiResult<TeacherResponse>.Ok(created, 201);
+        try
+        {
+            var created = (await teachers.CreateAsync(tid, req, ct))!;
+            return ApiResult<TeacherResponse>.Ok(created, 201);
+        }
+        catch (ContactConflictException ex)
+        {
+            return ApiResult<TeacherResponse>.Fail(ContactConflict(ex), 409);
+        }
     }
 
     public async Task<ApiResult<TeacherResponse>> UpdateTeacherAsync(
@@ -93,14 +101,29 @@ public sealed class StaffingService(
             await users.SetPhotoAsync(userId.Value, ImageUrlValidation.Normalize(req.PhotoUrl), ct);
         }
 
+        Guid? emailSyncedUserId = null;
         if (req.Email is not null && !string.Equals(req.Email, existing.Email, StringComparison.OrdinalIgnoreCase))
         {
             var userId = await teachers.GetUserIdAsync(id, ct);
             if (await SyncLinkedEmailAsync(userId, req.Email, ct) is { } error)
                 return ApiResult<TeacherResponse>.Fail(error, 409);
+            emailSyncedUserId = userId;
         }
 
-        var updated = (await teachers.UpdateAsync(id, req, ct))!;
+        try
+        {
+            await teachers.UpdateAsync(id, req, ct);
+        }
+        catch (ContactConflictException ex)
+        {
+            // The proc rolled back the Teachers row, but SyncLinkedEmailAsync already committed
+            // the new email to the linked Users row. Undo that so a rejected (409) edit never
+            // leaves the login email diverged from the unchanged profile (e.g. a phone conflict,
+            // or an email held only by an un-invited profile the Users pre-check can't see).
+            if (emailSyncedUserId is { } uid)
+                await users.SetEmailAsync(uid, existing.Email, ct);
+            return ApiResult<TeacherResponse>.Fail(ContactConflict(ex), 409);
+        }
         return ApiResult<TeacherResponse>.Ok((await teachers.GetAsync(id, ct))!);
     }
 
@@ -129,8 +152,15 @@ public sealed class StaffingService(
             return FeatureGate.Locked<StaffResponse>(FeatureCatalog.StaffSupport);
         if (tenant.TenantId is not { } tid)
             return ApiResult<StaffResponse>.Fail(new Error("forbidden", "no tenant context"), 403);
-        var created = (await staff.CreateAsync(tid, req, ct))!;
-        return ApiResult<StaffResponse>.Ok(created, 201);
+        try
+        {
+            var created = (await staff.CreateAsync(tid, req, ct))!;
+            return ApiResult<StaffResponse>.Ok(created, 201);
+        }
+        catch (ContactConflictException ex)
+        {
+            return ApiResult<StaffResponse>.Fail(ContactConflict(ex), 409);
+        }
     }
 
     public async Task<ApiResult<StaffResponse>> UpdateStaffAsync(
@@ -153,14 +183,28 @@ public sealed class StaffingService(
             await users.SetPhotoAsync(userId.Value, ImageUrlValidation.Normalize(req.PhotoUrl), ct);
         }
 
+        Guid? emailSyncedUserId = null;
         if (req.Email is not null && !string.Equals(req.Email, existing.Email, StringComparison.OrdinalIgnoreCase))
         {
             var userId = await staff.GetUserIdAsync(id, ct);
             if (await SyncLinkedEmailAsync(userId, req.Email, ct) is { } error)
                 return ApiResult<StaffResponse>.Fail(error, 409);
+            emailSyncedUserId = userId;
         }
 
-        var updated = (await staff.UpdateAsync(id, req, ct))!;
+        try
+        {
+            await staff.UpdateAsync(id, req, ct);
+        }
+        catch (ContactConflictException ex)
+        {
+            // The proc rolled back the Staff row, but SyncLinkedEmailAsync already committed
+            // the new email to the linked Users row. Undo that so a rejected (409) edit never
+            // leaves the login email diverged from the unchanged profile.
+            if (emailSyncedUserId is { } uid)
+                await users.SetEmailAsync(uid, existing.Email, ct);
+            return ApiResult<StaffResponse>.Fail(ContactConflict(ex), 409);
+        }
         return ApiResult<StaffResponse>.Ok((await staff.GetAsync(id, ct))!);
     }
 
@@ -182,6 +226,13 @@ public sealed class StaffingService(
         await users.SetEmailAsync(userId.Value, newEmail, ct);
         return null;
     }
+
+    /// Maps a ContactClaims uniqueness rejection raised by teacher_create/update or staff_create/update
+    /// (via dbo.contact_claims_sync) to the existing friendly `conflict` error (surfaced as HTTP 409).
+    private static Error ContactConflict(ContactConflictException ex) =>
+        new("conflict", ex.IsPhone
+            ? "A user with this phone number already exists in this school."
+            : "A user with this email already exists in this school.");
 
     public async Task<ApiResult<IReadOnlyList<LeaveResponse>>> ListMyLeaveAsync(CancellationToken ct = default)
     {

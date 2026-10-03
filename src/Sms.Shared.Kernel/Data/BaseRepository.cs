@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 using System.Reflection;
 using Dapper;
 
@@ -17,17 +18,31 @@ public abstract class BaseRepository(IDbConnectionFactory factory)
         string proc, object? args = null, CancellationToken ct = default)
     {
         await using var conn = await Factory.OpenAsync(ct);
-        var rows = await conn.QueryAsync<T>(
-            new CommandDefinition(FunctionCallSql(proc, args), args, commandType: CommandType.Text, cancellationToken: ct));
-        return rows.AsList();
+        try
+        {
+            var rows = await conn.QueryAsync<T>(
+                new CommandDefinition(FunctionCallSql(proc, args), args, commandType: CommandType.Text, cancellationToken: ct));
+            return rows.AsList();
+        }
+        catch (DbException ex) when (ex.SqlState == ContactConflictException.SqlState)
+        {
+            throw ContactConflictException.FromSentinel(ex);
+        }
     }
 
     protected async Task<T?> QuerySingleProcAsync<T>(
         string proc, object? args = null, CancellationToken ct = default)
     {
         await using var conn = await Factory.OpenAsync(ct);
-        return await conn.QuerySingleOrDefaultAsync<T>(
-            new CommandDefinition(FunctionCallSql(proc, args), args, commandType: CommandType.Text, cancellationToken: ct));
+        try
+        {
+            return await conn.QuerySingleOrDefaultAsync<T>(
+                new CommandDefinition(FunctionCallSql(proc, args), args, commandType: CommandType.Text, cancellationToken: ct));
+        }
+        catch (DbException ex) when (ex.SqlState == ContactConflictException.SqlState)
+        {
+            throw ContactConflictException.FromSentinel(ex);
+        }
     }
 
     /// Returns the row count the function reports via `GET DIAGNOSTICS ... = ROW_COUNT; RETURN`
@@ -37,8 +52,15 @@ public abstract class BaseRepository(IDbConnectionFactory factory)
         string proc, object? args = null, CancellationToken ct = default)
     {
         await using var conn = await Factory.OpenAsync(ct);
-        return await conn.ExecuteScalarAsync<int>(
-            new CommandDefinition(FunctionCallSql(proc, args), args, commandType: CommandType.Text, cancellationToken: ct));
+        try
+        {
+            return await conn.ExecuteScalarAsync<int>(
+                new CommandDefinition(FunctionCallSql(proc, args), args, commandType: CommandType.Text, cancellationToken: ct));
+        }
+        catch (DbException ex) when (ex.SqlState == ContactConflictException.SqlState)
+        {
+            throw ContactConflictException.FromSentinel(ex);
+        }
     }
 
     // Named notation (arg => @Arg) so Postgres resolves parameters by name, not position. The
