@@ -70,6 +70,15 @@ public class InviteContactUniquenessTests(PostgresFixture fx)
             new { t = tenantId, v = normalizedEmail, p = Guid.NewGuid() });
     }
 
+    private async Task<int> UserCountByEmailAsync(Guid tenantId, string email)
+    {
+        await using var c = await PlatformFactory().OpenAsync();
+        var rows = await c.QueryAsync<int>(
+            """SELECT COUNT(1) FROM "dbo"."Users" WHERE "TenantId" = @t AND lower("Email") = lower(@e)""",
+            new { t = tenantId, e = email });
+        return rows.First();
+    }
+
     private sealed record ClaimRow(string Kind, string NormalizedValue, string OwnerType, string OwnerId);
 
     private async Task<IReadOnlyList<ClaimRow>> ClaimsAsync(Guid tenantId)
@@ -93,6 +102,33 @@ public class InviteContactUniquenessTests(PostgresFixture fx)
         var res = await admin.PostAsJsonAsync("/v1/users", new { email, roles = new[] { "school.teacher" } });
 
         res.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        // The conflict must not leave an orphaned Users row behind (User_Create commits before the
+        // ledger sync; a failed sync has to compensate). An orphan would make the pre-check reject
+        // every later invite of this contact permanently.
+        (await UserCountByEmailAsync(tid, email)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Invite_rejected_by_the_ledger_can_be_retried_once_the_foreign_claim_is_gone()
+    {
+        var tid = await SeedActiveTenant();
+        var email = $"retry{Guid.NewGuid():N}@x.com";
+        await SeedForeignEmailClaim(tid, email);
+        await using var app = App();
+        var admin = AdminClient(app, tid);
+
+        (await admin.PostAsJsonAsync("/v1/users", new { email, roles = new[] { "school.teacher" } }))
+            .StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        // Clearing the foreign claim must leave the tenant able to invite the contact — i.e. the
+        // first, rejected attempt left no ghost user row blocking the pre-check.
+        await using (var c = await PlatformFactory().OpenAsync())
+            await c.ExecuteAsync(
+                """DELETE FROM "dbo"."ContactClaims" WHERE "TenantId" = @t AND "NormalizedValue" = @v""",
+                new { t = tid, v = email });
+
+        var retry = await admin.PostAsJsonAsync("/v1/users", new { email, roles = new[] { "school.teacher" } });
+        retry.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
     [Fact]

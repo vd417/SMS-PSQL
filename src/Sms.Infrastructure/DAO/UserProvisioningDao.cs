@@ -59,6 +59,16 @@ public sealed class UserProvisioningDao(IDbConnectionFactory factory) : BaseRepo
         return ExecuteProcAsync("dbo.UserPermissions_Set", new { UserId = userId, Json = json }, ct);
     }
 
+    // Data-modifying CTE so the role rows and the user row go in a single atomic statement (one
+    // round trip, implicit transaction): a compensating delete must never half-remove the user.
+    public Task DeleteUserAsync(Guid userId, CancellationToken ct = default) =>
+        ExecuteInlineAsync(
+            """
+            WITH del_roles AS (DELETE FROM "dbo"."UserRoles" WHERE "UserId" = @UserId)
+            DELETE FROM "dbo"."Users" WHERE "Id" = @UserId
+            """,
+            new { UserId = userId }, ct);
+
     public Task SetStatusAsync(Guid userId, string status, CancellationToken ct = default) =>
         ExecuteProcAsync("dbo.User_SetStatus", new { UserId = userId, Status = status }, ct);
 

@@ -92,11 +92,17 @@ public sealed class UserService(
         // this new user's claim. PersonId is null at create time (adopted later by backfill).
         var claim = await contacts.SyncAsync(tid, "user", id.ToString(), personId: null, req.Email, req.Phone, ct);
         if (!claim.IsValid)
+        {
+            // User_Create already committed above (there is no shared transaction across the two
+            // DAOs). Undo it, or the orphaned row would make the ListByTenantAsync pre-check reject
+            // every future invite of this contact with a 409 that no "resend invite" can clear.
+            await dao.DeleteUserAsync(id, ct);
             return ApiResult<object>.Fail(
                 new Error("conflict", claim.ConflictKind == ContactConflictKind.Phone
                     ? "A user with this phone number already exists in this school. Resend the invite from the Invitations tab instead."
                     : "A user with this email already exists in this school. Resend the invite from the Invitations tab instead."),
                 409);
+        }
 
         await dao.SetStatusAsync(id, "pending", ct);
 
