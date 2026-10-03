@@ -17,6 +17,7 @@ public static class AuthQueries
     public const string EnsureStudentLogin = "dbo.Student_EnsureLogin";
     public const string EnsureParentLogin = "dbo.Parent_EnsureLogin";
     public const string EnsureStaffLogin = "dbo.Staff_EnsureLogin";
+    public const string EnsureTeacherLogin = "dbo.Teacher_EnsureLogin";
     public const string ListByAdmissionId = "dbo.User_ListByAdmissionId";
     public const string GetRosterByAdmissionNo = "dbo.Student_GetByAdmissionNo";
 }
