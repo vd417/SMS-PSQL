@@ -181,6 +181,35 @@ public class TaskEndpointTests(PostgresFixture fx)
     }
 
     [Fact]
+    public async Task Completing_a_task_with_a_remark_stores_and_returns_it()
+    {
+        var tenantId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        await SeedUserAsync(fx, tenantId, adminId, "Admin");
+        await SeedManagerRoleAsync(fx, adminId, Policies.SchoolAdmin);
+
+        var app = App(fx);
+        var adminClient = ClientFor(app, tenantId, adminId, Policies.SchoolAdmin);
+
+        var create = await adminClient.PostAsJsonAsync("/v1/staff/tasks", new
+        {
+            title = "Fix the gate", priority = "normal", assigned_to_user_id = adminId,
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+        using var doc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
+        var id = doc.RootElement.GetProperty("data").GetProperty("id").GetString();
+
+        var complete = await adminClient.PostAsJsonAsync(
+            $"/v1/staff/tasks/{id}/complete", new { remark = "Gate hinge replaced" });
+        complete.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var completeDoc = JsonDocument.Parse(await complete.Content.ReadAsStringAsync());
+        var refreshed = completeDoc.RootElement.GetProperty("data").EnumerateArray()
+            .First(e => e.GetProperty("id").GetString() == id);
+        refreshed.GetProperty("done").GetBoolean().Should().BeTrue();
+        refreshed.GetProperty("remarks").GetString().Should().Be("Gate hinge replaced");
+    }
+
+    [Fact]
     public async Task Completing_someone_elses_specifically_assigned_task_is_forbidden()
     {
         var tenantId = Guid.NewGuid();

@@ -14,12 +14,13 @@ namespace Sms.Application.Services.Tasks;
 /// photo_url?. All three staff endpoints (list/complete/photo) return the caller's full,
 /// refreshed task list in this shape, never a single mutated row.
 public sealed record StaffTaskDto(
-    Guid Id, string Title, string? Detail, string Priority, bool Done, string? DueLabel, string? PhotoUrl);
+    Guid Id, string Title, string? Detail, string Priority, bool Done, string? DueLabel, string? PhotoUrl,
+    string? Remarks);
 
 public interface ITaskService
 {
     Task<ApiResult<IReadOnlyList<StaffTaskDto>>> ListMineAsync(ClaimsPrincipal caller, CancellationToken ct = default);
-    Task<ApiResult<IReadOnlyList<StaffTaskDto>>> CompleteAsync(Guid id, ClaimsPrincipal caller, CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<StaffTaskDto>>> CompleteAsync(Guid id, string? remark, ClaimsPrincipal caller, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<StaffTaskDto>>> AttachPhotoAsync(
         Guid id, string? photoBase64, ClaimsPrincipal caller, CancellationToken ct = default);
     Task<ApiResult<TaskResponse>> CreateAsync(CreateTaskRequest req, ClaimsPrincipal caller, CancellationToken ct = default);
@@ -42,7 +43,7 @@ public sealed class TaskService(TaskRepository repo, ITenantContext tenant, IClo
     }
 
     public async Task<ApiResult<IReadOnlyList<StaffTaskDto>>> CompleteAsync(
-        Guid id, ClaimsPrincipal caller, CancellationToken ct = default)
+        Guid id, string? remark, ClaimsPrincipal caller, CancellationToken ct = default)
     {
         if (tenant.UserId is not { } uid)
             return ApiResult<IReadOnlyList<StaffTaskDto>>.Fail(new Error("forbidden", "no user context"), 403);
@@ -51,7 +52,7 @@ public sealed class TaskService(TaskRepository repo, ITenantContext tenant, IClo
         if (authz.Error is { } error)
             return ApiResult<IReadOnlyList<StaffTaskDto>>.Fail(error, authz.StatusCode);
 
-        await repo.CompleteAsync(id, uid, ct);
+        await repo.CompleteAsync(id, uid, string.IsNullOrWhiteSpace(remark) ? null : remark.Trim(), ct);
         return ApiResult<IReadOnlyList<StaffTaskDto>>.Ok(await MineAsync(uid, ct));
     }
 
@@ -145,7 +146,7 @@ public sealed class TaskService(TaskRepository repo, ITenantContext tenant, IClo
 
     private static StaffTaskDto ToDto(TaskResponse r, DateTime today) => new(
         r.Id, r.Title, r.Detail, r.Priority, r.Status == "completed",
-        TaskDueLabelFormatter.Format(r.DueDate, today), r.PhotoUrl);
+        TaskDueLabelFormatter.Format(r.DueDate, today), r.PhotoUrl, r.Remarks);
 
     /// A task is completable/photo-attachable by the caller only if it's assigned to them
     /// specifically, or broadcast to everyone holding their duty role (and not yet claimed by a
