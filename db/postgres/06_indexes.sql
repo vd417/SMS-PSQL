@@ -22,6 +22,9 @@ CREATE INDEX "IX_CalendarEvents_Tenant" ON "dbo"."CalendarEvents" ("TenantId");
 CREATE INDEX "IX_ChatMessages_Correlation" ON "dbo"."ChatMessages" ("CorrelationId");
 CREATE INDEX "IX_ChatMessages_Thread" ON "dbo"."ChatMessages" ("ThreadId");
 CREATE INDEX "IX_ChatThreads_Contact" ON "dbo"."ChatThreads" ("TenantId", "OwnerUserId", "ContactUserId");
+-- One 1:1 conversation per (tenant, owner, contact); see migrations/0018. Group threads exempt,
+-- NULL-ContactUserId legacy threads unconstrained.
+CREATE UNIQUE INDEX IF NOT EXISTS "UQ_ChatThreads_OwnerContact" ON "dbo"."ChatThreads" ("TenantId", "OwnerUserId", "ContactUserId") WHERE "ContactUserId" IS NOT NULL AND "IsGroup" = false;
 CREATE INDEX "IX_ChatThreads_Owner" ON "dbo"."ChatThreads" ("TenantId", "OwnerUserId", "Name");
 CREATE INDEX "IX_ChatThreads_Tenant" ON "dbo"."ChatThreads" ("TenantId");
 CREATE INDEX "IX_CheckIns_User_At" ON "dbo"."CheckIns" ("UserId", "At");
