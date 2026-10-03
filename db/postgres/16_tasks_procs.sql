@@ -11,10 +11,14 @@
 -- header for the RETURNS int vs RETURNS TABLE note) and TaskResponse's secondary constructor
 -- documents that the SELECT must stay at exactly these 16 columns (no joined *Name fields).
 
+-- DueDate is timestamptz, not date: the C# DateTime? this comes from binds as timestamptz via
+-- Npgsql, and Postgres won't implicitly resolve a timestamptz argument against a `date` parameter
+-- for function-overload matching (same reasoning as 12_finance_procs.sql's feeinvoice_create). The
+-- "DueDate" column stays date, so the INSERT casts DueDate::date.
 CREATE OR REPLACE FUNCTION dbo.task_create(
     TenantId uuid, CreatedByUserId uuid, Title varchar(200), Priority varchar(10),
     Detail varchar(2000) DEFAULT NULL, Category varchar(40) DEFAULT NULL,
-    AssignedToUserId uuid DEFAULT NULL, AssignedToRoleKey varchar(20) DEFAULT NULL, DueDate date DEFAULT NULL
+    AssignedToUserId uuid DEFAULT NULL, AssignedToRoleKey varchar(20) DEFAULT NULL, DueDate timestamptz DEFAULT NULL
 )
 RETURNS TABLE (
     "Id" uuid, "TenantId" uuid, "Title" varchar(200), "Detail" varchar(2000), "Category" varchar(40),
@@ -29,7 +33,7 @@ DECLARE v_id uuid := gen_random_uuid();
 BEGIN
     INSERT INTO "dbo"."Tasks"
         ("Id", "TenantId", "Title", "Detail", "Category", "AssignedToUserId", "AssignedToRoleKey", "Priority", "DueDate", "CreatedByUserId")
-    VALUES (v_id, TenantId, Title, Detail, Category, AssignedToUserId, AssignedToRoleKey, Priority, DueDate, CreatedByUserId);
+    VALUES (v_id, TenantId, Title, Detail, Category, AssignedToUserId, AssignedToRoleKey, Priority, DueDate::date, CreatedByUserId);
 
     RETURN QUERY
     SELECT "Id", "TenantId", "Title", "Detail", "Category", "AssignedToUserId", "AssignedToRoleKey", "Priority", "Status",
