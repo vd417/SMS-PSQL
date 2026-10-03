@@ -16,6 +16,7 @@ public sealed record ChatThreadResponse(
     // several parent threads tell them apart at a glance. Null for staff threads.
     public string? ChildName { get; init; }
     public string? ChildClassLabel { get; init; }
+    public int? ChildRoll { get; init; }
     // The Inbox list's read-receipt tick: whether the OWNER sent the last message (only then
     // does a tick make sense — an incoming last message never shows one), and its delivery
     // state. Null status means the thread has no messages yet.
@@ -40,9 +41,10 @@ public sealed record ChatThreadResponse(
     public ChatThreadResponse(
         Guid Id, Guid TenantId, string Name, string? Role, string? LastMessage, DateTime? LastAt,
         int Unread, bool Group, Guid? ChildId, bool Online, string? ChildName, string? ChildClassLabel,
-        bool LastMessageMine, string? LastMessageStatus)
+        int? ChildRoll, bool LastMessageMine, string? LastMessageStatus)
         : this(Id, TenantId, Name, Role, LastMessage, LastAt, Unread, Group, ChildId, Online, ChildName, ChildClassLabel)
     {
+        this.ChildRoll = ChildRoll;
         this.LastMessageMine = LastMessageMine;
         this.LastMessageStatus = LastMessageStatus;
     }
@@ -164,7 +166,7 @@ public sealed class CommsRepository(IDbConnectionFactory factory) : BaseReposito
         QueryInlineAsync<ChatThreadResponse>(@"
 SELECT th.""Id"", th.""TenantId"", th.""Name"", th.""Role"", th.""LastMessage"", th.""LastAt"", th.""Unread"", th.""IsGroup"" AS ""Group"", th.""ChildId"",
        (u.""LastSeenAt"" IS NOT NULL AND u.""LastSeenAt"" > (now() AT TIME ZONE 'UTC') - interval '5 minutes') AS ""Online"",
-       c.""Name"" AS ""ChildName"", c.""ClassLabel"" AS ""ChildClassLabel"",
+       c.""Name"" AS ""ChildName"", c.""ClassLabel"" AS ""ChildClassLabel"", c.""Roll"" AS ""ChildRoll"",
        (lm.""SenderId"" = th.""OwnerUserId"") AS ""LastMessageMine"",
        CASE
            WHEN lm.""SenderId"" IS NULL THEN NULL
@@ -450,6 +452,9 @@ SELECT COALESCE(
     NULLIF(btrim(u.""Name""), ''),
     NULLIF(btrim(t.""Name""), ''),
     NULLIF(btrim(s.""Name""), ''),
+    -- A student's own login (Users.StudentId -> Students.AdmissionNo) has no Users.Name; resolve
+    -- their real name so a student sender shows as e.g. ""Arav Sharma"" instead of ""School Office"".
+    NULLIF(btrim(st.""Name""), ''),
     CASE
         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.owner') THEN 'School Owner'
         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.admin') THEN 'School Admin'
@@ -460,6 +465,8 @@ SELECT COALESCE(
 FROM ""dbo"".""Users"" u
 LEFT JOIN ""dbo"".""Teachers"" t ON t.""UserId"" = u.""Id"" AND t.""TenantId"" = @tenantId
 LEFT JOIN ""dbo"".""Staff"" s ON s.""UserId"" = u.""Id"" AND s.""TenantId"" = @tenantId
+LEFT JOIN ""dbo"".""Students"" st ON st.""TenantId"" = @tenantId
+    AND lower(btrim(st.""AdmissionNo"")) = lower(btrim(u.""StudentId""))
 WHERE u.""Id"" = @userId
 LIMIT 1", new { tenantId, userId }, ct);
         return rows.FirstOrDefault()?.Name?.Trim();

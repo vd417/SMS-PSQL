@@ -240,4 +240,71 @@ public class ChatPresenceTests(PostgresFixture fx)
         }
         delivered.Should().BeTrue("a Student-role thread with no ContactUserId must still deliver to the linked parent");
     }
+
+    [Fact]
+    public async Task Student_senders_thread_shows_their_name_and_class_roll_not_School_Office()
+    {
+        var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("environment", "Production");
+            b.UseSetting("ConnectionStrings:Sql", fx.ConnectionString);
+            b.UseSetting("Jwt:SigningKey", Key);
+        });
+        var tenantId = Guid.NewGuid();
+        var teacherUserId = Guid.NewGuid();
+        var studentUserId = Guid.NewGuid();
+        var studentId = Guid.NewGuid();
+        var studentThreadId = Guid.NewGuid();
+
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"Name\") VALUES (@teacherUserId, @tenantId, 'Ms Teacher')",
+                new { teacherUserId, tenantId });
+            // Student's own login: no Users.Name, StudentId links to the roster by AdmissionNo.
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Users\" (\"Id\", \"TenantId\", \"StudentId\") VALUES (@studentUserId, @tenantId, 'STU-ROLL-1')",
+                new { studentUserId, tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"ClassLabel\", \"Roll\") " +
+                "VALUES (@studentId, @tenantId, 'STU-ROLL-1', 'Arav Sharma', 'I-A', 1)",
+                new { studentId, tenantId });
+            // Thread the student owns, addressed to the teacher by ContactUserId.
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"ChatThreads\" (\"Id\", \"TenantId\", \"OwnerUserId\", \"Name\", \"Role\", \"ContactUserId\") " +
+                "VALUES (@studentThreadId, @tenantId, @studentUserId, 'Ms Teacher', 'Teacher', @teacherUserId)",
+                new { studentThreadId, tenantId, studentUserId, teacherUserId });
+        }
+
+        var jwt = new JwtTokenService(
+            new JwtOptions { Issuer = "sms", Audience = "sms-apps", SigningKey = Key, AccessTokenMinutes = 15 },
+            new SystemClock());
+
+        var studentClient = app.CreateClient();
+        studentClient.DefaultRequestHeaders.Authorization = new(
+            "Bearer", jwt.IssueAccess(studentUserId, tenantId, new[] { Policies.StudentOrParent }, isPlatform: false));
+        (await studentClient.PostAsJsonAsync($"/v1/threads/{studentThreadId}/messages", new { text = "hi sir" }))
+            .StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var teacherClient = app.CreateClient();
+        teacherClient.DefaultRequestHeaders.Authorization = new(
+            "Bearer", jwt.IssueAccess(teacherUserId, tenantId, new[] { Policies.Teacher }, isPlatform: false));
+        var listRes = await teacherClient.GetAsync("/v1/threads");
+        listRes.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var doc = JsonDocument.Parse(await listRes.Content.ReadAsStringAsync());
+        var found = false;
+        foreach (var row in doc.RootElement.GetProperty("data").EnumerateArray())
+        {
+            if (row.GetProperty("last_message").GetString() != "hi sir") continue;
+            found = true;
+            row.GetProperty("name").GetString().Should().Be("Arav Sharma",
+                "a student sender must show their real name, never the 'School Office' fallback");
+            row.GetProperty("child_class_label").GetString().Should().Be("I-A");
+            row.GetProperty("child_roll").GetInt32().Should().Be(1);
+        }
+        found.Should().BeTrue("the student's message must create a mirrored thread in the teacher's inbox");
+    }
 }
