@@ -11,7 +11,7 @@ namespace Sms.Infrastructure.DAO;
 /// database error (including an SMSDC with an unrecognised message) propagates unchanged.
 public sealed class ContactValidator(IDbConnectionFactory factory) : BaseRepository(factory), IContactValidator
 {
-    // SQLSTATE and message text are the exact contract defined by 0011_contact_claims_sync_fn.sql.
+    // SQLSTATE and message text are the exact contract defined by 0012_contact_claims_sync_fn.sql.
     private const string ConflictSqlState = "SMSDC";
     private const string EmailConflictMessage = "contact_conflict:email";
     private const string PhoneConflictMessage = "contact_conflict:phone";

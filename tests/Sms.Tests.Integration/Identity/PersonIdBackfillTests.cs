@@ -13,7 +13,7 @@ namespace Sms.Tests.Integration.Identity;
 public class PersonIdBackfillTests(PostgresFixture fx)
 {
     private static string BackfillSql() =>
-        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "migrations", "0008_users_personid_backfill.sql"));
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "migrations", "0009_users_personid_backfill.sql"));
 
     private async Task<(NpgsqlConnection Conn, NpgsqlTransaction Tx)> OpenAsync()
     {
