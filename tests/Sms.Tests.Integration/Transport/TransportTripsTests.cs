@@ -43,7 +43,10 @@ public class TransportTripsTests(PostgresFixture fx)
     public async Task Trip_lifecycle_start_ping_board_end()
     {
         await using var app = App();
-        var client = StaffClient(app, Guid.NewGuid(), Guid.NewGuid());
+        var tenantId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, "KA-01-F-2207", userId);
+        var client = StaffClient(app, tenantId, userId);
 
         // start
         var trip = await Data(await client.PostAsJsonAsync("/v1/staff/trips",

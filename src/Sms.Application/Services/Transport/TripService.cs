@@ -11,6 +11,11 @@ namespace Sms.Application.Services.Transport;
 public interface ITripService
 {
     Task<ApiResult<TripResponse>> StartAsync(StartTripRequest req, CancellationToken ct = default);
+    /// Admin/CRM operator path: does not require the caller to be the bus's assigned driver
+    /// or conductor. DriverId is the bus's assigned driver when one exists; when the bus has
+    /// no assigned driver, DriverId falls back to the calling operator's own user id
+    /// (pre-existing behaviour, preserved on purpose for buses with no staff assignment yet).
+    Task<ApiResult<TripResponse>> StartAsOperatorAsync(StartTripRequest req, CancellationToken ct = default);
     Task<ApiResult<TripResponse?>> GetCurrentAsync(CancellationToken ct = default);
     Task<ApiResult<StaffTripAssignmentResponse>> GetAssignmentAsync(CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<StaffRosterStudentResponse>>> GetRosterAsync(Guid tripId, CancellationToken ct = default);
@@ -25,6 +30,7 @@ public interface ITripService
     Task<ApiResult> ConfirmStopArrivalAsync(Guid tripId, Guid stopId, CancellationToken ct = default);
     Task<ApiResult> CompleteStopAsync(Guid tripId, Guid stopId, CancellationToken ct = default);
     Task<ApiResult> MarkSchoolArrivedAsync(Guid tripId, CancellationToken ct = default);
+    Task<ApiResult<TripStopsResponse>> GetStopProgressAsync(Guid tripId, CancellationToken ct = default);
 }
 
 /// Every mutation that changes a trip's live state (start/ping/end) also pushes a fleet snapshot
@@ -33,7 +39,8 @@ public interface ITripService
 public sealed class TripService(
     TripRepository repo, BusRepository buses, ITenantContext tenant,
     ITransportFleetBroadcaster fleetBroadcaster, ILiveBroadcaster live, IClock clock,
-    IConfiguration config, IBusParentAlertService parentAlerts) : ITripService
+    IConfiguration config, IBusParentAlertService parentAlerts,
+    IBusTeacherAlertService teacherAlerts) : ITripService
 {
     // Matches TransportOfflineSweepWorker's Math.Clamp-on-read convention for a config value
     // with a sane default and hard bounds, rather than trusting an unbounded/negative config
@@ -45,12 +52,44 @@ public sealed class TripService(
     {
         if (tenant.TenantId is not { } tid || tenant.UserId is not { } uid)
             return ApiResult<TripResponse>.Fail(new Error("forbidden", "no tenant/user context"), 403);
-        // dbo.Trip_Start now returns no row (instead of inserting) when the bus it resolves
-        // from req.BusNo already has a live trip — the guard has to live in the stored proc
-        // because BusId is resolved there from BusNo, never in C#, so there is no busId this
-        // service layer could check up front. A null result here means "blocked", not "trip
-        // vanished immediately after insert" (that never happens), so it's safe to treat as 409.
-        if (await repo.StartAsync(tid, uid, req, ct) is not { } trip)
+        if (string.IsNullOrWhiteSpace(req.BusNo))
+            return ApiResult<TripResponse>.Fail(new Error("bus_no_required", "bus_no is required"), 422);
+        // The bus assignment — never the caller — decides who the trip's driver and conductor are.
+        // The caller only has to be one of them; a conductor pressing Start must not become DriverId.
+        if (await repo.GetBusAssignmentByNoAsync(tid, req.BusNo, ct) is not { } bus)
+            return ApiResult<TripResponse>.Fail(new Error("bus_not_found", "no bus with that number in this school"), 404);
+        if (bus.DriverUserId is not { } driverUserId)
+            return ApiResult<TripResponse>.Fail(new Error("no_driver_assigned", "this bus has no driver assigned"), 422);
+        if (uid != driverUserId && uid != bus.ConductorUserId)
+            return ApiResult<TripResponse>.Fail(new Error("not_assigned", "you are not assigned to this bus"), 403);
+
+        var effective = req with { RouteId = req.RouteId ?? bus.RouteId };
+        return await StartCoreAsync(tid, driverUserId, effective, ct);
+    }
+
+    public async Task<ApiResult<TripResponse>> StartAsOperatorAsync(StartTripRequest req, CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { } tid || tenant.UserId is not { } uid)
+            return ApiResult<TripResponse>.Fail(new Error("forbidden", "no tenant/user context"), 403);
+        if (string.IsNullOrWhiteSpace(req.BusNo))
+            return ApiResult<TripResponse>.Fail(new Error("bus_no_required", "bus_no is required"), 422);
+        if (await repo.GetBusAssignmentByNoAsync(tid, req.BusNo, ct) is not { } bus)
+            return ApiResult<TripResponse>.Fail(new Error("bus_not_found", "no bus with that number in this school"), 404);
+        // No assignment check here — the operator path is trusted (admin/CRM), unlike the
+        // staff-facing StartAsync. DriverId is the bus's assigned driver when there is one;
+        // a bus with no driver assigned yet falls back to the calling operator's own user id,
+        // preserving this endpoint's pre-existing behaviour rather than rejecting it outright.
+        var driverUserId = bus.DriverUserId ?? uid;
+        var effective = req with { RouteId = req.RouteId ?? bus.RouteId };
+        return await StartCoreAsync(tid, driverUserId, effective, ct);
+    }
+
+    private async Task<ApiResult<TripResponse>> StartCoreAsync(
+        Guid tid, Guid driverUserId, StartTripRequest req, CancellationToken ct)
+    {
+        // dbo.Trip_Start returns no row (instead of inserting) when the bus already has a live
+        // trip; it fills ConductorId from Buses.ConductorStaffId itself.
+        if (await repo.StartAsync(tid, driverUserId, req, ct) is not { } trip)
             return ApiResult<TripResponse>.Fail(new Error("bus_already_active", "This bus already has an active trip"), 409);
         await fleetBroadcaster.BroadcastFleetAsync(tid, ct);
         await live.PublishAsync(tid, LiveEventTypes.Transport, ct: ct);
@@ -58,6 +97,7 @@ public sealed class TripService(
         {
             await fleetBroadcaster.BroadcastTripStartedAsync(busId, trip.Id, trip.DriverId, trip.ConductorId, trip.Direction, trip.StartedAt ?? clock.UtcNow, ct);
             await parentAlerts.NotifyTripStartedAsync(tid, busId, trip.Id, ct);
+            await teacherAlerts.NotifyTripStartedAsync(tid, busId, trip.Id, ct);
         }
         return ApiResult<TripResponse>.Ok(WithActiveBroadcaster(trip), 201);
     }
@@ -67,7 +107,20 @@ public sealed class TripService(
         if (tenant.UserId is not { } uid)
             return ApiResult<TripResponse?>.Fail(new Error("forbidden", "no user context"), 403);
         var trip = await repo.GetCurrentAsync(uid, ct);
-        return ApiResult<TripResponse?>.Ok(trip is null ? null : WithActiveBroadcaster(trip));
+        if (trip is null) return ApiResult<TripResponse?>.Ok(null);
+        var currentStopId = await repo.GetCurrentStopIdAsync(trip.Id, ct);
+        return ApiResult<TripResponse?>.Ok(WithActiveBroadcaster(trip) with { CurrentStopId = currentStopId });
+    }
+
+    public async Task<ApiResult<TripStopsResponse>> GetStopProgressAsync(Guid tripId, CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { } tid || tenant.UserId is not { } uid)
+            return ApiResult<TripStopsResponse>.Fail(new Error("forbidden", "no tenant/user context"), 403);
+        if (await repo.GetParticipantRoleAsync(tid, tripId, uid, ct) is null)
+            return ApiResult<TripStopsResponse>.Fail(new Error("forbidden", "not your trip"), 403);
+        return await repo.GetStopProgressAsync(tid, tripId, ct) is { } progress
+            ? ApiResult<TripStopsResponse>.Ok(progress)
+            : ApiResult<TripStopsResponse>.Fail(new Error("not_found", "trip not found"), 404);
     }
 
     public async Task<ApiResult> IngestPingsAsync(Guid tripId, BulkPingRequest req, CancellationToken ct = default)
@@ -79,7 +132,8 @@ public sealed class TripService(
             return ApiResult.Fail(new Error("forbidden", "not your trip"), 403);
         if (!await repo.IsActiveAsync(tripId, ct))
             return ApiResult.Fail(new Error("trip_ended", "this trip has already ended"), 409);
-        return await IngestPingsCoreAsync(tid, tripId, req, heartbeatRole: role, ct);
+        // Live driver/conductor path: eligible to raise parent "bus near stop" alerts.
+        return await IngestPingsCoreAsync(tid, tripId, req, heartbeatRole: role, allowParentAlerts: true, ct);
     }
 
     public async Task<ApiResult> IngestOperatorPingsAsync(Guid tripId, BulkPingRequest req, CancellationToken ct = default)
@@ -87,11 +141,12 @@ public sealed class TripService(
         if (tenant.TenantId is not { } tid)
             return ApiResult.Fail(new Error("forbidden", "no tenant context"), 403);
         // Heartbeat column: treat CRM/admin ingest as driver ping so offline sweep stays correct.
-        return await IngestPingsCoreAsync(tid, tripId, req, heartbeatRole: "driver", ct);
+        // But operator/admin ingest may be backfilled or replayed, so it must NOT raise parent alerts.
+        return await IngestPingsCoreAsync(tid, tripId, req, heartbeatRole: "driver", allowParentAlerts: false, ct);
     }
 
     private async Task<ApiResult> IngestPingsCoreAsync(
-        Guid tid, Guid tripId, BulkPingRequest req, string heartbeatRole, CancellationToken ct)
+        Guid tid, Guid tripId, BulkPingRequest req, string heartbeatRole, bool allowParentAlerts, CancellationToken ct)
     {
         await repo.IngestPingsAsync(tid, tripId, req.Pings, ct);
         await repo.MarkPingAsync(tripId, heartbeatRole, ct);
@@ -101,6 +156,7 @@ public sealed class TripService(
         {
             var snapshot = await buses.GetLiveSnapshotAsync(busId, ct);
             var currentStopId = await repo.GetCurrentStopIdAsync(tripId, ct);
+            (double Lat, double Lng, Guid StopId)? approach = null;
             // Only probe for a next stop when not already sitting at a confirmed one —
             // arrival detection targets the NEXT stop, not the current one (see
             // TripStopRepositoryTests' note that excluding the current stop is the caller's job).
@@ -111,14 +167,22 @@ public sealed class TripService(
                 var distance = TripRepository.Haversine(lat, lng, nextStop.Lat, nextStop.Lng);
                 var withinRadius = StopArrivalRules.IsWithinRadius(distance, _arrivalRadiusMeters);
                 snapshot = snapshot with { NextStopId = nextStop.Id, WithinArrivalRadius = withinRadius, CurrentStopId = currentStopId };
+                approach = (lat, lng, nextStop.Id);
             }
             else
             {
                 snapshot = snapshot with { CurrentStopId = currentStopId };
             }
             await fleetBroadcaster.BroadcastPositionAsync(busId, snapshot, ct);
-            if (snapshot.Lat is { } pingLat && snapshot.Lng is { } pingLng)
-                await parentAlerts.NotifyApproachingStopsAsync(tid, busId, tripId, pingLat, pingLng, ct);
+            // Parent "bus near stop" alert: live driver/conductor path only, the next incomplete
+            // stop only, and only off a fresh/accurate fix (staleness/accuracy gated in the service).
+            if (allowParentAlerts && approach is { } ap)
+            {
+                await parentAlerts.NotifyApproachingStopsAsync(
+                    tid, busId, tripId, ap.Lat, ap.Lng, snapshot.Accuracy, snapshot.LastUpdateAt, ap.StopId, ct);
+                await teacherAlerts.NotifyApproachingStopsAsync(
+                    tid, busId, tripId, ap.Lat, ap.Lng, snapshot.Accuracy, snapshot.LastUpdateAt, ap.StopId, ct);
+            }
         }
         return ApiResult.NoContent();
     }
@@ -146,7 +210,10 @@ public sealed class TripService(
         await fleetBroadcaster.BroadcastFleetAsync(tid, ct);
         await live.PublishAsync(tid, LiveEventTypes.Transport, ct: ct);
         if (busId is { } bid)
+        {
             await fleetBroadcaster.BroadcastTripEndedAsync(bid, tripId, clock.UtcNow, ct);
+            await teacherAlerts.NotifyTripEndedAsync(tid, bid, tripId, ct);
+        }
         return ApiResult<TripSummaryResponse>.Ok(summary);
     }
 
@@ -232,7 +299,12 @@ public sealed class TripService(
         if (!StopArrivalRules.IsWithinRadius(distance, _arrivalRadiusMeters))
             return ApiResult.Fail(new Error("too_far", "you are not close enough to this stop to confirm arrival"), 409);
 
-        await repo.ConfirmStopArrivalAsync(tid, tripId, stopId, next.Seq, clock.UtcNow, clock.UtcNow, ct);
+        // Final atomic guard against the check-then-act race: the pre-checks above can both pass for
+        // a driver and a conductor tapping "Arrived" at the same instant. Only the caller that
+        // actually claims the current stop (1 row) broadcasts; the loser gets the same 409 the
+        // already-current pre-check returns and, crucially, does not emit a duplicate fleet event.
+        if (await repo.ConfirmStopArrivalAsync(tid, tripId, stopId, next.Seq, clock.UtcNow, clock.UtcNow, ct) == 0)
+            return ApiResult.Fail(new Error("already_at_stop", "this stop is already confirmed as current"), 409);
         await fleetBroadcaster.BroadcastStopArrivedAsync(bid, tripId, stopId, next.Name, clock.UtcNow, ct);
         return ApiResult.NoContent();
     }
@@ -248,7 +320,11 @@ public sealed class TripService(
         if (await repo.GetCurrentStopIdAsync(tripId, ct) != stopId)
             return ApiResult.Fail(new Error("not_current_stop", "this stop is not the confirmed current stop"), 409);
 
-        await repo.CompleteStopAsync(tid, tripId, stopId, clock.UtcNow, ct);
+        // Final atomic guard against the same check-then-act race as ConfirmStopArrivalAsync: only
+        // the caller that actually releases the current stop (1 row) broadcasts the completion; a
+        // concurrent/duplicate depart gets the same 409 the not-current pre-check returns.
+        if (await repo.CompleteStopAsync(tid, tripId, stopId, clock.UtcNow, ct) == 0)
+            return ApiResult.Fail(new Error("not_current_stop", "this stop is not the confirmed current stop"), 409);
         if (await repo.GetBusIdAsync(tripId, ct) is { } busId && await repo.GetTripRouteIdAsync(tripId, ct) is { } routeId)
         {
             var next = await repo.GetNextIncompleteStopAsync(tripId, routeId, ct);

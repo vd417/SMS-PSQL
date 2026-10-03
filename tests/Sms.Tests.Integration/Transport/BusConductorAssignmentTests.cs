@@ -90,7 +90,9 @@ public class BusConductorAssignmentTests(PostgresFixture fx)
             new { conductor_staff_id = conductorStaffId }), HttpStatusCode.OK);
         updated.GetProperty("conductor_staff_id").GetGuid().Should().Be(conductorStaffId);
 
-        var driver = DriverClient(app, tenantId, Guid.NewGuid());
+        var driverId = Guid.NewGuid();
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, driverId);
+        var driver = DriverClient(app, tenantId, driverId);
         var trip = await Data(await driver.PostAsJsonAsync("/v1/staff/trips",
             new { direction = "pickup", bus_no = busNo }), HttpStatusCode.Created);
         trip.GetProperty("conductor_id").GetGuid().Should().Be(conductorUserId);

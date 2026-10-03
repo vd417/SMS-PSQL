@@ -375,12 +375,22 @@ LANGUAGE plpgsql
 AS $$
 DECLARE v_count int;
 BEGIN
+    -- Atomically release the current stop. The row lock this UPDATE takes serialises concurrent
+    -- driver+conductor "Depart" taps: only the caller that still sees CurrentStopId = StopId wins
+    -- (1 row); a duplicate/racing depart sees it already cleared and changes nothing (0 rows), so
+    -- the caller must not re-broadcast a completion. Gating the DepartedAt write on that win keeps
+    -- the two updates consistent.
+    UPDATE "dbo"."Trips" SET "CurrentStopId" = NULL
+    WHERE "Id" = TripId AND "TenantId" = TenantId AND "CurrentStopId" = StopId;
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    IF v_count = 0 THEN
+        RETURN 0;
+    END IF;
+
     UPDATE "dbo"."TripStopProgress" SET "DepartedAt" = DepartedAt
     WHERE "TenantId" = TenantId AND "TripId" = TripId AND "StopId" = StopId;
-    GET DIAGNOSTICS v_count = ROW_COUNT;
 
-    UPDATE "dbo"."Trips" SET "CurrentStopId" = NULL WHERE "Id" = TripId AND "TenantId" = TenantId;
-    RETURN v_count;
+    RETURN 1;
 END;
 $$;
 
@@ -393,15 +403,25 @@ AS $$
 #variable_conflict use_column
 DECLARE v_count int;
 BEGIN
+    -- Atomically claim this stop as the trip's current stop. The row lock this UPDATE takes
+    -- serialises concurrent driver+conductor "Arrived" taps: only the caller that still sees
+    -- CurrentStopId IS NULL wins (1 row); every other concurrent/duplicate confirm sees it already
+    -- set and changes nothing (0 rows), so the caller must not re-broadcast an arrival. Gating the
+    -- progress upsert on that win also stops a losing confirm from resetting ConfirmedAt.
+    UPDATE "dbo"."Trips" SET "CurrentStopId" = StopId
+    WHERE "Id" = TripId AND "TenantId" = TenantId AND "CurrentStopId" IS NULL;
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    IF v_count = 0 THEN
+        RETURN 0;
+    END IF;
+
     INSERT INTO "dbo"."TripStopProgress" AS tsp ("Id", "TenantId", "TripId", "StopId", "Seq", "ArrivedAt", "ConfirmedAt")
     VALUES (gen_random_uuid(), TenantId, TripId, StopId, Seq, ArrivedAt, ConfirmedAt)
     ON CONFLICT ("TripId", "StopId") DO UPDATE
     SET "ArrivedAt" = COALESCE(tsp."ArrivedAt", tripstopprogress_confirmarrival.ArrivedAt),
         "ConfirmedAt" = tripstopprogress_confirmarrival.ConfirmedAt;
-    GET DIAGNOSTICS v_count = ROW_COUNT;
 
-    UPDATE "dbo"."Trips" SET "CurrentStopId" = StopId WHERE "Id" = TripId AND "TenantId" = TenantId;
-    RETURN v_count;
+    RETURN 1;
 END;
 $$;
 

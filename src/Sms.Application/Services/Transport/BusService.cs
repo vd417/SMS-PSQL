@@ -20,7 +20,7 @@ public interface IBusService
     Task<ApiResult<BusTeacherAssignmentResponse>> AssignTeacherAsync(Guid busId, Guid teacherUserId, CancellationToken ct = default);
     Task<ApiResult> UnassignTeacherAsync(Guid busId, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<TravelingTeacherResponse>>> ListTravelingTeachersAsync(Guid busId, CancellationToken ct = default);
-    Task<ApiResult<IReadOnlyList<TravelingTeacherResponse>>> AddTravelingTeacherAsync(Guid busId, Guid teacherUserId, CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<TravelingTeacherResponse>>> AddTravelingTeacherAsync(Guid busId, Guid teacherUserId, Guid? stopId = null, CancellationToken ct = default);
     Task<ApiResult> RemoveTravelingTeacherAsync(Guid busId, Guid teacherUserId, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<BusResponse>>> GetTravelingBusesAsync(CancellationToken ct = default);
     Task<ApiResult<FleetBusResponse>> CreateBusAsync(
@@ -130,14 +130,14 @@ public sealed class BusService(
     }
 
     public async Task<ApiResult<IReadOnlyList<TravelingTeacherResponse>>> AddTravelingTeacherAsync(
-        Guid busId, Guid teacherUserId, CancellationToken ct = default)
+        Guid busId, Guid teacherUserId, Guid? stopId = null, CancellationToken ct = default)
     {
         if (!OperationsAllowed) return FeatureGate.Locked<IReadOnlyList<TravelingTeacherResponse>>(FeatureCatalog.Operations);
         if (tenant.TenantId is not { } tid)
             return ApiResult<IReadOnlyList<TravelingTeacherResponse>>.Fail(new Error("forbidden", "no tenant context"), 403);
         if (!await repo.BusExistsAsync(busId, ct))
             return ApiResult<IReadOnlyList<TravelingTeacherResponse>>.Fail(new Error("not_found", "bus not found"), 404);
-        await repo.AddTravelingTeacherAsync(tid, busId, teacherUserId, ct);
+        await repo.AddTravelingTeacherAsync(tid, busId, teacherUserId, stopId, ct);
         return ApiResult<IReadOnlyList<TravelingTeacherResponse>>.Ok(await repo.ListTravelingTeachersAsync(busId, ct));
     }
 
@@ -346,8 +346,11 @@ public sealed class BusService(
         if (ctx is null)
             return ApiResult<TripResponse>.Fail(new Error("not_found", "bus not found"), 404);
         var dir = string.IsNullOrWhiteSpace(direction) ? "pickup" : direction.Trim();
-        // Reuse TripService.StartAsync so trip_started + parent alerts match the driver path.
-        return await tripService.StartAsync(new StartTripRequest(ctx.RouteId, ctx.BusNo, dir), ct);
+        // Reuse TripService.StartAsOperatorAsync so trip_started + parent alerts match the
+        // driver path, without requiring this Principal-only caller to be the bus's assigned
+        // driver/conductor themselves — that assignment check is for the staff-facing
+        // StartAsync only (see TripService.StartAsOperatorAsync's doc comment).
+        return await tripService.StartAsOperatorAsync(new StartTripRequest(ctx.RouteId, ctx.BusNo, dir), ct);
     }
 
     public async Task<ApiResult> IngestBusTripPingsAsync(Guid busId, BulkPingRequest req, CancellationToken ct = default)
