@@ -6,6 +6,7 @@ using Sms.Application.Services.AiSearch.Handlers;
 using Sms.Application.Services.Transport;
 using Sms.Modules.Transport;
 using Sms.Shared.Kernel.Tenancy;
+using Sms.Tests.Integration.Transport;
 using Xunit;
 
 namespace Sms.Tests.Integration.AiSearch;
@@ -37,8 +38,15 @@ public class MyTripStatusHandlerTests(PostgresFixture fx)
     {
         await using var app = App();
         using var scope = app.Services.CreateScope();
+        var tenantId = Guid.NewGuid();
+        var driverId = Guid.NewGuid();
         scope.ServiceProvider.GetRequiredService<ITenantContext>()
-            .Set(Guid.NewGuid(), Guid.NewGuid(), isPlatform: false);
+            .Set(tenantId, driverId, isPlatform: false);
+
+        // StartAsync is self-scoped and only creates a trip when the caller is the bus's assigned
+        // driver/conductor — seed that assignment first, exactly as TripOwnershipTests does, so
+        // there is a real active trip for the handler to find.
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, "BUS-12", driverId);
 
         var trips = scope.ServiceProvider.GetRequiredService<ITripService>();
         await trips.StartAsync(new StartTripRequest(null, "BUS-12", "morning"));

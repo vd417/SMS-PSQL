@@ -5,6 +5,7 @@ using Sms.Application.Services.Attendance;
 using Sms.Application.Services.Auth;
 using Sms.Application.Services.Comms;
 using Sms.Application.Services.Dashboard;
+using Sms.Application.Services.Devices;
 using Sms.Application.Services.Finance;
 using Sms.Application.Services.Hostel;
 using Sms.Application.Services.Issues;
@@ -38,6 +39,7 @@ public static class DependencyInjection
         services.AddSingleton<IFeeInvoicePdfGenerator, FeeInvoicePdfGenerator>();
         services.AddScoped<IPayrollService, PayrollService>();
         services.AddScoped<ISisService, SisService>();
+        services.AddScoped<IDeviceService, DeviceService>();
         services.AddScoped<IStudentBulkImportService, StudentBulkImportService>();
         services.AddScoped<IStaffingService, StaffingService>();
         services.AddScoped<IProfileService, ProfileService>();
@@ -58,6 +60,7 @@ public static class DependencyInjection
         services.AddScoped<IStudentBusService, StudentBusService>();
         services.AddScoped<IStudentTransportService, StudentTransportService>();
         services.AddScoped<IBusParentAlertService, BusParentAlertService>();
+        services.AddScoped<IBusTeacherAlertService, BusTeacherAlertService>();
         services.AddScoped<IBusNotifyService, BusNotifyService>();
         services.AddScoped<IHostelService, HostelService>();
         services.AddScoped<ISportsService, SportsService>();

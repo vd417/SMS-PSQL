@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Authz;
 using Sms.Shared.Kernel.Time;
+using Sms.Tests.Integration.Transport;
 using Xunit;
 
 namespace Sms.Tests.Integration.Issues;
@@ -262,6 +263,7 @@ public class IssueEndpointTests(PostgresFixture fx)
         // Sms.Api/Extensions/ServiceCollectionExtensions.cs, AddJsonOptions) to both
         // serialization and deserialization of StartTripRequest(Guid? RouteId, string? BusNo,
         // string Direction). The brief's original draft used busNo, which would bind to null.
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, "BUS-1", otherDriverId);
         var startTrip = await otherDriverClient.PostAsJsonAsync("/v1/staff/trips", new { bus_no = "BUS-1", direction = "pickup" });
         startTrip.StatusCode.Should().Be(HttpStatusCode.Created);
         using var tripDoc = JsonDocument.Parse(await startTrip.Content.ReadAsStringAsync());
@@ -294,6 +296,7 @@ public class IssueEndpointTests(PostgresFixture fx)
         var app = App(fx);
         var driverClient = ClientFor(app, tenantId, driverId, "driver");
 
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, "BUS-OWN", driverId);
         var startTrip = await driverClient.PostAsJsonAsync(
             "/v1/staff/trips", new { route_id = routeId, bus_no = "BUS-OWN", direction = "pickup" });
         startTrip.StatusCode.Should().Be(HttpStatusCode.Created);

@@ -572,6 +572,7 @@ public static class CommsModule
         services.AddScoped<CommsRepository>();
         services.AddScoped<PtmRepository>();
         services.AddScoped<UserAppSettingsRepository>();
+        services.AddScoped<DeviceTokenRepository>();
         return services;
     }
 }
