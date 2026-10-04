@@ -10,7 +10,10 @@ public sealed record StudentResponse(
 public sealed record CreateStudentRequest(
     string? AdmissionNo, string Name, string? Gender, string? Grade, string? Section, int Roll,
     string? GuardianName, string? GuardianPhone, string? GuardianEmail, string? House, int AvatarHue,
-    DateTime? Dob, string? Email, string? Address);
+    DateTime? Dob, string? Email, string? Address,
+    // Guardian relationship to the student ("Mother" | "Father" | "Guardian"); flows to the parent
+    // login's ParentStudentLinks."Relationship" so the teacher inbox can show which parent messaged.
+    string? GuardianRelation = null);
 
 /// <summary>SetPhoto distinguishes "leave the photo untouched" (SetPhoto=false, the
 /// common case for name/grade/roll edits) from "set/clear it" (SetPhoto=true; PhotoUrl
@@ -21,4 +24,4 @@ public sealed record UpdateStudentRequest(
     string? House, string? FeeStatus, decimal? FeeDue, string? Status,
     string? PhotoUrl = null, bool SetPhoto = false,
     string? Gender = null, DateTime? Dob = null, string? Email = null, string? Address = null,
-    int? AvatarHue = null);
+    int? AvatarHue = null, string? GuardianRelation = null);

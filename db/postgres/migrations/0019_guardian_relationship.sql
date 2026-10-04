@@ -1,61 +1,35 @@
--- Sis module: PL/pgSQL conversions of 10 of the 12 stored procedures in the
--- AddStudent/Parent_EnsureLogin/StudentBus_*/StudentTransport_*/Student_* family.
--- Source: full OBJECT_DEFINITION() extracted read-only from the live SQL Server Sms database on
--- 2026-09-21, cross-checked against sqlserver-object-inventory.csv.
+-- 0019: guardian relationship ("Mother" / "Father" / "Guardian").
 --
--- dbo.AddStudent is NOT converted: it targets a completely different legacy schema (int-PK
--- Student/Parent/Address tables with OrganizationId/SchoolId, not the modern uuid-PK
--- Students/TenantId model everything else in this file uses) and has zero C# call sites anywhere
--- in src/ or tests/ -- dead code, not something to translate on spec.
+-- WHY: the teacher-app inbox shows a parent's message but could not say which guardian (mother or
+-- father) is writing — the model only had a single Students."GuardianName" and a bare
+-- ParentStudentLinks (no relationship column). This adds:
+--   * Students."GuardianRelation"        — roster capture point (set via Student_Create/Update).
+--   * ParentStudentLinks."Relationship"  — per parent↔student link, surfaced in the inbox thread.
+-- dbo.parent_ensurelogin propagates the roster value onto the link when a parent login is
+-- provisioned (and backfills an existing link whose relationship is still blank).
 --
--- See 09_auth_procs.sql's header for the naming convention, and 10_tenancy_procs.sql's header
--- for the `#variable_conflict use_column` note (needed here too, for the same
--- RETURNS-TABLE-column-vs-parameter-name reason).
+-- Both columns are nullable free text (NULL = unknown): there is no gender/relationship source to
+-- backfill from (the legacy dbo."Parent" table is empty and uses disconnected integer ids), so the
+-- value is populated going forward as schools enter it on the roster.
+--
+-- Rollback:
+--   ALTER TABLE "dbo"."ParentStudentLinks" DROP COLUMN IF EXISTS "Relationship";
+--   ALTER TABLE "dbo"."Students" DROP COLUMN IF EXISTS "GuardianRelation";
+--   -- then re-create the pre-0019 student_create/student_update/parent_ensurelogin bodies.
 
--- ============================================================
--- Student_RenumberClass (helper, called by Student_Create/Student_Update)
--- ============================================================
+ALTER TABLE "dbo"."Students"           ADD COLUMN IF NOT EXISTS "GuardianRelation" varchar(20);
+ALTER TABLE "dbo"."ParentStudentLinks" ADD COLUMN IF NOT EXISTS "Relationship"     varchar(20);
 
-CREATE OR REPLACE FUNCTION dbo.student_renumberclass(TenantId uuid, Grade varchar(20), Section varchar(20))
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    IF student_renumberclass.TenantId IS NULL THEN RETURN; END IF;
+-- student_create / student_update gain a trailing GuardianRelation argument, which changes the
+-- function arity: CREATE OR REPLACE would create a second overload rather than replace, so drop
+-- the exact pre-0019 signatures first.
+DROP FUNCTION IF EXISTS dbo.student_create(
+    uuid, varchar, varchar, varchar, varchar, varchar, int, varchar,
+    varchar, varchar, varchar, int, timestamptz, varchar, varchar);
+DROP FUNCTION IF EXISTS dbo.student_update(
+    uuid, varchar, varchar, varchar, int, varchar, varchar, varchar, varchar, varchar,
+    numeric, varchar, text, boolean, varchar, timestamptz, varchar, varchar, int);
 
-    WITH ranked AS (
-        SELECT "Id",
-               row_number() OVER (ORDER BY "Name" ASC, "AdmissionNo" ASC, "Id" ASC) AS rn
-        FROM "dbo"."Students"
-        WHERE "TenantId" = student_renumberclass.TenantId
-          AND "Status" = 'active'
-          AND COALESCE("Grade", '') = COALESCE(student_renumberclass.Grade, '')
-          AND COALESCE("Section", '') = COALESCE(student_renumberclass.Section, '')
-    )
-    UPDATE "dbo"."Students" s SET "Roll" = r.rn
-    FROM ranked r
-    WHERE r."Id" = s."Id";
-END;
-$$;
-
--- ============================================================
--- Student
--- ============================================================
-
-CREATE OR REPLACE FUNCTION dbo.student_getbyadmissionno(AdmissionId varchar(64))
-RETURNS TABLE ("Id" uuid, "TenantId" uuid, "AdmissionNo" varchar(64), "Name" varchar(200),
-               "Email" varchar(256), "GuardianPhone" varchar(40), "Status" varchar(20), "GuardianEmail" varchar(256))
-LANGUAGE sql
-AS $$
-    SELECT s."Id", s."TenantId", s."AdmissionNo", s."Name", s."Email", s."GuardianPhone", s."Status", s."GuardianEmail"
-    FROM "dbo"."Students" s
-    WHERE lower(trim(s."AdmissionNo")) = lower(trim(student_getbyadmissionno.AdmissionId))
-    LIMIT 1;
-$$;
-
--- TRY_CAST(SUBSTRING(...) AS int) -> a regex-guarded cast, same narrow approach as
--- 10_tenancy_procs.sql's planupgraderequest_listbytenants (the audit's shared safe_cast() helper
--- is separate, not-yet-done work).
 CREATE OR REPLACE FUNCTION dbo.student_create(
     TenantId uuid, AdmissionNo varchar(64), Name varchar(200), Gender varchar(1),
     Grade varchar(20), Section varchar(20), Roll int, GuardianName varchar(200),
@@ -217,121 +191,7 @@ BEGIN
 END;
 $$;
 
--- ============================================================
--- Student_EnsureLogin / Parent_EnsureLogin
--- UPDLOCK/HOLDLOCK -> SELECT ... FOR UPDATE: locks the matched Students row for the rest of the
--- transaction, preventing a concurrent call from racing to create a second login for the same
--- admission number. This is the closest native Postgres equivalent, reviewed for this specific
--- "don't double-provision a login" use case (per the audit's guidance to pick the right locking
--- primitive deliberately, not substitute mechanically) -- flagged here for visibility, not a
--- silent choice.
--- BEGIN TRY/CATCH around a duplicate-key INSERT -> a nested BEGIN...EXCEPTION WHEN unique_violation
--- block, Postgres's equivalent of a savepoint-scoped catch: the outer function's rollback-to-here
--- state is preserved (the whole function isn't rolled back on this specific expected error), only
--- the failed INSERT is undone before the ELSE branch's fallback logic runs.
--- ============================================================
-
-CREATE OR REPLACE FUNCTION dbo.student_ensurelogin(AdmissionId varchar(64))
-RETURNS TABLE (
-    "Id" uuid, "TenantId" uuid, "Email" varchar(256), "StudentId" varchar(64), "Phone" varchar(32),
-    "PasswordHash" varchar(512), "IsPlatform" boolean, "Status" varchar(20), "Name" varchar(200),
-    "MustSetPassword" boolean, "CreatedAt" timestamptz, "PhotoUrl" text
-)
-LANGUAGE plpgsql
-AS $$
-#variable_conflict use_column
-DECLARE
-    v_norm varchar(64) := lower(trim(student_ensurelogin.AdmissionId));
-    v_tenant_id uuid;
-    v_admission_no varchar(64);
-    v_name varchar(200);
-    v_email varchar(256);
-    v_phone varchar(32);
-    v_status varchar(20);
-    v_user_id uuid;
-BEGIN
-    IF v_norm IS NULL OR v_norm = '' THEN RETURN; END IF;
-
-    SELECT s."TenantId", s."AdmissionNo", s."Name",
-           NULLIF(trim(s."Email"), ''),
-           left(NULLIF(trim(s."GuardianPhone"), ''), 32),
-           s."Status"
-    INTO v_tenant_id, v_admission_no, v_name, v_email, v_phone, v_status
-    FROM "dbo"."Students" s
-    WHERE lower(trim(s."AdmissionNo")) = v_norm
-    LIMIT 1
-    FOR UPDATE OF s;
-
-    IF v_tenant_id IS NULL THEN RETURN; END IF;
-    IF v_status IN ('inactive', 'removed', 'left', 'withdrawn') THEN RETURN; END IF;
-
-    -- Prefer an existing student-role login. Parent rows share StudentId and must not be reused.
-    SELECT u."Id" INTO v_user_id
-    FROM "dbo"."Users" u
-    WHERE u."StudentId" IS NOT NULL
-      AND lower(trim(u."StudentId")) = lower(trim(v_admission_no))
-      AND NOT EXISTS (
-            SELECT 1 FROM "dbo"."UserRoles" ur
-            WHERE ur."UserId" = u."Id"
-              AND (ur."Role" LIKE '%parent%'
-                   OR ur."Role" LIKE '%owner%'
-                   OR ur."Role" LIKE '%admin%'
-                   OR ur."Role" LIKE '%teacher%'
-                   OR ur."Role" LIKE '%principal%'
-                   OR ur."Role" = 'staff')
-      )
-      AND (
-            EXISTS (
-                SELECT 1 FROM "dbo"."UserRoles" ur
-                WHERE ur."UserId" = u."Id" AND (ur."Role" = 'student' OR ur."Role" LIKE '%.student')
-            )
-            OR NOT EXISTS (SELECT 1 FROM "dbo"."UserRoles" ur WHERE ur."UserId" = u."Id")
-      )
-    ORDER BY CASE WHEN u."IsPlatform" THEN 0 ELSE 1 END, u."CreatedAt"
-    LIMIT 1;
-
-    IF v_user_id IS NULL THEN
-        IF v_email IS NOT NULL AND EXISTS (
-            SELECT 1 FROM "dbo"."Users" u
-            WHERE u."TenantId" = v_tenant_id AND u."Email" IS NOT NULL AND lower(trim(u."Email")) = lower(v_email)
-        ) THEN
-            v_email := NULL;
-        END IF;
-
-        -- GuardianPhone is often already on a parent login (UX_Users_Tenant_Phone).
-        IF v_phone IS NOT NULL AND EXISTS (
-            SELECT 1 FROM "dbo"."Users" u
-            WHERE u."TenantId" = v_tenant_id AND u."Phone" IS NOT NULL AND u."Phone" = v_phone
-        ) THEN
-            v_phone := NULL;
-        END IF;
-
-        v_user_id := gen_random_uuid();
-        BEGIN
-            INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "Phone", "IsPlatform", "Status", "StudentId", "MustSetPassword", "Name")
-            VALUES (v_user_id, v_tenant_id, v_email, v_phone, false, 'active', v_admission_no, true, v_name);
-        EXCEPTION WHEN unique_violation THEN
-            BEGIN
-                INSERT INTO "dbo"."Users" ("Id", "TenantId", "Email", "Phone", "IsPlatform", "Status", "StudentId", "MustSetPassword", "Name")
-                VALUES (v_user_id, v_tenant_id, NULL, NULL, false, 'active', v_admission_no, true, v_name);
-            EXCEPTION WHEN unique_violation THEN
-                RETURN;
-            END;
-        END;
-
-        IF NOT EXISTS (SELECT 1 FROM "dbo"."UserRoles" WHERE "UserId" = v_user_id AND "Role" = 'student') THEN
-            INSERT INTO "dbo"."UserRoles" ("UserId", "Role") VALUES (v_user_id, 'student');
-        END IF;
-    END IF;
-
-    RETURN QUERY
-    SELECT u."Id", u."TenantId", u."Email", u."StudentId", u."Phone",
-           u."PasswordHash", u."IsPlatform", u."Status", u."Name", u."MustSetPassword", u."CreatedAt", u."PhotoUrl"
-    FROM "dbo"."Users" u WHERE u."Id" = v_user_id
-    LIMIT 1;
-END;
-$$;
-
+-- parent_ensurelogin keeps its (varchar) signature, so CREATE OR REPLACE replaces it in place.
 CREATE OR REPLACE FUNCTION dbo.parent_ensurelogin(AdmissionId varchar(64))
 RETURNS TABLE (
     "Id" uuid, "TenantId" uuid, "Email" varchar(256), "StudentId" varchar(64), "Phone" varchar(32),
@@ -491,94 +351,5 @@ BEGIN
            u."PasswordHash", u."IsPlatform", u."Status", u."Name", u."MustSetPassword", u."CreatedAt", u."PhotoUrl"
     FROM "dbo"."Users" u WHERE u."Id" = v_user_id
     LIMIT 1;
-END;
-$$;
-
--- ============================================================
--- StudentBus / StudentTransport
--- (StudentBus_Assign, StudentTransport_Upsert: MERGE -> INSERT ... ON CONFLICT; both keyed on
--- ("TenantId", "StudentId"), matching the existing UQ_StudentBus_Tenant_Student /
--- UQ_StudentTransportOptOut_Tenant_Student unique constraints in 05_constraints.sql.)
--- ============================================================
-
-CREATE OR REPLACE FUNCTION dbo.studentbus_assign(TenantId uuid, StudentId uuid, BusId uuid, StopId uuid DEFAULT NULL)
-RETURNS int
-LANGUAGE plpgsql
-AS $$
-DECLARE v_count int;
-BEGIN
-    INSERT INTO "dbo"."StudentBusAssignments" ("TenantId", "StudentId", "BusId", "StopId")
-    VALUES (studentbus_assign.TenantId, studentbus_assign.StudentId, studentbus_assign.BusId, studentbus_assign.StopId)
-    ON CONFLICT ("TenantId", "StudentId") DO UPDATE SET
-        "BusId" = EXCLUDED."BusId", "StopId" = EXCLUDED."StopId", "CreatedAt" = now();
-    GET DIAGNOSTICS v_count = ROW_COUNT;
-    RETURN v_count;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION dbo.studentbus_unassign(TenantId uuid, StudentId uuid)
-RETURNS int
-LANGUAGE plpgsql
-AS $$
-DECLARE v_count int;
-BEGIN
-    DELETE FROM "dbo"."StudentBusAssignments"
-    WHERE "TenantId" = studentbus_unassign.TenantId AND "StudentId" = studentbus_unassign.StudentId;
-    GET DIAGNOSTICS v_count = ROW_COUNT;
-    RETURN v_count;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION dbo.studenttransport_optin(TenantId uuid, StudentId uuid)
-RETURNS int
-LANGUAGE plpgsql
-AS $$
-DECLARE v_count int;
-BEGIN
-    DELETE FROM "dbo"."StudentTransportOptOut"
-    WHERE "TenantId" = studenttransport_optin.TenantId AND "StudentId" = studenttransport_optin.StudentId;
-    GET DIAGNOSTICS v_count = ROW_COUNT;
-    RETURN v_count;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION dbo.studenttransport_optout(TenantId uuid, StudentId uuid)
-RETURNS int
-LANGUAGE plpgsql
-AS $$
-DECLARE v_count int;
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM "dbo"."StudentTransportOptOut"
-        WHERE "TenantId" = studenttransport_optout.TenantId AND "StudentId" = studenttransport_optout.StudentId
-    ) THEN
-        INSERT INTO "dbo"."StudentTransportOptOut" ("TenantId", "StudentId")
-        VALUES (studenttransport_optout.TenantId, studenttransport_optout.StudentId);
-    END IF;
-
-    DELETE FROM "dbo"."StudentBusAssignments"
-    WHERE "TenantId" = studenttransport_optout.TenantId AND "StudentId" = studenttransport_optout.StudentId;
-    GET DIAGNOSTICS v_count = ROW_COUNT;
-    RETURN v_count;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION dbo.studenttransport_upsert(
-    TenantId uuid, StudentId uuid, RouteId uuid,
-    StopId uuid DEFAULT NULL, FeeHeadId uuid DEFAULT NULL, BusId uuid DEFAULT NULL
-)
-RETURNS int
-LANGUAGE plpgsql
-AS $$
-DECLARE v_count int;
-BEGIN
-    INSERT INTO "dbo"."StudentBusAssignments" ("TenantId", "StudentId", "RouteId", "StopId", "FeeHeadId", "BusId")
-    VALUES (studenttransport_upsert.TenantId, studenttransport_upsert.StudentId, studenttransport_upsert.RouteId,
-        studenttransport_upsert.StopId, studenttransport_upsert.FeeHeadId, studenttransport_upsert.BusId)
-    ON CONFLICT ("TenantId", "StudentId") DO UPDATE SET
-        "RouteId" = EXCLUDED."RouteId", "StopId" = EXCLUDED."StopId",
-        "FeeHeadId" = EXCLUDED."FeeHeadId", "BusId" = EXCLUDED."BusId", "CreatedAt" = now();
-    GET DIAGNOSTICS v_count = ROW_COUNT;
-    RETURN v_count;
 END;
 $$;
