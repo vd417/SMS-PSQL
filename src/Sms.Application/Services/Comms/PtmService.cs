@@ -22,7 +22,8 @@ public interface IPtmService
     Task<ApiResult> DeleteAsync(Guid id, ClaimsPrincipal caller, CancellationToken ct = default);
 }
 
-public sealed class PtmService(PtmRepository repo, ISisService sis, ClassRepository classes, ITenantContext tenant)
+public sealed class PtmService(
+    PtmRepository repo, ISisService sis, ClassRepository classes, ITenantContext tenant, PtmCommsNotifier notifier)
     : IPtmService
 {
     private static readonly string[] Statuses = ["pending", "confirmed"];
@@ -133,7 +134,9 @@ public sealed class PtmService(PtmRepository repo, ISisService sis, ClassReposit
             return ApiResult<PtmMeetingResponse>.Fail(new Error("not_found", "resource not found"), 404);
 
         var id = await repo.CreateAsync(tid, studentId, teacherId, req.Subject, date, time, req.Mode!, ct);
-        return ApiResult<PtmMeetingResponse>.Ok((await repo.GetAsync(id, tid, ct))!, 201);
+        var created = (await repo.GetAsync(id, tid, ct))!;
+        await notifier.NotifyMeetingScheduledAsync(tid, created, ct);
+        return ApiResult<PtmMeetingResponse>.Ok(created, 201);
     }
 
     public async Task<ApiResult<PtmMeetingResponse>> UpdateAsync(

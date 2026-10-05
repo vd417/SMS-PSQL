@@ -56,7 +56,8 @@ LEFT JOIN LATERAL (
         QuerySingleProcAsync<StudentResponse>("dbo.Student_Create", new
         {
             TenantId = tenantId, r.AdmissionNo, r.Name, r.Gender, r.Grade, r.Section, r.Roll,
-            r.GuardianName, r.GuardianPhone, r.GuardianEmail, r.House, r.AvatarHue, r.Dob, r.Email, r.Address
+            r.GuardianName, r.GuardianPhone, r.GuardianEmail, r.House, r.AvatarHue, r.Dob, r.Email, r.Address,
+            r.GuardianRelation
         }, ct);
 
     public Task<StudentResponse?> UpdateAsync(Guid id, UpdateStudentRequest r, CancellationToken ct = default) =>
@@ -64,7 +65,7 @@ LEFT JOIN LATERAL (
         {
             Id = id, r.Name, r.Grade, r.Section, r.Roll, r.GuardianName, r.GuardianPhone, r.GuardianEmail,
             r.House, r.FeeStatus, r.FeeDue, r.Status, r.PhotoUrl, r.SetPhoto,
-            r.Gender, r.Dob, r.Email, r.Address, r.AvatarHue
+            r.Gender, r.Dob, r.Email, r.Address, r.AvatarHue, r.GuardianRelation
         }, ct);
 
     public async Task<StudentResponse?> GetAsync(Guid id, CancellationToken ct = default) =>

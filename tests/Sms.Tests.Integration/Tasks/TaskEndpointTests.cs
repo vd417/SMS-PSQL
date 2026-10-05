@@ -99,6 +99,33 @@ public class TaskEndpointTests(PostgresFixture fx)
         otherDoc.RootElement.GetProperty("data").GetArrayLength().Should().Be(0);
     }
 
+    // Regression: a create request carrying a due_date used to 500. The C# DateTime? binds via
+    // Npgsql as timestamptz, and Postgres won't resolve a timestamptz argument against a `date`
+    // function parameter for overload matching, so dbo.task_create's DueDate parameter must be
+    // declared timestamptz (cast to date on insert), exactly like dbo.feeinvoice_create. Every
+    // other create test omits due_date, which is why this slipped through.
+    [Fact]
+    public async Task Task_created_with_a_due_date_is_accepted_and_round_trips_the_date()
+    {
+        var tenantId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        await SeedUserAsync(fx, tenantId, adminId, "Admin");
+        await SeedManagerRoleAsync(fx, adminId, Policies.SchoolAdmin);
+
+        var app = App(fx);
+        var adminClient = ClientFor(app, tenantId, adminId, Policies.SchoolAdmin);
+
+        var create = await adminClient.PostAsJsonAsync("/v1/staff/tasks", new
+        {
+            title = "Service the bus", priority = "normal", assigned_to_role_key = "driver",
+            due_date = "2026-10-15",
+        });
+        create.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        using var doc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
+        doc.RootElement.GetProperty("data").GetProperty("due_date").GetString().Should().StartWith("2026-10-15");
+    }
+
     [Fact]
     public async Task Task_broadcast_to_a_role_shows_for_every_user_with_that_role_and_not_others()
     {

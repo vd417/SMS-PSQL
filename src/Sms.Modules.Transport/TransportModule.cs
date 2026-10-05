@@ -22,6 +22,13 @@ public sealed record TripSummaryResponse(Guid TripId, int DurationMin, double Di
 public sealed record BoardingResponse(Guid TripId, Guid StudentId, Guid? StopId, string State, DateTime At);
 public sealed record BoardingRequest(Guid StudentId, Guid? StopId, string State, DateTime At);
 public sealed record StaffStopResponse(Guid Id, string Name, double Lat, double Lng, int Seq, int? EtaMin);
+// A route stop seen through the lens of one trip's progress. Status is derived server-side so the
+// staff app never has to reconcile the three TripStopProgress timestamps against Trips.CurrentStopId
+// itself: "completed" once DepartedAt is set, "current" while it is the trip's confirmed CurrentStopId,
+// "arrived" once confirmed/arrived but not yet departed and not current, else "pending".
+public sealed record StaffTripStopResponse(
+    Guid Id, string Name, double Lat, double Lng, int Seq,
+    string Status, DateTime? ArrivedAt, DateTime? DepartedAt);
 public sealed record StaffRouteResponse(Guid Id, string Name, string BusNo, IReadOnlyList<StaffStopResponse> Stops);
 public sealed record StaffTripAssignmentResponse(
     StaffRouteResponse Route, Guid BusId, string BusNo, string? ConductorName, string? Shift, int StudentsAssigned);
@@ -217,6 +224,40 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
               ORDER BY s.""Name""", new { busId }, ct);
     }
 
+    private sealed record TripStopProgressRow(
+        Guid Id, string Name, double Lat, double Lng, int Seq,
+        DateTime? ArrivedAt, DateTime? DepartedAt, DateTime? ConfirmedAt);
+
+    /// Every stop on the trip's route, in Seq order, LEFT-JOINed to this trip's TripStopProgress so
+    /// stops not yet reached still appear (as "pending"). Mirrors GetAssignmentAsync's route-stop
+    /// query but adds the per-trip progress state the staff trip screen needs. Empty when the trip
+    /// has no route.
+    public async Task<IReadOnlyList<StaffTripStopResponse>> GetStopsAsync(Guid tripId, CancellationToken ct = default)
+    {
+        var routeId = (await QueryInlineAsync<Guid?>(
+            "SELECT \"RouteId\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @tripId", new { tripId }, ct)).FirstOrDefault();
+        if (routeId is null) return [];
+
+        var currentStopId = await GetCurrentStopIdAsync(tripId, ct);
+        var rows = await QueryInlineAsync<TripStopProgressRow>(
+            @"SELECT rs.""Id"", rs.""Name"", rs.""Lat"", rs.""Lng"", rs.""Seq"",
+                     tsp.""ArrivedAt"", tsp.""DepartedAt"", tsp.""ConfirmedAt""
+              FROM ""dbo"".""RouteStops"" rs
+              LEFT JOIN ""dbo"".""TripStopProgress"" tsp
+                ON tsp.""TripId"" = @tripId AND tsp.""StopId"" = rs.""Id""
+              WHERE rs.""RouteId"" = @routeId
+              ORDER BY rs.""Seq""",
+            new { tripId, routeId }, ct);
+
+        return rows.Select(r => new StaffTripStopResponse(
+            r.Id, r.Name, r.Lat, r.Lng, r.Seq,
+            r.DepartedAt is not null ? "completed"
+                : r.Id == currentStopId ? "current"
+                : r.ArrivedAt is not null || r.ConfirmedAt is not null ? "arrived"
+                : "pending",
+            r.ArrivedAt, r.DepartedAt)).ToList();
+    }
+
     public Task<IReadOnlyList<BoardingResponse>> ListBoardingAsync(Guid tripId, CancellationToken ct = default) =>
         QueryInlineAsync<BoardingResponse>(
             "SELECT \"TripId\", \"StudentId\", \"StopId\", \"State\", \"At\" FROM \"dbo\".\"Boardings\" WHERE \"TripId\" = @tripId ORDER BY \"At\"",
@@ -241,6 +282,57 @@ public sealed class TripRepository(IDbConnectionFactory factory) : BaseRepositor
               FROM ""dbo"".""Trips""
               WHERE ""Status"" = 'live' AND ""BusId"" IS NOT NULL", null, ct);
         var cutoff = DateTime.UtcNow - staleAfter;
+        return rows.Where(r => r.LastPingAt is null || r.LastPingAt < cutoff).ToList();
+    }
+
+    /// Active trips (live OR arrived) whose last activity is older than autoEndAfter, for the sweep
+    /// worker to force-end so an abandoned trip can't block its bus forever. "Last activity" floors
+    /// at StartedAt — so a just-started trip that hasn't pinged yet is measured from when it began,
+    /// not treated as infinitely stale (which the ping-only MAX in GetStaleActiveTripsAsync would do,
+    /// acceptable there for an advisory "offline" blip but never for an irreversible auto-end). Also
+    /// includes 'arrived' trips, which GetStaleActiveTripsAsync deliberately ignores, because an
+    /// abandoned pickup stuck at 'arrived' blocks Trip_Start's guard just the same. Runs under the
+    /// same platform-level (IsPlatform = true) cross-tenant context as GetStaleActiveTripsAsync.
+    public async Task<IReadOnlyList<StaleTripRow>> GetAutoEndCandidatesAsync(TimeSpan autoEndAfter, CancellationToken ct = default)
+    {
+        var rows = await QueryInlineAsync<StaleTripRow>(
+            @"SELECT ""Id"" AS ""TripId"", ""BusId"", ""TenantId"",
+                     (SELECT MAX(v) FROM (VALUES (""DriverLastPingAt""), (""ConductorLastPingAt""), (""StartedAt"")) AS x(v)) AS ""LastPingAt""
+              FROM ""dbo"".""Trips""
+              WHERE ""Status"" IN ('live', 'arrived') AND ""BusId"" IS NOT NULL", null, ct);
+        var cutoff = DateTime.UtcNow - autoEndAfter;
+        return rows.Where(r => r.LastPingAt is null || r.LastPingAt < cutoff).ToList();
+    }
+
+    /// Active trips that have actually finished their route and then sat idle for at least `grace`,
+    /// for the sweep worker to close so a completed trip doesn't linger (and keep blocking its bus)
+    /// until the driver remembers to press End. "Finished" means:
+    ///   - a pickup that reached school (Status='arrived'), or
+    ///   - a drop whose every route stop has a departed TripStopProgress row (route fully covered).
+    /// The drop arm requires the route to have at least one stop, so a routeless/stopless trip can
+    /// never look trivially "complete". The `grace` (short, minutes) gives the driver a window to
+    /// end it themselves or start the next leg before we step in; last-activity floors at StartedAt
+    /// and also counts SchoolArrivedAt so a just-arrived pickup isn't ended the instant it lands.
+    /// Same platform-level (IsPlatform = true) cross-tenant context as the other sweep queries.
+    public async Task<IReadOnlyList<StaleTripRow>> GetCompletedTripsToAutoEndAsync(TimeSpan grace, CancellationToken ct = default)
+    {
+        var rows = await QueryInlineAsync<StaleTripRow>(
+            @"SELECT t.""Id"" AS ""TripId"", t.""BusId"", t.""TenantId"",
+                     (SELECT MAX(v) FROM (VALUES (t.""DriverLastPingAt""), (t.""ConductorLastPingAt""), (t.""StartedAt""), (t.""SchoolArrivedAt"")) AS x(v)) AS ""LastPingAt""
+              FROM ""dbo"".""Trips"" t
+              WHERE t.""BusId"" IS NOT NULL
+                AND (
+                  (t.""Direction"" = 'pickup' AND t.""Status"" = 'arrived')
+                  OR (t.""Direction"" = 'drop' AND t.""Status"" IN ('live', 'arrived') AND t.""RouteId"" IS NOT NULL
+                      AND EXISTS (SELECT 1 FROM ""dbo"".""RouteStops"" rs WHERE rs.""RouteId"" = t.""RouteId"")
+                      AND NOT EXISTS (
+                        SELECT 1 FROM ""dbo"".""RouteStops"" rs
+                        WHERE rs.""RouteId"" = t.""RouteId""
+                          AND NOT EXISTS (
+                            SELECT 1 FROM ""dbo"".""TripStopProgress"" tsp
+                            WHERE tsp.""TripId"" = t.""Id"" AND tsp.""StopId"" = rs.""Id"" AND tsp.""DepartedAt"" IS NOT NULL)))
+                )", null, ct);
+        var cutoff = DateTime.UtcNow - grace;
         return rows.Where(r => r.LastPingAt is null || r.LastPingAt < cutoff).ToList();
     }
 

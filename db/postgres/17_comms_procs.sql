@@ -60,6 +60,68 @@ BEGIN
 END;
 $$;
 
+-- Unambiguous contact-identity for a stored thread (name + role), from the owner's perspective.
+-- Returns the single resolved user id, or NULL when zero or more-than-one distinct candidates
+-- exist, so thread adoption never merges two different people who share a name. Mirrors
+-- CommsModule.ResolveContactUserIdAsync (incl. the " (parent)" / Role='Student' -> parent rules).
+-- See migrations/0017_thread_create_identity_adoption.sql.
+CREATE OR REPLACE FUNCTION dbo.resolve_thread_contact(
+    p_tenant uuid, p_name varchar, p_role varchar, p_sender uuid
+) RETURNS uuid
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_student_name text;
+    v_ids uuid[];
+BEGIN
+    IF p_name IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    v_student_name :=
+        CASE
+            WHEN p_name ILIKE '% (parent)'
+                THEN btrim(left(p_name, length(p_name) - length(' (parent)')))
+            WHEN lower(coalesce(p_role, '')) = 'student'
+                THEN btrim(p_name)
+            ELSE NULL
+        END;
+
+    SELECT array_agg(DISTINCT q.id) INTO v_ids
+    FROM (
+        SELECT u."Id" AS id
+        FROM "dbo"."Users" u
+        WHERE u."TenantId" = p_tenant AND u."Name" = p_name AND u."Id" <> p_sender
+        UNION ALL
+        SELECT t."UserId"
+        FROM "dbo"."Teachers" t
+        WHERE t."TenantId" = p_tenant AND t."Name" = p_name AND t."UserId" IS NOT NULL AND t."UserId" <> p_sender
+        UNION ALL
+        SELECT s."UserId"
+        FROM "dbo"."Staff" s
+        WHERE s."TenantId" = p_tenant AND s."Name" = p_name AND s."UserId" IS NOT NULL AND s."UserId" <> p_sender
+        UNION ALL
+        SELECT pl."ParentUserId"
+        FROM "dbo"."Students" st
+        INNER JOIN "dbo"."ParentStudentLinks" pl
+            ON pl."StudentId" = st."Id" AND pl."TenantId" = st."TenantId"
+        WHERE v_student_name IS NOT NULL
+          AND st."TenantId" = p_tenant
+          AND st."Name" = v_student_name
+          AND pl."ParentUserId" <> p_sender
+          AND (SELECT count(1) FROM "dbo"."Students" st2
+                WHERE st2."TenantId" = p_tenant AND st2."Name" = v_student_name) = 1
+    ) q
+    WHERE q.id IS NOT NULL;
+
+    IF v_ids IS NULL OR array_length(v_ids, 1) <> 1 THEN
+        RETURN NULL;   -- zero or ambiguous: never adopt
+    END IF;
+    RETURN v_ids[1];
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION dbo.thread_create(
     TenantId uuid, OwnerUserId uuid, Name varchar(120), "role" varchar(40),
     IsGroup boolean, ChildId uuid, ContactUserId uuid DEFAULT NULL
@@ -76,18 +138,30 @@ DECLARE
     v_id uuid;
 BEGIN
     IF ContactUserId IS NOT NULL THEN
+        -- Serialise concurrent sends to the same (tenant, owner, contact) so a race cannot create
+        -- two threads for one conversation. Released at transaction end.
+        PERFORM pg_advisory_xact_lock(
+            hashtextextended(TenantId::text || ':' || OwnerUserId::text || ':' || ContactUserId::text, 0));
+
         SELECT th."Id" INTO v_existing
         FROM "dbo"."ChatThreads" th
         WHERE th."TenantId" = TenantId AND th."OwnerUserId" = OwnerUserId AND th."ContactUserId" = ContactUserId
         LIMIT 1;
 
         IF v_existing IS NULL THEN
-            -- Adopt a legacy same-name thread from before ContactUserId existed,
-            -- rather than creating a second conversation with this same contact.
+            -- Adopt a legacy NULL-ContactUserId thread for the SAME contact identity rather than
+            -- creating a second conversation. Exact display-name match wins first (preserves the
+            -- original same-name adoption); then a thread whose stored name/role resolves to this
+            -- same ContactUserId (unambiguous only), so "Neha Singh" is adopted even when the
+            -- sender now presents under a different display name such as "Principal".
             SELECT th."Id" INTO v_existing
             FROM "dbo"."ChatThreads" th
-            WHERE th."TenantId" = TenantId AND th."OwnerUserId" = OwnerUserId AND th."ContactUserId" IS NULL
-              AND th."IsGroup" = COALESCE(thread_create.IsGroup, false) AND th."Name" = thread_create.Name
+            WHERE th."TenantId" = TenantId AND th."OwnerUserId" = OwnerUserId
+              AND th."ContactUserId" IS NULL
+              AND th."IsGroup" = COALESCE(IsGroup, false)
+              AND ( th."Name" = thread_create.Name
+                 OR dbo.resolve_thread_contact(TenantId, th."Name", th."Role", OwnerUserId) = ContactUserId )
+            ORDER BY (th."Name" = thread_create.Name) DESC, th."LastAt" DESC NULLS LAST
             LIMIT 1;
 
             IF v_existing IS NOT NULL THEN

@@ -26,4 +26,7 @@
     <Project Path="tests/Sms.Tests.Integration/Sms.Tests.Integration.csproj" />
     <Project Path="tests/Sms.Tests.Unit/Sms.Tests.Unit.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Sms.DevSeed/Sms.DevSeed.csproj" />
+  </Folder>
 </Solution>

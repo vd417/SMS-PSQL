@@ -16,6 +16,11 @@ public sealed record ChatThreadResponse(
     // several parent threads tell them apart at a glance. Null for staff threads.
     public string? ChildName { get; init; }
     public string? ChildClassLabel { get; init; }
+    public int? ChildRoll { get; init; }
+    // For a parent thread: which guardian the contact is to the child — "Mother" / "Father" /
+    // "Guardian" (null for staff/student threads or when unknown). Shown beneath the student so a
+    // teacher sees whether the mother or father is messaging. Resolved from ParentStudentLinks.
+    public string? Relationship { get; init; }
     // The Inbox list's read-receipt tick: whether the OWNER sent the last message (only then
     // does a tick make sense — an incoming last message never shows one), and its delivery
     // state. Null status means the thread has no messages yet.
@@ -40,12 +45,23 @@ public sealed record ChatThreadResponse(
     public ChatThreadResponse(
         Guid Id, Guid TenantId, string Name, string? Role, string? LastMessage, DateTime? LastAt,
         int Unread, bool Group, Guid? ChildId, bool Online, string? ChildName, string? ChildClassLabel,
-        bool LastMessageMine, string? LastMessageStatus)
+        int? ChildRoll, bool LastMessageMine, string? LastMessageStatus)
         : this(Id, TenantId, Name, Role, LastMessage, LastAt, Unread, Group, ChildId, Online, ChildName, ChildClassLabel)
     {
+        this.ChildRoll = ChildRoll;
         this.LastMessageMine = LastMessageMine;
         this.LastMessageStatus = LastMessageStatus;
     }
+
+    // ListThreadsAsync shape (+ Relationship = 16 columns). Dapper picks the constructor by column
+    // count, so each distinct query shape needs its own overload (see the note above).
+    public ChatThreadResponse(
+        Guid Id, Guid TenantId, string Name, string? Role, string? LastMessage, DateTime? LastAt,
+        int Unread, bool Group, Guid? ChildId, bool Online, string? ChildName, string? ChildClassLabel,
+        int? ChildRoll, bool LastMessageMine, string? LastMessageStatus, string? Relationship)
+        : this(Id, TenantId, Name, Role, LastMessage, LastAt, Unread, Group, ChildId, Online, ChildName, ChildClassLabel,
+            ChildRoll, LastMessageMine, LastMessageStatus) =>
+        this.Relationship = Relationship;
 }
 /// <param name="ContactKind">"teacher" | "staff" | "student" (student ⇒ message that student's
 /// parent) | "user" (another CRM login account, addressed by its own Users id) — when set with
@@ -102,6 +118,9 @@ public sealed record UpdateComplaintRequest(string? Status, string? Assignee);
 public sealed record NotificationResponse(
     Guid Id, Guid TenantId, string? Icon, string? Tone, string Title, string? Body, string? Time, bool Unread);
 public sealed record CreateNotificationRequest(string? Icon, string? Tone, string Title, string? Body, Guid? UserId = null);
+/// A banned word/phrase for the chat profanity filter. Kind: "single" (one token, matched
+/// exactly against message tokens) | "phrase" (multi-word, matched as a collapsed substring).
+public sealed record ChatBannedWord(string Kind, string Word);
 
 public sealed class CommsRepository(IDbConnectionFactory factory) : BaseRepository(factory)
 {
@@ -149,6 +168,12 @@ public sealed class CommsRepository(IDbConnectionFactory factory) : BaseReposito
             $"SELECT {NotificationCols} FROM \"dbo\".\"Notifications\" WHERE \"UserId\" IS NULL OR \"UserId\" = @userId ORDER BY \"Unread\" DESC, \"Time\" DESC",
             new { userId }, ct);
 
+    // Global (TenantId NULL) + this tenant's banned words. RLS on ChatBannedWords already scopes
+    // the result to NULL-or-current-tenant rows via the stamped connection context.
+    public Task<IReadOnlyList<ChatBannedWord>> ListBannedWordsAsync(CancellationToken ct = default) =>
+        QueryInlineAsync<ChatBannedWord>(
+            "SELECT \"Kind\", \"Word\" FROM \"dbo\".\"ChatBannedWords\"", new { }, ct);
+
     public Task<int> MarkNotificationsReadAsync(Guid? userId, CancellationToken ct = default) =>
         ExecuteInlineAsync(
             "UPDATE \"dbo\".\"Notifications\" SET \"Unread\" = false WHERE \"Unread\" = true AND (\"UserId\" IS NULL OR \"UserId\" = @userId)",
@@ -164,19 +189,23 @@ public sealed class CommsRepository(IDbConnectionFactory factory) : BaseReposito
         QueryInlineAsync<ChatThreadResponse>(@"
 SELECT th.""Id"", th.""TenantId"", th.""Name"", th.""Role"", th.""LastMessage"", th.""LastAt"", th.""Unread"", th.""IsGroup"" AS ""Group"", th.""ChildId"",
        (u.""LastSeenAt"" IS NOT NULL AND u.""LastSeenAt"" > (now() AT TIME ZONE 'UTC') - interval '5 minutes') AS ""Online"",
-       c.""Name"" AS ""ChildName"", c.""ClassLabel"" AS ""ChildClassLabel"",
+       c.""Name"" AS ""ChildName"", c.""ClassLabel"" AS ""ChildClassLabel"", c.""Roll"" AS ""ChildRoll"",
        (lm.""SenderId"" = th.""OwnerUserId"") AS ""LastMessageMine"",
        CASE
            WHEN lm.""SenderId"" IS NULL THEN NULL
            WHEN lm.""ReadAt"" IS NOT NULL THEN 'read'
            WHEN lm.""DeliveredAt"" IS NOT NULL THEN 'delivered'
            ELSE 'sent'
-       END AS ""LastMessageStatus""
+       END AS ""LastMessageStatus"",
+       psl.""Relationship"" AS ""Relationship""
 FROM ""dbo"".""ChatThreads"" th
 LEFT JOIN ""dbo"".""Users"" u
     ON (th.""ContactUserId"" IS NOT NULL AND u.""Id"" = th.""ContactUserId"")
     OR (th.""ContactUserId"" IS NULL AND u.""TenantId"" = th.""TenantId"" AND u.""Name"" = th.""Name"")
 LEFT JOIN ""dbo"".""Students"" c ON c.""Id"" = th.""ChildId""
+-- Guardian relationship for a parent thread: the contact (parent) linked to this thread's child.
+LEFT JOIN ""dbo"".""ParentStudentLinks"" psl
+    ON psl.""ParentUserId"" = th.""ContactUserId"" AND psl.""StudentId"" = th.""ChildId""
 LEFT JOIN LATERAL (
     SELECT m.""SenderId"", m.""DeliveredAt"", m.""ReadAt""
     FROM ""dbo"".""ChatMessages"" m
@@ -327,7 +356,7 @@ WHERE incoming.""CorrelationId"" = m.""CorrelationId""
         if (thread is null || thread.IsGroup)
             return false;
 
-        var recipientId = thread.ContactUserId ?? await ResolveContactUserIdAsync(tenantId, thread.Name, sid, ct);
+        var recipientId = thread.ContactUserId ?? await ResolveContactUserIdAsync(tenantId, thread.Name, thread.Role, sid, ct);
         if (recipientId is null || recipientId == sid)
             return false;
 
@@ -393,14 +422,19 @@ WHERE incoming.""CorrelationId"" = m.""CorrelationId""
     private const string ParentSuffix = " (parent)";
 
     private async Task<Guid?> ResolveContactUserIdAsync(
-        Guid tenantId, string contactName, Guid senderId, CancellationToken ct)
+        Guid tenantId, string contactName, string? role, Guid senderId, CancellationToken ct)
     {
         // The admin's "message this student's parent" contact stores the thread name as
-        // "<Student> (parent)" — that never matches a real account name, so strip the suffix
-        // and match the student roster instead (only when the name is unambiguous).
-        string? parentContactName = contactName.EndsWith(ParentSuffix, StringComparison.OrdinalIgnoreCase)
-            ? contactName[..^ParentSuffix.Length].Trim()
-            : null;
+        // "<Student> (parent)"; a thread whose Role is "Student" stores the bare student name.
+        // Neither matches a real account name, so resolve both to the student roster (and thence
+        // the parent), but only when the name is unambiguous. Without the Role branch, a
+        // ContactUserId-less "Student" thread (e.g. created with just a name) would never deliver.
+        string? studentContactName =
+            contactName.EndsWith(ParentSuffix, StringComparison.OrdinalIgnoreCase)
+                ? contactName[..^ParentSuffix.Length].Trim()
+                : string.Equals(role, "Student", StringComparison.OrdinalIgnoreCase)
+                    ? contactName.Trim()
+                    : null;
 
         var rows = await QueryInlineAsync<UserIdRow>(@"
 SELECT x.""Id""
@@ -420,15 +454,15 @@ FROM (
     SELECT pl.""ParentUserId"", 4 AS ""Pri""
     FROM ""dbo"".""Students"" st
     INNER JOIN ""dbo"".""ParentStudentLinks"" pl ON pl.""StudentId"" = st.""Id"" AND pl.""TenantId"" = st.""TenantId""
-    WHERE @parentContactName::text IS NOT NULL
+    WHERE @studentContactName::text IS NOT NULL
       AND st.""TenantId"" = @tenantId
-      AND st.""Name"" = @parentContactName
+      AND st.""Name"" = @studentContactName
       AND pl.""ParentUserId"" <> @senderId
-      AND (SELECT COUNT(1) FROM ""dbo"".""Students"" st2 WHERE st2.""TenantId"" = @tenantId AND st2.""Name"" = @parentContactName) = 1
+      AND (SELECT COUNT(1) FROM ""dbo"".""Students"" st2 WHERE st2.""TenantId"" = @tenantId AND st2.""Name"" = @studentContactName) = 1
 ) x
 WHERE x.""Id"" IS NOT NULL
 ORDER BY x.""Pri""
-LIMIT 1", new { tenantId, contactName, senderId, parentContactName }, ct);
+LIMIT 1", new { tenantId, contactName, senderId, studentContactName }, ct);
         return rows.FirstOrDefault()?.Id;
     }
 
@@ -445,16 +479,31 @@ SELECT COALESCE(
     NULLIF(btrim(u.""Name""), ''),
     NULLIF(btrim(t.""Name""), ''),
     NULLIF(btrim(s.""Name""), ''),
+    -- A student's OWN login (Users.StudentId -> Students.AdmissionNo) has no Users.Name; resolve
+    -- their real name so a student sender shows as e.g. ""Arav Sharma"" instead of ""School Office"".
+    -- A PARENT login ALSO carries Users.StudentId (the ward's admission no), so this same join
+    -- would otherwise resolve a guardian-less parent to the STUDENT's name — making the teacher's
+    -- inbox show the student as the sender instead of the parent. Only use the student name when
+    -- the account is NOT a parent.
+    CASE WHEN NOT EXISTS (
+        SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%parent%'
+    ) THEN NULLIF(btrim(st.""Name""), '') END,
+    -- Parent fallback: Users.Name is seeded from Students.GuardianName at login creation, but if
+    -- that was blank then (and filled on the student row since), show the guardian/parent name.
+    NULLIF(btrim(st.""GuardianName""), ''),
     CASE
         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.owner') THEN 'School Owner'
         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.admin') THEN 'School Admin'
         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.principal') THEN 'Principal'
         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%vice%principal%') THEN 'Vice Principal'
+        WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%parent%') THEN 'Parent'
         ELSE 'School Office'
     END) AS ""Name""
 FROM ""dbo"".""Users"" u
 LEFT JOIN ""dbo"".""Teachers"" t ON t.""UserId"" = u.""Id"" AND t.""TenantId"" = @tenantId
 LEFT JOIN ""dbo"".""Staff"" s ON s.""UserId"" = u.""Id"" AND s.""TenantId"" = @tenantId
+LEFT JOIN ""dbo"".""Students"" st ON st.""TenantId"" = @tenantId
+    AND lower(btrim(st.""AdmissionNo"")) = lower(btrim(u.""StudentId""))
 WHERE u.""Id"" = @userId
 LIMIT 1", new { tenantId, userId }, ct);
         return rows.FirstOrDefault()?.Name?.Trim();
@@ -472,10 +521,23 @@ LIMIT 1", new { tenantId, userId }, ct);
 SELECT COALESCE(
     NULLIF(btrim(t.""Designation""), ''),
     NULLIF(btrim(st.""Role""), ''),
-    CASE WHEN NULLIF(btrim(u.""StudentId""), '') IS NOT NULL THEN 'Student' END,
+    -- Parent BEFORE the StudentId check: a parent login also carries Users.StudentId (the ward's
+    -- admission no), so a bare StudentId -> 'Student' test mislabels every parent as a student in
+    -- the recipient's inbox. Classify by the parent role/link first.
+    CASE WHEN EXISTS (
+        SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%parent%'
+    ) THEN 'Parent' END,
     CASE WHEN EXISTS (
         SELECT 1 FROM ""dbo"".""ParentStudentLinks"" pl WHERE pl.""ParentUserId"" = u.""Id"" AND pl.""TenantId"" = @tenantId
     ) THEN 'Parent' END,
+    CASE WHEN NULLIF(btrim(u.""StudentId""), '') IS NOT NULL THEN 'Student' END,
+    -- CRM logins (owner/admin/principal/vice-principal) have no Teacher/Staff/Student/parent row,
+    -- so without these they fall through to 'Teacher' and show up mislabeled (as a teacher) in the
+    -- parent/student app inbox. Label them from their account role instead.
+    CASE WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.owner') THEN 'Owner' END,
+    CASE WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.admin') THEN 'Admin' END,
+    CASE WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.principal') THEN 'Principal' END,
+    CASE WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%vice%principal%') THEN 'Vice Principal' END,
     'Teacher') AS ""RoleLabel""
 FROM ""dbo"".""Users"" u
 LEFT JOIN ""dbo"".""Teachers"" t ON t.""UserId"" = u.""Id"" AND t.""TenantId"" = @tenantId
@@ -537,10 +599,19 @@ WHERE (@audience::text IS NULL OR a.""Audience"" IS NULL OR btrim(a.""Audience""
 ORDER BY a.""Date"" DESC",
             new { audience, accepted = audience is null ? Array.Empty<string>() : AudienceAliases(audience) }, ct);
 
-    public Task<AnnouncementResponse?> CreateAnnouncementAsync(
-        Guid tenantId, CreateAnnouncementRequest r, Guid? creatorUserId, string? role, CancellationToken ct = default) =>
-        QuerySingleProcAsync<AnnouncementResponse>("dbo.Announcement_Create",
-            new { TenantId = tenantId, r.Title, r.Body, From = role, Role = role, CreatorUserId = creatorUserId, r.Type, r.Audience }, ct);
+    // B-5: store/return the creator's display name as "From", falling back to the role claim
+    // exactly like ListAnnouncementsAsync's COALESCE(u."Name", a."Role") - not the bare role.
+    public async Task<AnnouncementResponse?> CreateAnnouncementAsync(
+        Guid tenantId, CreateAnnouncementRequest r, Guid? creatorUserId, string? role, CancellationToken ct = default)
+    {
+        var creatorName = creatorUserId is { } uid
+            ? (await QueryInlineAsync<string?>(
+                "SELECT \"Name\" FROM \"dbo\".\"Users\" WHERE \"Id\" = @uid", new { uid }, ct)).FirstOrDefault()
+            : null;
+        var from = string.IsNullOrWhiteSpace(creatorName) ? role : creatorName;
+        return await QuerySingleProcAsync<AnnouncementResponse>("dbo.Announcement_Create",
+            new { TenantId = tenantId, r.Title, r.Body, From = from, Role = role, CreatorUserId = creatorUserId, r.Type, r.Audience }, ct);
+    }
 
     public Task<int> SaveAnnouncementDeliveryAsync(
         Guid id, string recipientsJson, string? attachmentFileName, string? attachmentContentType,

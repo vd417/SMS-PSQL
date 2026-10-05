@@ -10,7 +10,7 @@ public sealed class ExamRepository(IDbConnectionFactory factory) : BaseRepositor
         "\"Id\", \"TenantId\", \"Name\", \"Type\", \"Grades\", \"FromDate\", \"ToDate\", \"SubjectCount\", \"Status\", \"MarksEnteredPct\", \"Published\"";
     private const string PaperCols =
         "\"Id\", \"TenantId\", \"ExamId\", \"ClassId\", \"Name\", \"Subject\", \"SubjectId\", \"Date\", \"StartTime\", \"DurationMin\", \"MaxMarks\", " +
-        "\"Room\", \"Invigilator1\", \"Invigilator2\", \"Status\", \"Topics\"";
+        "\"Room\", \"Invigilator1\", \"Invigilator2\", \"Status\", \"Topics\", \"CreatedBy\"";
     private const string GradeCols =
         "\"Id\", \"TenantId\", \"StudentId\", \"StudentName\", \"ExamPaperId\", \"Marks\", \"MaxMarks\", \"Grade\", \"Gpa\", \"Pass\", \"Date\"";
 
@@ -52,12 +52,20 @@ public sealed class ExamRepository(IDbConnectionFactory factory) : BaseRepositor
     }
 
     // Exam papers
-    public Task<ExamPaperResponse?> CreateExamPaperAsync(Guid tenantId, CreateExamPaperRequest r, CancellationToken ct = default) =>
-        QuerySingleProcAsync<ExamPaperResponse>("dbo.ExamPaper_Create", new
+    public async Task<ExamPaperResponse?> CreateExamPaperAsync(
+        Guid tenantId, CreateExamPaperRequest r, Guid? createdBy, CancellationToken ct = default)
+    {
+        // dbo.ExamPaper_Create's RETURNS TABLE deliberately still excludes CreatedBy (adding it there
+        // would change the function's return shape, which CREATE OR REPLACE FUNCTION cannot do
+        // in-place — see migrations/0006_exampaper_createdby.sql); re-read the created row via
+        // GetExamPaperAsync so the response reflects the CreatedBy we just persisted.
+        var created = await QuerySingleProcAsync<ExamPaperResponse>("dbo.ExamPaper_Create", new
         {
             TenantId = tenantId, r.ExamId, r.ClassId, r.Name, r.Subject, r.SubjectId, r.Date, r.StartTime,
-            r.DurationMin, r.MaxMarks, r.Room, r.Invigilator1, r.Invigilator2, r.Topics
+            r.DurationMin, r.MaxMarks, r.Room, r.Invigilator1, r.Invigilator2, r.Topics, CreatedBy = createdBy
         }, ct);
+        return created is null ? null : await GetExamPaperAsync(created.Id, ct);
+    }
 
     public async Task<ExamPaperResponse?> GetExamPaperAsync(Guid id, CancellationToken ct = default) =>
         (await QueryInlineAsync<ExamPaperResponse>($"SELECT {PaperCols} FROM \"dbo\".\"ExamPapers\" WHERE \"Id\" = @id", new { id }, ct))

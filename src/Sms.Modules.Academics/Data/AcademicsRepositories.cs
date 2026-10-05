@@ -1,10 +1,12 @@
+using System.Globalization;
 using System.Text.Json;
 using Sms.Modules.Academics.Contracts;
 using Sms.Shared.Kernel.Data;
+using Sms.Shared.Kernel.Time;
 
 namespace Sms.Modules.Academics.Data;
 
-public sealed class ClassRepository(IDbConnectionFactory factory) : BaseRepository(factory)
+public sealed class ClassRepository(IDbConnectionFactory factory, IClock clock) : BaseRepository(factory)
 {
     private const string Cols = "\"Id\", \"TenantId\", \"Name\", \"Grade\", \"Section\", \"Subject\", \"Room\", \"StudentCount\", \"ClassTeacherId\"";
 
@@ -14,11 +16,10 @@ public sealed class ClassRepository(IDbConnectionFactory factory) : BaseReposito
     // Grade+Section when both are set, else the free-text ClassLabel/Name. Also derives
     // NextPeriod from the next upcoming TimetableSlot for the class today.
     //
-    // Known limitation: StartTime is compared as an "HH:mm" string against a UTC-formatted
-    // current time (matching TimetableSlots.StartTime's existing varchar(10) shape) - if
-    // the school's local timezone differs from UTC, "next period" could be off. Timezone
-    // handling for timetables is a pre-existing condition across this module, not introduced
-    // by this fix.
+    // TimetableSlots.Day/StartTime are school-local wall-clock values. "Next period" is
+    // therefore computed against the school-local (Asia/Kolkata) day/time - the same
+    // conversion AcademicsService.ToSchoolLocal/SchoolClock.ToSchoolLocal use - passed in as
+    // @localDay/@localTime parameters, never against now() AT TIME ZONE 'UTC' directly (B-1).
     private const string ClassSelectWithLiveCountAndNextPeriod = @"
 SELECT c.""Id"", c.""TenantId"", c.""Name"", c.""Grade"", c.""Section"", c.""Subject"", c.""Room"",
        CASE WHEN sc.""Cnt"" IS NOT NULL THEN sc.""Cnt"" ELSE c.""StudentCount"" END AS ""StudentCount"",
@@ -36,11 +37,21 @@ LEFT JOIN LATERAL (
     SELECT ts.""Subject""
     FROM ""dbo"".""TimetableSlots"" ts
     WHERE ts.""ClassId"" = c.""Id""
-      AND upper(left(trim(ts.""Day""), 3)) = upper(left(to_char(now() AT TIME ZONE 'UTC', 'DY'), 3))
-      AND ts.""StartTime"" > to_char(now() AT TIME ZONE 'UTC', 'HH24:MI')
+      AND upper(left(trim(ts.""Day""), 3)) = @localDay
+      AND ts.""StartTime"" > @localTime
     ORDER BY ts.""Period""
     LIMIT 1
 ) np ON true";
+
+    // School-local (Asia/Kolkata) 3-letter day abbreviation and "HH:mm" time for "now", matching
+    // TimetableSlots' school-local wall-clock convention (B-1).
+    private (string LocalDay, string LocalTime) LocalNowParts()
+    {
+        var local = SchoolClock.ToSchoolLocal(clock.UtcNow);
+        return (
+            local.ToString("ddd", CultureInfo.InvariantCulture).ToUpperInvariant(),
+            local.ToString("HH:mm", CultureInfo.InvariantCulture));
+    }
 
     public Task<ClassResponse?> CreateAsync(Guid tenantId, CreateClassRequest r, CancellationToken ct = default) =>
         QuerySingleProcAsync<ClassResponse>("dbo.Class_Create",
@@ -61,9 +72,13 @@ LEFT JOIN LATERAL (
                 r.ClearClassTeacher,
             }, ct);
 
-    public async Task<ClassResponse?> GetAsync(Guid id, CancellationToken ct = default) =>
-        (await QueryInlineAsync<ClassResponse>($"{ClassSelectWithLiveCountAndNextPeriod} WHERE c.\"Id\" = @id", new { id }, ct))
-        .FirstOrDefault();
+    public async Task<ClassResponse?> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        var (localDay, localTime) = LocalNowParts();
+        return (await QueryInlineAsync<ClassResponse>(
+            $"{ClassSelectWithLiveCountAndNextPeriod} WHERE c.\"Id\" = @id", new { id, localDay, localTime }, ct))
+            .FirstOrDefault();
+    }
 
     public async Task<Guid?> TeacherIdForUserAsync(Guid userId, CancellationToken ct = default) =>
         (await QueryInlineAsync<Guid?>(
@@ -75,14 +90,20 @@ LEFT JOIN LATERAL (
             "SELECT \"Name\" FROM \"dbo\".\"Teachers\" WHERE \"Id\" = @id", new { id }, ct))
         .FirstOrDefault();
 
-    public Task<IReadOnlyList<ClassResponse>> ListAsync(CancellationToken ct = default) =>
-        QueryInlineAsync<ClassResponse>($"{ClassSelectWithLiveCountAndNextPeriod} ORDER BY c.\"Name\"", null, ct);
+    public Task<IReadOnlyList<ClassResponse>> ListAsync(CancellationToken ct = default)
+    {
+        var (localDay, localTime) = LocalNowParts();
+        return QueryInlineAsync<ClassResponse>(
+            $"{ClassSelectWithLiveCountAndNextPeriod} ORDER BY c.\"Name\"", new { localDay, localTime }, ct);
+    }
 
     /// Classes this teacher is associated with: they're the class-teacher, or they have any
     /// published timetable slot for it (directly assigned, or via the subject's default
     /// teacher) — the same linkage TimetableRepository.ListForTeacherAsync already uses.
-    public Task<IReadOnlyList<ClassResponse>> ListForTeacherAsync(Guid teacherUserId, CancellationToken ct = default) =>
-        QueryInlineAsync<ClassResponse>(@"
+    public Task<IReadOnlyList<ClassResponse>> ListForTeacherAsync(Guid teacherUserId, CancellationToken ct = default)
+    {
+        var (localDay, localTime) = LocalNowParts();
+        return QueryInlineAsync<ClassResponse>(@"
 SELECT DISTINCT c.""Id"", c.""TenantId"", c.""Name"", c.""Grade"", c.""Section"", c.""Subject"", c.""Room"",
        CASE WHEN sc.""Cnt"" IS NOT NULL THEN sc.""Cnt"" ELSE c.""StudentCount"" END AS ""StudentCount"",
        c.""ClassTeacherId"", np.""Subject"" AS ""NextPeriod""
@@ -102,13 +123,14 @@ LEFT JOIN LATERAL (
     SELECT ts2.""Subject""
     FROM ""dbo"".""TimetableSlots"" ts2
     WHERE ts2.""ClassId"" = c.""Id""
-      AND upper(left(trim(ts2.""Day""), 3)) = upper(left(to_char(now() AT TIME ZONE 'UTC', 'DY'), 3))
-      AND ts2.""StartTime"" > to_char(now() AT TIME ZONE 'UTC', 'HH24:MI')
+      AND upper(left(trim(ts2.""Day""), 3)) = @localDay
+      AND ts2.""StartTime"" > @localTime
     ORDER BY ts2.""Period""
     LIMIT 1
 ) np ON true
 WHERE c.""ClassTeacherId"" = t.""Id"" OR ts.""TeacherId"" = t.""Id"" OR sub.""TeacherId"" = t.""Id""
-ORDER BY c.""Name""", new { teacherUserId }, ct);
+ORDER BY c.""Name""", new { teacherUserId, localDay, localTime }, ct);
+    }
 }
 
 public sealed class SubjectRepository(IDbConnectionFactory factory) : BaseRepository(factory)

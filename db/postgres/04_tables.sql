@@ -752,7 +752,12 @@ CREATE TABLE "dbo"."ParentStudentLinks" (
     "ParentUserId" uuid NOT NULL,
     "StudentId" uuid NOT NULL,
     "TenantId" uuid NOT NULL,
-    "CreatedAt" timestamptz DEFAULT now() NOT NULL
+    "CreatedAt" timestamptz DEFAULT now() NOT NULL,
+    -- Which guardian this parent is to the student: 'Mother' | 'Father' | 'Guardian' (free text,
+    -- NULL when unknown). Surfaced in the teacher inbox beneath the student so a teacher can see
+    -- whether the mother or the father is messaging. Copied from Students."GuardianRelation" when
+    -- the parent login/link is provisioned (dbo.parent_ensurelogin).
+    "Relationship" varchar(20)
 );
 
 CREATE TABLE "dbo"."PayrollRunLines" (
@@ -1167,6 +1172,9 @@ CREATE TABLE "dbo"."Students" (
     "ClassLabel" varchar(40),
     "Roll" integer DEFAULT 0 NOT NULL,
     "GuardianName" varchar(200),
+    -- Relationship of the guardian to the student: 'Mother' | 'Father' | 'Guardian' (free text,
+    -- NULL when unknown). Captured on the roster; propagated to ParentStudentLinks."Relationship".
+    "GuardianRelation" varchar(20),
     "GuardianPhone" varchar(40),
     "AttendancePct" numeric(5,2) DEFAULT 0 NOT NULL,
     "FeeStatus" varchar(20) DEFAULT 'due' NOT NULL,
@@ -1464,7 +1472,8 @@ CREATE TABLE "dbo"."Users" (
     "Name" varchar(200),
     "MustSetPassword" boolean DEFAULT false NOT NULL,
     "LastSeenAt" timestamptz,
-    "PhotoUrl" text
+    "PhotoUrl" text,
+    "PersonId" uuid NULL
 );
 
 CREATE TABLE "dbo"."Vehicle" (

@@ -46,12 +46,12 @@ public sealed class ExamPaperController(
     [HttpPatch("exam-papers/{id:guid}")]
     [Authorize(Policy = AuthorizationPolicies.TeacherApp)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateExamPaperRequest req, CancellationToken ct) =>
-        FromResult(await academics.UpdateExamPaperAsync(id, req, ct));
+        FromResult(await academics.UpdateExamPaperAsync(id, req, User, ct));
 
     [HttpDelete("exam-papers/{id:guid}")]
     [Authorize(Policy = AuthorizationPolicies.TeacherApp)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct) =>
-        FromResult(await academics.DeleteExamPaperAsync(id, ct));
+        FromResult(await academics.DeleteExamPaperAsync(id, User, ct));
 
     [HttpGet("exam-papers/{id:guid}/attendance")]
     public async Task<IActionResult> ListAttendance(Guid id, CancellationToken ct) =>

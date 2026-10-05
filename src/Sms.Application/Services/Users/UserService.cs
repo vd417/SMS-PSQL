@@ -38,7 +38,8 @@ public sealed class UserService(
     ClientRepository clients,
     IInvitationDao invitations,
     IRoleTemplateDao roleTemplates,
-    AuditRepository audit) : IUserService
+    AuditRepository audit,
+    IContactValidator contacts) : IUserService
 {
     private static readonly HashSet<string> AssignableRoleTemplateRoles = new(
         ["admin", "principal", "vice_principal", "teacher", "staff"], StringComparer.OrdinalIgnoreCase);
@@ -84,6 +85,25 @@ public sealed class UserService(
             return ApiResult<object>.Fail(new Error("conflict", "A user with this phone number already exists in this school. Resend the invite from the Invitations tab instead."), 409);
 
         var id = await dao.CreateUserAsync(tid, req.Email, req.Phone, false, req.Roles, ct);
+
+        // Authoritative contact-uniqueness via the ContactClaims ledger. The pre-check above
+        // rejects the common same-tenant duplicate before insert; this also catches a contact
+        // already claimed by a different owner/person (and concurrent-invite races) and records
+        // this new user's claim. PersonId is null at create time (adopted later by backfill).
+        var claim = await contacts.SyncAsync(tid, "user", id.ToString(), personId: null, req.Email, req.Phone, ct);
+        if (!claim.IsValid)
+        {
+            // User_Create already committed above (there is no shared transaction across the two
+            // DAOs). Undo it, or the orphaned row would make the ListByTenantAsync pre-check reject
+            // every future invite of this contact with a 409 that no "resend invite" can clear.
+            await dao.DeleteUserAsync(id, ct);
+            return ApiResult<object>.Fail(
+                new Error("conflict", claim.ConflictKind == ContactConflictKind.Phone
+                    ? "A user with this phone number already exists in this school. Resend the invite from the Invitations tab instead."
+                    : "A user with this email already exists in this school. Resend the invite from the Invitations tab instead."),
+                409);
+        }
+
         await dao.SetStatusAsync(id, "pending", ct);
 
         var roleLabel = RoleLabel(req.Roles.FirstOrDefault());

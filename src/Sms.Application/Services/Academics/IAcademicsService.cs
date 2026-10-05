@@ -123,8 +123,9 @@ public interface IAcademicsService
         Guid? examId, Guid studentId, CancellationToken ct = default);
     Task<ApiResult<ExamPaperResponse>> GetExamPaperAsync(Guid id, CancellationToken ct = default);
     Task<ApiResult<ExamPaperResponse>> CreateExamPaperAsync(CreateExamPaperRequest req, CancellationToken ct = default);
-    Task<ApiResult<ExamPaperResponse>> UpdateExamPaperAsync(Guid id, UpdateExamPaperRequest req, CancellationToken ct = default);
-    Task<ApiResult> DeleteExamPaperAsync(Guid id, CancellationToken ct = default);
+    Task<ApiResult<ExamPaperResponse>> UpdateExamPaperAsync(
+        Guid id, UpdateExamPaperRequest req, ClaimsPrincipal caller, CancellationToken ct = default);
+    Task<ApiResult> DeleteExamPaperAsync(Guid id, ClaimsPrincipal caller, CancellationToken ct = default);
 
     Task<ApiResult<IReadOnlyList<GradeResponse>>> ListGradesAsync(Guid examPaperId, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<GradeResponse>>> ListGradesForStudentAsync(Guid studentId, CancellationToken ct = default);

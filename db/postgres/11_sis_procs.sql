@@ -60,7 +60,7 @@ CREATE OR REPLACE FUNCTION dbo.student_create(
     TenantId uuid, AdmissionNo varchar(64), Name varchar(200), Gender varchar(1),
     Grade varchar(20), Section varchar(20), Roll int, GuardianName varchar(200),
     GuardianPhone varchar(40), GuardianEmail varchar(256), House varchar(40), AvatarHue int,
-    Dob timestamptz, Email varchar(256), Address varchar(500)
+    Dob timestamptz, Email varchar(256), Address varchar(500), GuardianRelation varchar(20) DEFAULT NULL
 )
 RETURNS TABLE (
     "Id" uuid, "TenantId" uuid, "AdmissionNo" varchar(64), "Name" varchar(200), "Gender" varchar(1),
@@ -105,10 +105,11 @@ BEGIN
     END IF;
 
     INSERT INTO "dbo"."Students" ("Id", "TenantId", "AdmissionNo", "Name", "Gender", "Grade", "Section", "ClassLabel", "Roll",
-        "GuardianName", "GuardianPhone", "GuardianEmail", "House", "AvatarHue", "Dob", "Email", "Address")
+        "GuardianName", "GuardianRelation", "GuardianPhone", "GuardianEmail", "House", "AvatarHue", "Dob", "Email", "Address")
     VALUES (v_id, student_create.TenantId, v_admission_no, student_create.Name, student_create.Gender,
         student_create.Grade, student_create.Section, v_class_label, 0,
-        student_create.GuardianName, student_create.GuardianPhone, student_create.GuardianEmail,
+        student_create.GuardianName, NULLIF(trim(student_create.GuardianRelation), ''),
+        student_create.GuardianPhone, student_create.GuardianEmail,
         student_create.House, COALESCE(student_create.AvatarHue, 0), student_create.Dob, student_create.Email,
         student_create.Address);
 
@@ -119,6 +120,12 @@ BEGIN
         SELECT count(*) FROM "dbo"."Students" s WHERE s."TenantId" = student_create.TenantId AND s."Status" = 'active'
     )
     WHERE "Id" = student_create.TenantId;
+
+    -- B5: claim the student's OWN email for per-tenant contact uniqueness (students have no own
+    -- phone column; guardian email/phone are never claimed). Raises SMSDC on a different-person
+    -- conflict, rolling back this create.
+    PERFORM dbo.contact_claims_sync(student_create.TenantId, 'student', v_id::text, NULL,
+                                    student_create.Email, NULL);
 
     RETURN QUERY
     SELECT s."Id", s."TenantId", s."AdmissionNo", s."Name", s."Gender", s."Grade", s."Section", s."ClassLabel", s."Roll",
@@ -134,7 +141,8 @@ CREATE OR REPLACE FUNCTION dbo.student_update(
     GuardianEmail varchar(256) DEFAULT NULL, House varchar(40) DEFAULT NULL, FeeStatus varchar(20) DEFAULT NULL,
     FeeDue numeric(18,2) DEFAULT NULL, Status varchar(20) DEFAULT NULL, PhotoUrl text DEFAULT NULL,
     SetPhoto boolean DEFAULT false, Gender varchar(1) DEFAULT NULL, Dob timestamptz DEFAULT NULL,
-    Email varchar(256) DEFAULT NULL, Address varchar(500) DEFAULT NULL, AvatarHue int DEFAULT NULL
+    Email varchar(256) DEFAULT NULL, Address varchar(500) DEFAULT NULL, AvatarHue int DEFAULT NULL,
+    GuardianRelation varchar(20) DEFAULT NULL
 )
 RETURNS TABLE (
     "Id" uuid, "TenantId" uuid, "AdmissionNo" varchar(64), "Name" varchar(200), "Gender" varchar(1),
@@ -162,6 +170,7 @@ BEGIN
         "Section" = COALESCE(student_update.Section, "Section"),
         "ClassLabel" = COALESCE(student_update.Grade, "Grade") || '-' || COALESCE(student_update.Section, "Section"),
         "GuardianName" = COALESCE(student_update.GuardianName, "GuardianName"),
+        "GuardianRelation" = COALESCE(NULLIF(trim(student_update.GuardianRelation), ''), "GuardianRelation"),
         "GuardianPhone" = COALESCE(student_update.GuardianPhone, "GuardianPhone"),
         "GuardianEmail" = COALESCE(student_update.GuardianEmail, "GuardianEmail"),
         "House" = COALESCE(student_update.House, "House"),
@@ -193,6 +202,11 @@ BEGIN
             SELECT count(*) FROM "dbo"."Students" s WHERE s."TenantId" = v_tenant_id AND s."Status" = 'active'
         )
         WHERE "Id" = v_tenant_id;
+
+        -- B5: re-claim the student's OWN (post-update) email for per-tenant contact uniqueness.
+        -- Guardian fields are never claimed. Raises SMSDC on a different-person conflict.
+        PERFORM dbo.contact_claims_sync(v_tenant_id, 'student', student_update.Id::text, NULL,
+            (SELECT s."Email" FROM "dbo"."Students" s WHERE s."Id" = student_update.Id), NULL);
     END IF;
 
     RETURN QUERY
@@ -337,6 +351,7 @@ DECLARE
     v_status varchar(20);
     v_user_id uuid;
     v_student_guid uuid;
+    v_relation varchar(20);
 BEGIN
     IF v_norm IS NULL OR v_norm = '' THEN RETURN; END IF;
 
@@ -344,8 +359,9 @@ BEGIN
            NULLIF(trim(s."GuardianName"), ''),
            NULLIF(trim(s."GuardianEmail"), ''),
            left(NULLIF(trim(s."GuardianPhone"), ''), 32),
-           s."Status"
-    INTO v_tenant_id, v_admission_no, v_name, v_email, v_phone, v_status
+           s."Status",
+           NULLIF(trim(s."GuardianRelation"), '')
+    INTO v_tenant_id, v_admission_no, v_name, v_email, v_phone, v_status, v_relation
     FROM "dbo"."Students" s
     WHERE lower(trim(s."AdmissionNo")) = v_norm
     LIMIT 1
@@ -456,8 +472,14 @@ BEGIN
                 SELECT 1 FROM "dbo"."ParentStudentLinks"
                 WHERE "ParentUserId" = v_user_id AND "StudentId" = v_student_guid
             ) THEN
-                INSERT INTO "dbo"."ParentStudentLinks" ("ParentUserId", "StudentId", "TenantId")
-                VALUES (v_user_id, v_student_guid, v_tenant_id);
+                INSERT INTO "dbo"."ParentStudentLinks" ("ParentUserId", "StudentId", "TenantId", "Relationship")
+                VALUES (v_user_id, v_student_guid, v_tenant_id, v_relation);
+            ELSIF v_relation IS NOT NULL THEN
+                -- Keep an existing link's relationship fresh when the roster later fills it in.
+                UPDATE "dbo"."ParentStudentLinks"
+                SET "Relationship" = v_relation
+                WHERE "ParentUserId" = v_user_id AND "StudentId" = v_student_guid
+                  AND ("Relationship" IS NULL OR trim("Relationship") = '');
             END IF;
         EXCEPTION WHEN unique_violation THEN
             NULL;

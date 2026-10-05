@@ -61,9 +61,11 @@ public static class DependencyInjection
         services.AddScoped<IBusNotifyService, BusNotifyService>();
         services.AddScoped<IHostelService, HostelService>();
         services.AddScoped<ISportsService, SportsService>();
+        services.AddScoped<IChatContentFilter, ChatContentFilter>();
         services.AddScoped<IThreadService, ThreadService>();
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<IComplaintService, ComplaintService>();
+        services.AddScoped<PtmCommsNotifier>();
         services.AddScoped<IPtmService, PtmService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IIssueService, IssueService>();

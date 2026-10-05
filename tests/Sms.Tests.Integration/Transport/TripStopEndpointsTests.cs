@@ -240,6 +240,51 @@ public class TripStopEndpointsTests(PostgresFixture fx)
         row.SchoolArrivedLng.Should().Be(77.6543);
     }
 
+    private sealed record StaffTripStopDto(Guid Id, string Name, double Lat, double Lng, int Seq, string Status, DateTime? ArrivedAt, DateTime? DepartedAt);
+    private sealed record Envelope<T>(T Data);
+
+    [Fact]
+    public async Task GetStops_returns_route_stops_in_seq_order_with_per_trip_progress_status()
+    {
+        var (tenantId, tripId, driverId, stop1, stop2) = await SeedLiveTripWithTwoStops();
+        await using var app = App();
+        var client = AuthedClient(app, driverId, tenantId, Policies.Driver);
+
+        // Drive the first stop through confirm -> complete so it reads back as "completed",
+        // leaving the second stop untouched ("pending").
+        await SeedPing(tenantId, tripId, lat: 12.1000, lng: 77.1000);
+        (await client.PostAsync($"/v1/staff/trips/{tripId}/stops/{stop1}/confirm-arrival", null)).IsSuccessStatusCode.Should().BeTrue();
+        (await client.PostAsync($"/v1/staff/trips/{tripId}/stops/{stop1}/complete", null)).IsSuccessStatusCode.Should().BeTrue();
+
+        var res = await client.GetAsync($"/v1/staff/trips/{tripId}/stops");
+        res.IsSuccessStatusCode.Should().BeTrue();
+        var body = await res.Content.ReadAsStringAsync();
+        var envelope = System.Text.Json.JsonSerializer.Deserialize<Envelope<List<StaffTripStopDto>>>(
+            body, new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                PropertyNameCaseInsensitive = true,
+            });
+        var stops = envelope?.Data;
+        stops.Should().NotBeNull(because: body);
+        stops!.Select(s => s.Id).Should().Equal(stop1, stop2);
+        stops.Single(s => s.Id == stop1).Status.Should().Be("completed", because: body);
+        stops.Single(s => s.Id == stop1).DepartedAt.Should().NotBeNull(because: body);
+        stops.Single(s => s.Id == stop2).Status.Should().Be("pending", because: body);
+    }
+
+    [Fact]
+    public async Task GetStops_by_a_user_who_is_not_a_trip_participant_is_forbidden()
+    {
+        var (tenantId, tripId, _, _, _) = await SeedLiveTripWithTwoStops();
+        await using var app = App();
+        // A driver in the same tenant who is neither this trip's driver nor its conductor.
+        var client = AuthedClient(app, Guid.NewGuid(), tenantId, Policies.Driver);
+
+        var res = await client.GetAsync($"/v1/staff/trips/{tripId}/stops");
+        res.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     [Fact]
     public async Task SchoolArrived_on_a_drop_trip_is_rejected()
     {

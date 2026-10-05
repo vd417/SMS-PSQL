@@ -14,8 +14,13 @@ public interface IThreadService
     Task<ApiResult<ChatMessageResponse>> SendMessageAsync(Guid threadId, SendMessageRequest req, CancellationToken ct = default);
 }
 
-public sealed class ThreadService(CommsRepository repo, ITenantContext tenant, ILiveBroadcaster live) : IThreadService
+public sealed class ThreadService(CommsRepository repo, ITenantContext tenant, ILiveBroadcaster live, IChatContentFilter contentFilter) : IThreadService
 {
+    // Shown verbatim to clients (mobile apps + sms-admin) when a message is rejected; matches the
+    // in-app chat notice so the UI can surface it as the violation popup.
+    private const string InappropriateContentMessage =
+        "Inappropriate language or images are not allowed in school chat. Violations may result in a notice from your school.";
+
     public async Task<ApiResult<IReadOnlyList<ChatThreadResponse>>> ListAsync(CancellationToken ct = default)
     {
         if (tenant.UserId is not { } uid)
@@ -55,6 +60,12 @@ public sealed class ThreadService(CommsRepository repo, ITenantContext tenant, I
 
         if (imageUrl is not null && ImageUrlValidation.Validate(imageUrl) is { } imageError)
             return ApiResult<ChatMessageResponse>.Fail(imageError, 422);
+
+        // Profanity filter: reject (don't store or deliver) a message with banned language so the
+        // client shows the "inappropriate content" notice. Images can't be word-checked here.
+        if ((await contentFilter.CheckAsync(text, ct)).Blocked)
+            return ApiResult<ChatMessageResponse>.Fail(
+                new Error("inappropriate_content", InappropriateContentMessage), 422);
 
         var msg = await repo.AddMessageAsync(tid, threadId, uid, uid, text, imageUrl, ct);
         if (msg is null)
