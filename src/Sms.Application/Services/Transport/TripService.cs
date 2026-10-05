@@ -14,6 +14,7 @@ public interface ITripService
     Task<ApiResult<TripResponse?>> GetCurrentAsync(CancellationToken ct = default);
     Task<ApiResult<StaffTripAssignmentResponse>> GetAssignmentAsync(CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<StaffRosterStudentResponse>>> GetRosterAsync(Guid tripId, CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<StaffTripStopResponse>>> GetStopsAsync(Guid tripId, CancellationToken ct = default);
     Task<ApiResult> IngestPingsAsync(Guid tripId, BulkPingRequest req, CancellationToken ct = default);
     /// Admin/CRM operator path: same broadcast + heartbeat as driver ingest, without trip-participant check.
     Task<ApiResult> IngestOperatorPingsAsync(Guid tripId, BulkPingRequest req, CancellationToken ct = default);
@@ -167,6 +168,15 @@ public sealed class TripService(
         if (await repo.GetParticipantRoleAsync(tid, tripId, uid, ct) is null)
             return ApiResult<IReadOnlyList<StaffRosterStudentResponse>>.Fail(new Error("forbidden", "not your trip"), 403);
         return ApiResult<IReadOnlyList<StaffRosterStudentResponse>>.Ok(await repo.GetRosterAsync(tripId, ct));
+    }
+
+    public async Task<ApiResult<IReadOnlyList<StaffTripStopResponse>>> GetStopsAsync(Guid tripId, CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { } tid || tenant.UserId is not { } uid)
+            return ApiResult<IReadOnlyList<StaffTripStopResponse>>.Fail(new Error("forbidden", "no tenant/user context"), 403);
+        if (await repo.GetParticipantRoleAsync(tid, tripId, uid, ct) is null)
+            return ApiResult<IReadOnlyList<StaffTripStopResponse>>.Fail(new Error("forbidden", "not your trip"), 403);
+        return ApiResult<IReadOnlyList<StaffTripStopResponse>>.Ok(await repo.GetStopsAsync(tripId, ct));
     }
 
     public async Task<ApiResult<IReadOnlyList<BoardingResponse>>> ListBoardingAsync(Guid tripId, CancellationToken ct = default)
