@@ -109,4 +109,14 @@ public class TeacherApprovalsScopeTests(PostgresFixture fx)
             .PatchAsync($"/v1/approvals/{Guid.NewGuid()}", new StringContent("{\"status\":\"approved\"}", System.Text.Encoding.UTF8, "application/json"));
         res.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
+
+    [Theory]
+    [InlineData(Policies.Staff)]
+    [InlineData(Policies.StudentOrParent)]
+    public async Task Non_teacher_non_manager_roles_are_forbidden(string role)
+    {
+        var (tenantId, _, _, _) = await SeedAsync(teacherHasClass: true);
+        var res = await Client(MakeApp(fx), Guid.NewGuid(), tenantId, role).GetAsync("/v1/approvals?status=pending");
+        res.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
 }

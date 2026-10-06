@@ -52,4 +52,38 @@ public class ClassTeacherStudentIdsTests(PostgresFixture fx)
         var ids = await repo.StudentIdsForClassTeacherAsync(teacherUserId, tenantId, default);
         ids.Should().ContainSingle().Which.Should().Be(matching);
     }
+
+    [Fact]
+    public async Task Does_not_leak_students_from_another_tenant()
+    {
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        var teacherUserA = Guid.NewGuid();
+        var teacherUserB = Guid.NewGuid();
+        var studentA = Guid.NewGuid();
+        var studentB = Guid.NewGuid();
+
+        foreach (var (tenantId, userId, studentId, adm) in new[] { (tenantA, teacherUserA, studentA, "ADM-A"), (tenantB, teacherUserB, studentB, "ADM-B") })
+        {
+            await using var conn = new NpgsqlConnection(fx.ConnectionString);
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
+            var teacherId = Guid.NewGuid();
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Teachers\" (\"Id\", \"TenantId\", \"Name\", \"UserId\") VALUES (@teacherId, @tenantId, 'T', @userId)",
+                new { teacherId, tenantId, userId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Classes\" (\"TenantId\", \"Name\", \"Grade\", \"Section\", \"ClassTeacherId\") VALUES (@tenantId, 'Grade 5 - A', 'Grade 5', 'A', @teacherId)",
+                new { tenantId, teacherId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Grade\", \"Section\", \"ClassLabel\", \"Roll\", \"Status\") " +
+                "VALUES (@studentId, @tenantId, @adm, 'S', 'Grade 5', 'A', 'Grade 5 - A', 1, 'active')",
+                new { studentId, tenantId, adm });
+        }
+
+        var repo = new LeaveRepository(new PlainFactory(fx.ConnectionString, tenantA));
+        var ids = await repo.StudentIdsForClassTeacherAsync(teacherUserA, tenantA, default);
+        ids.Should().ContainSingle().Which.Should().Be(studentA);
+        ids.Should().NotContain(studentB);
+    }
 }

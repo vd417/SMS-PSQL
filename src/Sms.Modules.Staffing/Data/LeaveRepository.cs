@@ -46,6 +46,8 @@ public sealed class LeaveRepository(IDbConnectionFactory factory) : BaseReposito
                    AND s."Grade" = c."Grade" AND s."Section" = c."Section")
                 OR (c."Name" IS NOT NULL AND s."ClassLabel" = c."Name"))
             WHERE t."UserId" = @teacherUserId
+              AND t."TenantId" = @tenantId
+              AND c."TenantId" = @tenantId
               AND s."Status" = 'active'
               AND s."TenantId" = @tenantId
             """, new { teacherUserId, tenantId }, ct);
