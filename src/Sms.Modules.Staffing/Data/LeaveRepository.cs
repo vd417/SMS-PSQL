@@ -34,7 +34,26 @@ public sealed class LeaveRepository(IDbConnectionFactory factory) : BaseReposito
             $"SELECT {Cols} FROM \"dbo\".\"LeaveRequests\" WHERE \"RequesterId\" = @requesterId ORDER BY \"AppliedOn\" DESC",
             new { requesterId }, ct);
 
-    public Task<IReadOnlyList<LeaveResponse>> ListByStatusAsync(string? status, CancellationToken ct = default)
+    /// Active students in the classes the given teacher user is ClassTeacherId of.
+    public Task<IReadOnlyList<Guid>> StudentIdsForClassTeacherAsync(
+        Guid teacherUserId, Guid tenantId, CancellationToken ct = default) =>
+        QueryInlineAsync<Guid>("""
+            SELECT s."Id"
+            FROM "dbo"."Teachers" t
+            JOIN "dbo"."Classes" c ON c."ClassTeacherId" = t."Id"
+            JOIN "dbo"."Students" s ON (
+                (c."Grade" IS NOT NULL AND c."Section" IS NOT NULL
+                   AND s."Grade" = c."Grade" AND s."Section" = c."Section")
+                OR (c."Name" IS NOT NULL AND s."ClassLabel" = c."Name"))
+            WHERE t."UserId" = @teacherUserId
+              AND t."TenantId" = @tenantId
+              AND c."TenantId" = @tenantId
+              AND s."Status" = 'active'
+              AND s."TenantId" = @tenantId
+            """, new { teacherUserId, tenantId }, ct);
+
+    public Task<IReadOnlyList<LeaveResponse>> ListByStatusAsync(
+        string? status, IReadOnlyCollection<Guid>? childScope = null, CancellationToken ct = default)
     {
         var all = string.IsNullOrWhiteSpace(status)
             || status.Equals("all", StringComparison.OrdinalIgnoreCase);
@@ -55,11 +74,14 @@ public sealed class LeaveRepository(IDbConnectionFactory factory) : BaseReposito
                    COALESCE(st."ClassLabel", st."Grade") AS "StudentClass",
                    st."Section" AS "StudentSection", st."Roll" AS "StudentRoll"
             """;
-        var sql = all
-            ? $"{select} {from} ORDER BY lr.\"AppliedOn\" DESC"
-            : $"{select} {from} WHERE lr.\"Status\" = @status ORDER BY lr.\"AppliedOn\" DESC";
-        return all
-            ? QueryInlineAsync<LeaveResponse>(sql, new { }, ct)
-            : QueryInlineAsync<LeaveResponse>(sql, new { status }, ct);
+        // childScope non-null => restrict to those child ids (also drops null-ChildId staff leave).
+        // An empty scope matches nothing (= ANY('{}')); it is NOT "no filter".
+        var conds = new List<string>();
+        if (!all) conds.Add("lr.\"Status\" = @status");
+        if (childScope is not null) conds.Add("lr.\"ChildId\" = ANY(@childScope)");
+        var where = conds.Count == 0 ? "" : " WHERE " + string.Join(" AND ", conds);
+        var sql = $"{select} {from}{where} ORDER BY lr.\"AppliedOn\" DESC";
+        return QueryInlineAsync<LeaveResponse>(sql,
+            new { status = all ? null : status, childScope = childScope?.ToArray() }, ct);
     }
 }
