@@ -62,8 +62,9 @@ public class LeaveApprovalsTests(PostgresFixture fx)
         (await Data(await client.GetAsync("/v1/approvals"), HttpStatusCode.OK))
             .EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).Should().Contain(id);
 
-        // approve
-        var decided = await Data(await client.PatchAsJsonAsync($"/v1/approvals/{id}",
+        // approve — a different principal decides (a requester cannot decide their own leave)
+        var approver = TenantClient(app, tenantId, Guid.NewGuid());
+        var decided = await Data(await approver.PatchAsJsonAsync($"/v1/approvals/{id}",
             new { status = "approved", decided_note = "Approved — covered" }), HttpStatusCode.OK);
         decided.GetProperty("status").GetString().Should().Be("approved");
         decided.GetProperty("decided_note").GetString().Should().Be("Approved — covered");
