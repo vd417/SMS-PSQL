@@ -31,7 +31,7 @@ public interface IStaffingService
     Task<ApiResult<IReadOnlyList<LeaveBalanceResponse>>> GetMyLeaveBalancesAsync(CancellationToken ct = default);
     Task<ApiResult<LeaveResponse>> CreateLeaveAsync(CreateLeaveRequest req, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<LeaveResponse>>> ListApprovalsAsync(string? status, bool isManager, CancellationToken ct = default);
-    Task<ApiResult<LeaveResponse>> DecideLeaveAsync(Guid id, DecideLeaveRequest req, CancellationToken ct = default);
+    Task<ApiResult<LeaveResponse>> DecideLeaveAsync(Guid id, DecideLeaveRequest req, bool isManager, CancellationToken ct = default);
 
     // Admin/principal document management for a specific staff member — distinct from
     // GET /v1/staff/profile, which is the self-service read for the CALLER's own documents.
@@ -303,13 +303,22 @@ public sealed class StaffingService(
     }
 
     public async Task<ApiResult<LeaveResponse>> DecideLeaveAsync(
-        Guid id, DecideLeaveRequest req, CancellationToken ct = default)
+        Guid id, DecideLeaveRequest req, bool isManager, CancellationToken ct = default)
     {
         if (await leave.GetAsync(id, ct) is not { } existing)
             return ApiResult<LeaveResponse>.Fail(new Error("not_found", "resource not found"), 404);
         if (existing.RequesterId is { } reqId && reqId == tenant.UserId)
             return ApiResult<LeaveResponse>.Fail(
                 new Error("forbidden", "You cannot decide your own leave request."), 403);
+        if (!isManager)
+        {
+            var owns = false;
+            if (existing.ChildId is { } childId && tenant is { UserId: { } uid, TenantId: { } ttid })
+                owns = (await leave.StudentIdsForClassTeacherAsync(uid, ttid, ct)).Contains(childId);
+            if (!owns)
+                return ApiResult<LeaveResponse>.Fail(
+                    new Error("forbidden", "You can only decide leave for students in your own class."), 403);
+        }
         var decided = (await leave.DecideAsync(id, req.Status, tenant.UserId, req.DecidedNote, ct))!;
         if (tenant.TenantId is { } tid)
             await live.PublishAsync(tid, LiveEventTypes.Leave, ct: ct);

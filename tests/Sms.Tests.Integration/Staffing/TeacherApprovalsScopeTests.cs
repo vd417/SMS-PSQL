@@ -101,15 +101,6 @@ public class TeacherApprovalsScopeTests(PostgresFixture fx)
         rows.Should().HaveCount(3);
     }
 
-    [Fact]
-    public async Task Teacher_cannot_decide()
-    {
-        var (tenantId, teacherUserId, _, _) = await SeedAsync(teacherHasClass: true);
-        var res = await Client(MakeApp(fx), teacherUserId, tenantId, Policies.Teacher)
-            .PatchAsync($"/v1/approvals/{Guid.NewGuid()}", new StringContent("{\"status\":\"approved\"}", System.Text.Encoding.UTF8, "application/json"));
-        res.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
     [Theory]
     [InlineData(Policies.Staff)]
     [InlineData(Policies.StudentOrParent)]
