@@ -34,11 +34,13 @@ public class PrincipalPolicyTests(PostgresFixture fx)
     }
 
     [Fact]
-    public async Task Teacher_role_is_forbidden_on_approvals()
+    public async Task Teacher_role_can_read_scoped_approvals()
     {
+        // Class teachers may read /approvals; the backend scopes the list to their own
+        // class's student leave (empty here — this teacher is not a class teacher).
         await using var app = App();
         var client = TenantClient(app, Guid.NewGuid(), Guid.NewGuid(), [Policies.Teacher]);
-        (await client.GetAsync("/v1/approvals")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await client.GetAsync("/v1/approvals")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -60,12 +62,15 @@ public class PrincipalPolicyTests(PostgresFixture fx)
     }
 
     [Fact]
-    public async Task Teacher_role_is_forbidden_on_patch_approval()
+    public async Task Teacher_patch_of_unknown_approval_is_not_found()
     {
+        // Teachers now pass the endpoint policy (they may decide their own class's student
+        // leave), so an unknown id resolves to 404 before the class-scope check. Deciding a
+        // leave outside their class is covered (403) in TeacherDecideScopeTests.
         await using var app = App();
         var client = TenantClient(app, Guid.NewGuid(), Guid.NewGuid(), [Policies.Teacher]);
         var resp = await client.PatchAsJsonAsync($"/v1/approvals/{Guid.NewGuid()}",
             new { status = "approved" });
-        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        resp.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

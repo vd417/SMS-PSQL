@@ -34,6 +34,8 @@ public interface IAuthDao
     Task<UserRecord?> EnsureParentLoginAsync(string admissionId, CancellationToken ct = default);
     /// <summary>Fetch the staff login for an email, creating it from dbo.Staff.Email when missing (no invite needed).</summary>
     Task<UserRecord?> EnsureStaffLoginAsync(string email, CancellationToken ct = default);
+    /// <summary>Fetch the teacher login for an email, creating it from dbo.Teachers.Email when missing (no invite needed; invite is reserved for CRM roles).</summary>
+    Task<UserRecord?> EnsureTeacherLoginAsync(string email, CancellationToken ct = default);
     Task<UserRecord?> GetByEmailAndTenantAsync(string email, Guid tenantId, CancellationToken ct = default);
     Task<IReadOnlyList<string>> GetRolesAsync(Guid userId, CancellationToken ct = default);
     Task SetPasswordAsync(Guid userId, string passwordHash, CancellationToken ct = default);

@@ -90,6 +90,9 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
     public Task<UserRecord?> EnsureStaffLoginAsync(string email, CancellationToken ct = default) =>
         QuerySingleProcAsync<UserRecord>(AuthQueries.EnsureStaffLogin, new { Email = email }, ct);
 
+    public Task<UserRecord?> EnsureTeacherLoginAsync(string email, CancellationToken ct = default) =>
+        QuerySingleProcAsync<UserRecord>(AuthQueries.EnsureTeacherLogin, new { Email = email }, ct);
+
     public async Task<UserRecord?> GetByEmailAndTenantAsync(string email, Guid tenantId, CancellationToken ct = default) =>
         (await QueryInlineAsync<UserRecord>(
             """
