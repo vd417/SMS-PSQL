@@ -108,6 +108,16 @@ public class TeacherDecideScopeTests(PostgresFixture fx)
         res.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    [Theory]
+    [InlineData(Policies.Staff)]
+    [InlineData(Policies.StudentOrParent)]
+    public async Task Non_teacher_non_manager_roles_are_forbidden_on_decide(string role)
+    {
+        var s = await SeedAsync(teacherHasClass: true);
+        var res = await Decide(Client(MakeApp(fx), Guid.NewGuid(), s.TenantId, role), s.OwnLeave);
+        res.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     [Fact]
     public async Task Principal_still_decides_staff_and_student_leave()
     {
