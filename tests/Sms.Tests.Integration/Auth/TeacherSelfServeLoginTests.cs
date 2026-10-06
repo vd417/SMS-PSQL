@@ -79,6 +79,12 @@ public class TeacherSelfServeLoginTests(PostgresFixture fx)
                 "SELECT \"Role\" FROM \"dbo\".\"UserRoles\" WHERE \"UserId\" = @userId", new { userId });
             role.Should().Be("school.teacher");
 
+            // Key safety property: no password is set — the only way to complete is the OTP
+            // sent to the teacher's own email. Materializing the row is not itself a login.
+            var hasPassword = await conn.QuerySingleAsync<bool>(
+                "SELECT \"PasswordHash\" IS NOT NULL FROM \"dbo\".\"Users\" WHERE \"Id\" = @userId", new { userId });
+            hasPassword.Should().BeFalse();
+
             var linked = await conn.QuerySingleAsync<bool>(
                 "SELECT \"UserId\" IS NOT NULL FROM \"dbo\".\"Teachers\" WHERE \"Id\" = @teacherId", new { teacherId });
             linked.Should().BeTrue("Teachers.UserId should be linked to the new login");
@@ -105,7 +111,7 @@ public class TeacherSelfServeLoginTests(PostgresFixture fx)
 
         var anon = app.CreateClient();
         var res = await anon.PostAsJsonAsync("/v1/auth/password/forgot", new { identifier = email });
-        res.StatusCode.Should().NotBe(HttpStatusCode.OK, await res.Content.ReadAsStringAsync());
+        res.StatusCode.Should().Be(HttpStatusCode.NotFound, await res.Content.ReadAsStringAsync());
 
         await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
         {
