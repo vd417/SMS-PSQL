@@ -34,6 +34,22 @@ public sealed class LeaveRepository(IDbConnectionFactory factory) : BaseReposito
             $"SELECT {Cols} FROM \"dbo\".\"LeaveRequests\" WHERE \"RequesterId\" = @requesterId ORDER BY \"AppliedOn\" DESC",
             new { requesterId }, ct);
 
+    /// Active students in the classes the given teacher user is ClassTeacherId of.
+    public Task<IReadOnlyList<Guid>> StudentIdsForClassTeacherAsync(
+        Guid teacherUserId, Guid tenantId, CancellationToken ct = default) =>
+        QueryInlineAsync<Guid>("""
+            SELECT s."Id"
+            FROM "dbo"."Teachers" t
+            JOIN "dbo"."Classes" c ON c."ClassTeacherId" = t."Id"
+            JOIN "dbo"."Students" s ON (
+                (c."Grade" IS NOT NULL AND c."Section" IS NOT NULL
+                   AND s."Grade" = c."Grade" AND s."Section" = c."Section")
+                OR (c."Name" IS NOT NULL AND s."ClassLabel" = c."Name"))
+            WHERE t."UserId" = @teacherUserId
+              AND s."Status" = 'active'
+              AND s."TenantId" = @tenantId
+            """, new { teacherUserId, tenantId }, ct);
+
     public Task<IReadOnlyList<LeaveResponse>> ListByStatusAsync(string? status, CancellationToken ct = default)
     {
         var all = string.IsNullOrWhiteSpace(status)
