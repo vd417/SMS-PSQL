@@ -4,8 +4,10 @@ namespace Sms.Modules.Staffing.Contracts;
 // ran — it won't mix a matched-prefix constructor with leftover property setters. Priority
 // is now a real, always-present column (default 'medium'), so it's baked into the primary
 // 14-param constructor - GetAsync/ListMineAsync/Leave_Create consistently return 14 columns.
-// RequesterName/DecidedByName are JOIN-derived (ListByStatusAsync + Leave_Decide, 16 columns),
-// so they stay trailing init-only properties with extra constructors, same reasoning as Task 6.
+// RequesterName/DecidedByName are JOIN-derived (Leave_Decide returns 16 columns), so they stay
+// trailing init-only properties with extra constructors, same reasoning as Task 6.
+// ListByStatusAsync returns 22 columns (14 base + RequesterName + DecidedByName + RequesterRole
+// + 5 student fields) and is matched by a dedicated 22-param constructor.
 public sealed record LeaveResponse(
     Guid Id, Guid TenantId, Guid? RequesterId, Guid? ChildId, string Type, DateTime? FromDate, DateTime? ToDate,
     string? Reason, string? Substitute, string Status, DateTime? AppliedOn, string? DecidedNote, string Priority,
