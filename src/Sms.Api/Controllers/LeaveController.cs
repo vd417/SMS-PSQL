@@ -23,9 +23,13 @@ public sealed class LeaveController(IStaffingService staffing) : ApiControllerBa
         FromResult(await staffing.CreateLeaveAsync(req, ct));
 
     [HttpGet("approvals")]
-    [Authorize(Policy = Policies.Principal)]
-    public async Task<IActionResult> ListApprovals([FromQuery] string? status, CancellationToken ct) =>
-        FromResult(await staffing.ListApprovalsAsync(status, ct));
+    [Authorize(Policy = AuthorizationPolicies.TeacherApp)]
+    public async Task<IActionResult> ListApprovals([FromQuery] string? status, CancellationToken ct)
+    {
+        var isManager = User.IsInRole(Policies.Principal)
+            || User.IsInRole(Policies.SchoolAdmin) || User.IsInRole(Policies.SchoolOwner);
+        return FromResult(await staffing.ListApprovalsAsync(status, isManager, ct));
+    }
 
     [HttpPatch("approvals/{id:guid}")]
     [Authorize(Policy = Policies.Principal)]

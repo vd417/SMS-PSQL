@@ -30,7 +30,7 @@ public interface IStaffingService
     Task<ApiResult<IReadOnlyList<LeaveResponse>>> ListMyLeaveAsync(CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<LeaveBalanceResponse>>> GetMyLeaveBalancesAsync(CancellationToken ct = default);
     Task<ApiResult<LeaveResponse>> CreateLeaveAsync(CreateLeaveRequest req, CancellationToken ct = default);
-    Task<ApiResult<IReadOnlyList<LeaveResponse>>> ListApprovalsAsync(string? status, CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<LeaveResponse>>> ListApprovalsAsync(string? status, bool isManager, CancellationToken ct = default);
     Task<ApiResult<LeaveResponse>> DecideLeaveAsync(Guid id, DecideLeaveRequest req, CancellationToken ct = default);
 
     // Admin/principal document management for a specific staff member — distinct from
@@ -291,9 +291,14 @@ public sealed class StaffingService(
     }
 
     public async Task<ApiResult<IReadOnlyList<LeaveResponse>>> ListApprovalsAsync(
-        string? status, CancellationToken ct = default)
+        string? status, bool isManager, CancellationToken ct = default)
     {
-        var rows = await leave.ListByStatusAsync(status ?? "pending", ct);
+        if (isManager)
+            return ApiResult<IReadOnlyList<LeaveResponse>>.Ok(await leave.ListByStatusAsync(status ?? "pending", null, ct));
+        if (tenant is not { UserId: { } uid, TenantId: { } tid })
+            return ApiResult<IReadOnlyList<LeaveResponse>>.Fail(new Error("forbidden", "no tenant context"), 403);
+        var childIds = await leave.StudentIdsForClassTeacherAsync(uid, tid, ct);
+        var rows = await leave.ListByStatusAsync(status ?? "pending", childIds.ToArray(), ct);
         return ApiResult<IReadOnlyList<LeaveResponse>>.Ok(rows);
     }
 

@@ -50,7 +50,8 @@ public sealed class LeaveRepository(IDbConnectionFactory factory) : BaseReposito
               AND s."TenantId" = @tenantId
             """, new { teacherUserId, tenantId }, ct);
 
-    public Task<IReadOnlyList<LeaveResponse>> ListByStatusAsync(string? status, CancellationToken ct = default)
+    public Task<IReadOnlyList<LeaveResponse>> ListByStatusAsync(
+        string? status, IReadOnlyCollection<Guid>? childScope = null, CancellationToken ct = default)
     {
         var all = string.IsNullOrWhiteSpace(status)
             || status.Equals("all", StringComparison.OrdinalIgnoreCase);
@@ -71,11 +72,14 @@ public sealed class LeaveRepository(IDbConnectionFactory factory) : BaseReposito
                    COALESCE(st."ClassLabel", st."Grade") AS "StudentClass",
                    st."Section" AS "StudentSection", st."Roll" AS "StudentRoll"
             """;
-        var sql = all
-            ? $"{select} {from} ORDER BY lr.\"AppliedOn\" DESC"
-            : $"{select} {from} WHERE lr.\"Status\" = @status ORDER BY lr.\"AppliedOn\" DESC";
-        return all
-            ? QueryInlineAsync<LeaveResponse>(sql, new { }, ct)
-            : QueryInlineAsync<LeaveResponse>(sql, new { status }, ct);
+        // childScope non-null => restrict to those child ids (also drops null-ChildId staff leave).
+        // An empty scope matches nothing (= ANY('{}')); it is NOT "no filter".
+        var conds = new List<string>();
+        if (!all) conds.Add("lr.\"Status\" = @status");
+        if (childScope is not null) conds.Add("lr.\"ChildId\" = ANY(@childScope)");
+        var where = conds.Count == 0 ? "" : " WHERE " + string.Join(" AND ", conds);
+        var sql = $"{select} {from}{where} ORDER BY lr.\"AppliedOn\" DESC";
+        return QueryInlineAsync<LeaveResponse>(sql,
+            new { status = all ? null : status, childScope = childScope?.ToArray() }, ct);
     }
 }
