@@ -14,6 +14,11 @@ public sealed record LeaveResponse(
     public string? RequesterName { get; init; }
     public string? DecidedByName { get; init; }
     public string? RequesterRole { get; init; }
+    public string? StudentName { get; init; }
+    public string? AdmissionNo { get; init; }
+    public string? StudentClass { get; init; }
+    public string? StudentSection { get; init; }
+    public int? StudentRoll { get; init; }
 
     public LeaveResponse(
         Guid Id, Guid TenantId, Guid? RequesterId, Guid? ChildId, string Type, DateTime? FromDate, DateTime? ToDate,
@@ -37,6 +42,22 @@ public sealed record LeaveResponse(
         string? AttachmentUrls, string? RequesterName, string? DecidedByName, string? RequesterRole)
         : this(Id, TenantId, RequesterId, ChildId, Type, FromDate, ToDate, Reason, Substitute, Status, AppliedOn, DecidedNote, Priority, AttachmentUrls, RequesterName, DecidedByName) =>
         this.RequesterRole = RequesterRole;
+
+    // ListByStatusAsync with the Students join (22 columns: 17 above + 5 student fields).
+    // Dapper needs an exact-arity constructor match, same reasoning as the constructors above.
+    public LeaveResponse(
+        Guid Id, Guid TenantId, Guid? RequesterId, Guid? ChildId, string Type, DateTime? FromDate, DateTime? ToDate,
+        string? Reason, string? Substitute, string Status, DateTime? AppliedOn, string? DecidedNote, string Priority,
+        string? AttachmentUrls, string? RequesterName, string? DecidedByName, string? RequesterRole,
+        string? StudentName, string? AdmissionNo, string? StudentClass, string? StudentSection, int? StudentRoll)
+        : this(Id, TenantId, RequesterId, ChildId, Type, FromDate, ToDate, Reason, Substitute, Status, AppliedOn, DecidedNote, Priority, AttachmentUrls, RequesterName, DecidedByName, RequesterRole)
+    {
+        this.StudentName = StudentName;
+        this.AdmissionNo = AdmissionNo;
+        this.StudentClass = StudentClass;
+        this.StudentSection = StudentSection;
+        this.StudentRoll = StudentRoll;
+    }
 }
 
 public sealed record LeaveBalanceResponse(string Type, int Total, int Used);
