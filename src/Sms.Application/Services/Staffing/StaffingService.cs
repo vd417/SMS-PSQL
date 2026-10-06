@@ -300,8 +300,11 @@ public sealed class StaffingService(
     public async Task<ApiResult<LeaveResponse>> DecideLeaveAsync(
         Guid id, DecideLeaveRequest req, CancellationToken ct = default)
     {
-        if (await leave.GetAsync(id, ct) is null)
+        if (await leave.GetAsync(id, ct) is not { } existing)
             return ApiResult<LeaveResponse>.Fail(new Error("not_found", "resource not found"), 404);
+        if (existing.RequesterId is { } reqId && reqId == tenant.UserId)
+            return ApiResult<LeaveResponse>.Fail(
+                new Error("forbidden", "You cannot decide your own leave request."), 403);
         var decided = (await leave.DecideAsync(id, req.Status, tenant.UserId, req.DecidedNote, ct))!;
         if (tenant.TenantId is { } tid)
             await live.PublishAsync(tid, LiveEventTypes.Leave, ct: ct);
