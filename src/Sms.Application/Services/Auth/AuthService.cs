@@ -816,6 +816,11 @@ public sealed class AuthService(
                 // get a Users row from Send invite, so this only ever fires for the rest.
                 var viaStaff = await users.EnsureStaffLoginAsync(trimmed, ct);
                 if (viaStaff is not null) return [viaStaff];
+                // Onboarded teachers (dbo.Teachers.Email) with no login yet — same self-serve
+                // model as staff: materialize the school.teacher login on demand so first-time
+                // "create password" / forgot works without an admin invite (invite stays for CRM roles).
+                var viaTeacher = await users.EnsureTeacherLoginAsync(trimmed, ct);
+                if (viaTeacher is not null) return [viaTeacher];
                 // Not a student's own address — check whether it's a guardian email on file
                 // and lazily provision/find that parent's login (no admission ID or role
                 // hint required; the plain guardian email is enough to resolve it).
