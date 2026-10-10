@@ -13,6 +13,11 @@ public sealed class ThreadController(IThreadService threads) : ApiControllerBase
     public async Task<IActionResult> List(CancellationToken ct) =>
         FromResult(await threads.ListAsync(ct));
 
+    // People a staff member can start a chat with (school management accounts).
+    [HttpGet("threads/contacts")]
+    public async Task<IActionResult> Contacts(CancellationToken ct) =>
+        FromResult(await threads.ListContactsAsync(ct));
+
     [HttpPost("threads")]
     public async Task<IActionResult> Create([FromBody] CreateThreadRequest req, CancellationToken ct) =>
         FromResult(await threads.CreateAsync(req, ct));

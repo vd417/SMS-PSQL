@@ -9,6 +9,7 @@ namespace Sms.Application.Services.Comms;
 public interface IThreadService
 {
     Task<ApiResult<IReadOnlyList<ChatThreadResponse>>> ListAsync(CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<ChatContactResponse>>> ListContactsAsync(CancellationToken ct = default);
     Task<ApiResult<ChatThreadResponse>> CreateAsync(CreateThreadRequest req, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<ChatMessageResponse>>> ListMessagesAsync(Guid threadId, CancellationToken ct = default);
     Task<ApiResult<ChatMessageResponse>> SendMessageAsync(Guid threadId, SendMessageRequest req, CancellationToken ct = default);
@@ -26,6 +27,15 @@ public sealed class ThreadService(CommsRepository repo, ITenantContext tenant, I
         if (tenant.UserId is not { } uid)
             return ApiResult<IReadOnlyList<ChatThreadResponse>>.Fail(new Error("unauthorized", "unauthorized"), 401);
         return ApiResult<IReadOnlyList<ChatThreadResponse>>.Ok(await repo.ListThreadsAsync(uid, ct));
+    }
+
+    public async Task<ApiResult<IReadOnlyList<ChatContactResponse>>> ListContactsAsync(CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { } tid)
+            return ApiResult<IReadOnlyList<ChatContactResponse>>.Fail(new Error("forbidden", "no tenant context"), 403);
+        if (tenant.UserId is not { } uid)
+            return ApiResult<IReadOnlyList<ChatContactResponse>>.Fail(new Error("unauthorized", "unauthorized"), 401);
+        return ApiResult<IReadOnlyList<ChatContactResponse>>.Ok(await repo.ListManagementContactsAsync(tid, uid, ct));
     }
 
     public async Task<ApiResult<ChatThreadResponse>> CreateAsync(CreateThreadRequest req, CancellationToken ct = default)

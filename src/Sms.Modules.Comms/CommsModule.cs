@@ -72,6 +72,9 @@ public sealed record ChatThreadResponse(
 public sealed record CreateThreadRequest(
     string Name, string? Role, bool Group, Guid? ChildId,
     string? ContactKind = null, Guid? ContactId = null);
+// A person a staff member can start a chat with (school management accounts). Kind is always
+// "user" (a CRM login addressed by its Users id); Role is a friendly label for the UI.
+public sealed record ChatContactResponse(Guid Id, string Kind, string Name, string Role);
 public sealed record ChatMessageResponse(
     Guid Id, Guid ThreadId, Guid? SenderId, string Text, DateTime SentAt, bool IsMine, string? ImageUrl)
 {
@@ -215,6 +218,38 @@ LEFT JOIN LATERAL (
 ) lm ON true
 WHERE th.""OwnerUserId"" = @ownerUserId
 ORDER BY th.""LastAt"" DESC", new { ownerUserId }, ct);
+
+    // School management accounts (owner / principal / vice-principal / admin) in the caller's
+    // tenant that a staff member can start a chat with. kind is always "user" (resolved by Users id).
+    public Task<IReadOnlyList<ChatContactResponse>> ListManagementContactsAsync(
+        Guid tenantId, Guid callerId, CancellationToken ct = default) =>
+        QueryInlineAsync<ChatContactResponse>(@"
+SELECT u.""Id"",
+       'user' AS ""Kind"",
+       COALESCE(NULLIF(btrim(u.""Name""), ''),
+         CASE
+           WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.owner') THEN 'School Owner'
+           WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.principal') THEN 'Principal'
+           WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%vice%principal%') THEN 'Vice Principal'
+           WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.admin') THEN 'School Admin'
+           ELSE 'School Office'
+         END) AS ""Name"",
+       CASE
+         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.owner') THEN 'School Owner'
+         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.principal') THEN 'Principal'
+         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%vice%principal%') THEN 'Vice Principal'
+         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.admin') THEN 'School Admin'
+         ELSE ''
+       END AS ""Role""
+FROM ""dbo"".""Users"" u
+WHERE u.""TenantId"" = @tenantId
+  AND u.""Id"" <> @callerId
+  AND EXISTS (
+    SELECT 1 FROM ""dbo"".""UserRoles"" ur
+    WHERE ur.""UserId"" = u.""Id""
+      AND (ur.""Role"" IN ('school.owner','school.principal','school.admin') OR ur.""Role"" LIKE '%vice%principal%')
+  )
+ORDER BY ""Name""", new { tenantId, callerId }, ct);
 
     public async Task<ChatThreadResponse?> CreateThreadAsync(
         Guid tenantId, Guid ownerUserId, CreateThreadRequest r, CancellationToken ct = default)
