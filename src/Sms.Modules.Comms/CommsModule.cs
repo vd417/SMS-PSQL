@@ -219,37 +219,48 @@ LEFT JOIN LATERAL (
 WHERE th.""OwnerUserId"" = @ownerUserId
 ORDER BY th.""LastAt"" DESC", new { ownerUserId }, ct);
 
-    // School management accounts (owner / principal / vice-principal / admin) in the caller's
-    // tenant that a staff member can start a chat with. kind is always "user" (resolved by Users id).
+    // People in the caller's tenant a staff member can start a chat with: school management
+    // (owner / principal / vice-principal / admin, kind=""user"" by Users id) and teachers
+    // (kind=""teacher"" by Teachers id). Management first, then teachers, each A–Z.
     public Task<IReadOnlyList<ChatContactResponse>> ListManagementContactsAsync(
         Guid tenantId, Guid callerId, CancellationToken ct = default) =>
         QueryInlineAsync<ChatContactResponse>(@"
-SELECT u.""Id"",
-       'user' AS ""Kind"",
-       COALESCE(NULLIF(btrim(u.""Name""), ''),
+SELECT x.""Id"", x.""Kind"", x.""Name"", x.""Role"" FROM (
+  SELECT u.""Id"",
+         'user' AS ""Kind"",
+         COALESCE(NULLIF(btrim(u.""Name""), ''),
+           CASE
+             WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.owner') THEN 'School Owner'
+             WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.principal') THEN 'Principal'
+             WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%vice%principal%') THEN 'Vice Principal'
+             WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.admin') THEN 'School Admin'
+             ELSE 'School Office'
+           END) AS ""Name"",
          CASE
            WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.owner') THEN 'School Owner'
            WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.principal') THEN 'Principal'
            WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%vice%principal%') THEN 'Vice Principal'
            WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.admin') THEN 'School Admin'
-           ELSE 'School Office'
-         END) AS ""Name"",
-       CASE
-         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.owner') THEN 'School Owner'
-         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.principal') THEN 'Principal'
-         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" LIKE '%vice%principal%') THEN 'Vice Principal'
-         WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.admin') THEN 'School Admin'
-         ELSE ''
-       END AS ""Role""
-FROM ""dbo"".""Users"" u
-WHERE u.""TenantId"" = @tenantId
-  AND u.""Id"" <> @callerId
-  AND EXISTS (
-    SELECT 1 FROM ""dbo"".""UserRoles"" ur
-    WHERE ur.""UserId"" = u.""Id""
-      AND (ur.""Role"" IN ('school.owner','school.principal','school.admin') OR ur.""Role"" LIKE '%vice%principal%')
-  )
-ORDER BY ""Name""", new { tenantId, callerId }, ct);
+           ELSE ''
+         END AS ""Role"",
+         0 AS ""Sort""
+  FROM ""dbo"".""Users"" u
+  WHERE u.""TenantId"" = @tenantId
+    AND u.""Id"" <> @callerId
+    AND EXISTS (
+      SELECT 1 FROM ""dbo"".""UserRoles"" ur
+      WHERE ur.""UserId"" = u.""Id""
+        AND (ur.""Role"" IN ('school.owner','school.principal','school.admin') OR ur.""Role"" LIKE '%vice%principal%')
+    )
+  UNION ALL
+  SELECT t.""Id"", 'teacher' AS ""Kind"", t.""Name"" AS ""Name"", 'Teacher' AS ""Role"", 1 AS ""Sort""
+  FROM ""dbo"".""Teachers"" t
+  WHERE t.""TenantId"" = @tenantId
+    AND t.""UserId"" IS NOT NULL
+    AND t.""UserId"" <> @callerId
+    AND btrim(COALESCE(t.""Name"", '')) <> ''
+) x
+ORDER BY x.""Sort"", x.""Name""", new { tenantId, callerId }, ct);
 
     public async Task<ChatThreadResponse?> CreateThreadAsync(
         Guid tenantId, Guid ownerUserId, CreateThreadRequest r, CancellationToken ct = default)
