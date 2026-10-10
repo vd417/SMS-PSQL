@@ -5,6 +5,9 @@ obj/
 TestResults/
 *.log
 
+# local secrets for docker-compose (e.g. GOOGLE_ROUTES_API_KEY) — never commit
+.env
+
 # worktrees
 .worktrees
 

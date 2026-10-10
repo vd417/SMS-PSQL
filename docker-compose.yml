@@ -40,6 +40,10 @@ services:
       # DataProtection keys must survive `docker compose restart`/recreate or every school's
       # encrypted Razorpay secrets become permanently undecryptable — see dp-keys volume below.
       DataProtection__KeyPath: "/app/keys"
+      # Server-side Google Routes API key (NOT the frontend Maps-JS key, which is referrer-restricted
+      # and 403s from a server). Without it, RouteGeometryService returns "unavailable" and no road
+      # path is drawn. Supplied from the host env / a gitignored .env — never hardcode the key here.
+      GoogleRoutes__ApiKey: "${GOOGLE_ROUTES_API_KEY:-}"
     ports: ["5080:8080"]
     volumes:
       - dp-keys:/app/keys
