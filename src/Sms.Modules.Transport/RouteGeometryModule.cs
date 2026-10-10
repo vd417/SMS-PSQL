@@ -17,6 +17,18 @@ public interface IRouteStopSource
     Task<IReadOnlyList<RouteStopListItem>> ListRouteStopsAsync(Guid routeId, CancellationToken ct = default);
 }
 
+/// The configured school/campus location, used as the mandatory planned-route origin.
+public sealed record SchoolRouteOrigin(double Lat, double Lng, string? Name);
+
+public interface IRouteOriginSource
+{
+    /// The tenant's configured school location. Null when none is configured (no
+    /// SchoolLocations row and no usable Tenants fallback, i.e. effectively (0,0)).
+    /// Callers MUST treat null as "not configured" and never substitute a stop or a
+    /// GPS position as the origin.
+    Task<SchoolRouteOrigin?> GetSchoolOriginAsync(Guid tenantId, CancellationToken ct = default);
+}
+
 public interface IRouteGeometryStore
 {
     Task<RouteGeometryRow?> GetAsync(Guid routeId, CancellationToken ct = default);

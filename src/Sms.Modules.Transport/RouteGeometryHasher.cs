@@ -6,12 +6,18 @@ namespace Sms.Modules.Transport;
 
 public static class RouteGeometryHasher
 {
-    /// Deterministic hash over an ordered stop list. Any add/remove/reorder/coordinate
-    /// change to `RouteStops` for a route changes this value, which is how
+    /// Deterministic hash over the planned-route inputs: the (optional) school origin
+    /// followed by the ordered stop list. Any add/remove/reorder/coordinate change to
+    /// `RouteStops` — OR a move of the school origin — changes this value, which is how
     /// RouteGeometryService decides whether cached geometry can still be reused.
-    public static string Compute(IReadOnlyList<RouteStopListItem> orderedStops)
+    public static string Compute(
+        IReadOnlyList<RouteStopListItem> orderedStops, (double Lat, double Lng)? origin = null)
     {
         var sb = new StringBuilder();
+        if (origin is { } o)
+            sb.Append("O|")
+              .Append(o.Lat.ToString("R", CultureInfo.InvariantCulture)).Append('|')
+              .Append(o.Lng.ToString("R", CultureInfo.InvariantCulture)).Append(';');
         foreach (var s in orderedStops)
         {
             sb.Append(s.Id).Append('|')

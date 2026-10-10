@@ -15,6 +15,9 @@ public interface ITripService
     Task<ApiResult<StaffTripAssignmentResponse>> GetAssignmentAsync(CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<StaffRosterStudentResponse>>> GetRosterAsync(Guid tripId, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<StaffTripStopResponse>>> GetStopsAsync(Guid tripId, CancellationToken ct = default);
+    /// Admin/CRM operator path: a trip's stops (completed/current/remaining) without the
+    /// trip-participant check — the caller authorizes (TransportController Principal + tenant RLS).
+    Task<ApiResult<IReadOnlyList<StaffTripStopResponse>>> GetStopsAsOperatorAsync(Guid tripId, CancellationToken ct = default);
     Task<ApiResult> IngestPingsAsync(Guid tripId, BulkPingRequest req, CancellationToken ct = default);
     /// Admin/CRM operator path: same broadcast + heartbeat as driver ingest, without trip-participant check.
     Task<ApiResult> IngestOperatorPingsAsync(Guid tripId, BulkPingRequest req, CancellationToken ct = default);
@@ -176,6 +179,15 @@ public sealed class TripService(
             return ApiResult<IReadOnlyList<StaffTripStopResponse>>.Fail(new Error("forbidden", "no tenant/user context"), 403);
         if (await repo.GetParticipantRoleAsync(tid, tripId, uid, ct) is null)
             return ApiResult<IReadOnlyList<StaffTripStopResponse>>.Fail(new Error("forbidden", "not your trip"), 403);
+        return ApiResult<IReadOnlyList<StaffTripStopResponse>>.Ok(await repo.GetStopsAsync(tripId, ct));
+    }
+
+    public async Task<ApiResult<IReadOnlyList<StaffTripStopResponse>>> GetStopsAsOperatorAsync(Guid tripId, CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { })
+            return ApiResult<IReadOnlyList<StaffTripStopResponse>>.Fail(new Error("forbidden", "no tenant context"), 403);
+        // No participant check: this path is reached only from the Principal-gated admin fleet
+        // endpoint, and the repo query is tenant-scoped by RLS.
         return ApiResult<IReadOnlyList<StaffTripStopResponse>>.Ok(await repo.GetStopsAsync(tripId, ct));
     }
 

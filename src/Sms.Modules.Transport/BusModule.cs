@@ -72,7 +72,7 @@ public sealed record FleetBusRow(
     int StopCount, Guid? TripId, double? Lat, double? Lng, double? SpeedKmh, DateTime? LastPingAt, int StudentsRiding,
     int? Capacity, double? Heading);
 
-public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository(factory), IRouteStopSource
+public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository(factory), IRouteStopSource, IRouteOriginSource
 {
     private sealed record BusRow(Guid Id, string BusNo, string? RouteName, string? Driver, string? DriverPhone, Guid? RouteId = null);
     private sealed record RosterRow(Guid StudentId, string StudentName, Guid? StopId, string Status);
@@ -269,6 +269,24 @@ public sealed class BusRepository(IDbConnectionFactory factory) : BaseRepository
             "SELECT \"Id\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\" FROM \"dbo\".\"RouteStops\" WHERE \"RouteId\" = @routeId ORDER BY \"Seq\"",
             new { routeId }, ct);
         return rows.Select(s => new RouteStopListItem(s.Id, s.RouteId, s.Name, s.Seq, s.Lat, s.Lng)).ToList();
+    }
+
+    /// The tenant's configured campus location (same COALESCE source as attendance check-in:
+    /// SchoolLocations row, else the Tenants lat/lng fallback). Returns null when effectively
+    /// (0,0) so the planned-route origin is only ever a real, configured school location.
+    public async Task<SchoolRouteOrigin?> GetSchoolOriginAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var rows = await QueryInlineAsync<SchoolRouteOrigin>(
+            @"SELECT COALESCE(sl.""Lat"", t.""Lat"", 0) AS ""Lat"",
+                     COALESCE(sl.""Lng"", t.""Lng"", 0) AS ""Lng"",
+                     COALESCE(sl.""Name"", t.""Name"") AS ""Name""
+              FROM ""dbo"".""Tenants"" t
+              LEFT JOIN ""dbo"".""SchoolLocations"" sl ON sl.""TenantId"" = t.""Id""
+              WHERE t.""Id"" = @tenantId",
+            new { tenantId }, ct);
+        var o = rows.FirstOrDefault();
+        if (o is null || (o.Lat == 0 && o.Lng == 0)) return null;
+        return o;
     }
 
     public async Task<bool> RouteStopExistsAsync(Guid stopId, CancellationToken ct = default) =>

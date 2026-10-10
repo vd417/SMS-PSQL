@@ -42,6 +42,7 @@ public interface IBusService
     Task<ApiResult<TripResponse>> StartBusTripAsync(Guid busId, string direction, CancellationToken ct = default);
     Task<ApiResult> IngestBusTripPingsAsync(Guid busId, BulkPingRequest req, CancellationToken ct = default);
     Task<ApiResult<TripSummaryResponse>> EndBusTripAsync(Guid busId, CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<StaffTripStopResponse>>> GetBusTripStopsAsync(Guid busId, CancellationToken ct = default);
 }
 
 public sealed class BusService(
@@ -369,6 +370,18 @@ public sealed class BusService(
         if (tripId is null)
             return ApiResult<TripSummaryResponse>.Fail(new Error("no_active_trip", "no live trip for this bus"), 409);
         return await tripService.EndAsOperatorAsync(tripId.Value, ct);
+    }
+
+    /// Live stop progress (completed/current/remaining) for a bus's in-progress trip, for the
+    /// admin fleet/live map. Mirrors EndBusTripAsync: resolves the bus's live trip then returns
+    /// its stops via the operator path (Principal-authorized by the controller, tenant-scoped by RLS).
+    public async Task<ApiResult<IReadOnlyList<StaffTripStopResponse>>> GetBusTripStopsAsync(Guid busId, CancellationToken ct = default)
+    {
+        if (!GpsAllowed) return FeatureGate.Locked<IReadOnlyList<StaffTripStopResponse>>(FeatureCatalog.TransportGps);
+        var tripId = await repo.GetLiveTripIdForBusAsync(busId, ct);
+        if (tripId is null)
+            return ApiResult<IReadOnlyList<StaffTripStopResponse>>.Fail(new Error("no_active_trip", "no live trip for this bus"), 409);
+        return await tripService.GetStopsAsOperatorAsync(tripId.Value, ct);
     }
 
     public async Task<ApiResult> UpsertBoardingAsync(Guid busId, BusBoardingRequest req, CancellationToken ct = default)

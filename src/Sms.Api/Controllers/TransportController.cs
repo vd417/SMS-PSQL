@@ -154,4 +154,9 @@ public sealed class TransportController(IBusService bus, IStudentBusService stud
     [HttpPost("buses/{busId:guid}/trip/end")]
     public async Task<IActionResult> EndBusTrip(Guid busId, CancellationToken ct) =>
         FromResult(await bus.EndBusTripAsync(busId));
+
+    // Live stop progress (completed/current/remaining) for a bus's in-progress trip — admin fleet map.
+    [HttpGet("buses/{busId:guid}/trip/stops")]
+    public async Task<IActionResult> GetBusTripStops(Guid busId, CancellationToken ct) =>
+        FromResult(await bus.GetBusTripStopsAsync(busId, ct));
 }

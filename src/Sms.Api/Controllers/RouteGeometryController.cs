@@ -6,7 +6,8 @@ namespace Sms.Api.Controllers;
 
 public sealed record RouteGeometryResponse(
     Guid RouteId, string Status, string? Format, string? Geometry,
-    int? DistanceMeters, int? DurationSeconds, string StopSequenceHash, DateTime? GeneratedAt);
+    int? DistanceMeters, int? DurationSeconds, string StopSequenceHash, DateTime? GeneratedAt,
+    string? Reason);
 
 /// Canonical road-following route geometry, shared by every authorized consumer app
 /// (CRM/admin, teacher, parent/student, driver/staff) — one endpoint, one contract.
@@ -34,6 +35,6 @@ public sealed class RouteGeometryController(
         return OkData(new RouteGeometryResponse(
             result.RouteId, result.Status == RouteGeometryStatus.Available ? "available" : "unavailable",
             result.Format, result.Geometry, result.DistanceMeters, result.DurationSeconds,
-            result.StopSequenceHash, result.GeneratedAt));
+            result.StopSequenceHash, result.GeneratedAt, result.Reason));
     }
 }

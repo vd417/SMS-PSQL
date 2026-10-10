@@ -185,6 +185,7 @@ public static class ServiceCollectionExtensions
         builder.Services.AddHttpClient("google-routes");
         builder.Services.AddSingleton<IGoogleRoutesClient, GoogleRoutesClient>();
         builder.Services.AddScoped<IRouteStopSource>(sp => sp.GetRequiredService<BusRepository>());
+        builder.Services.AddScoped<IRouteOriginSource>(sp => sp.GetRequiredService<BusRepository>());
         builder.Services.AddScoped<IRouteGeometryStore>(sp => sp.GetRequiredService<RouteGeometryRepository>());
         builder.Services.AddScoped<IRouteGeometryService, RouteGeometryService>();
 
