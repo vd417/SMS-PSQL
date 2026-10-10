@@ -118,7 +118,12 @@ public static class ServiceCollectionExtensions
         builder.Services.AddSingleton(new ConsoleOtpSender(builder.Environment.IsDevelopment()));
         builder.Services.AddSingleton<IOtpSender, ChannelOtpSender>();
         builder.Services.AddHostedService<EmailDispatchWorker>();
-        builder.Services.AddHostedService<Sms.Api.Workers.TransportOfflineSweepWorker>();
+        // Gated so integration tests can switch it off (TransportOfflineSweep:Enabled=false). The sweep
+        // scans every tenant and auto-ends matching trips; left running against the shared test database
+        // it races with — and ends the trips out from under — the Transport auto-end tests. Defaults on,
+        // so production and any unset environment keep the worker.
+        if (builder.Configuration.GetValue("TransportOfflineSweep:Enabled", true))
+            builder.Services.AddHostedService<Sms.Api.Workers.TransportOfflineSweepWorker>();
         builder.Services.AddSingleton<IPaymentGateway, StubPaymentGateway>();
         builder.Services.AddSingleton<IAuditLogger, AuditLogger>();
         // Keys MUST be persisted somewhere durable, or every school's encrypted Razorpay secrets
