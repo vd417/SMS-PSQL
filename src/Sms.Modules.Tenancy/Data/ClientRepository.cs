@@ -18,7 +18,8 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
           (SELECT count(*) FROM "dbo"."Staff" st WHERE st."TenantId" = t."Id" AND st."Status" = 'active')
         ) AS int) AS "StaffCount",
         t."StorageGb", t."LimitsStudents", t."LimitsStaff", t."LimitsStorageGb", t."CreatedAt", t."Csm", t."HealthScore",
-        t."ContactName", t."ContactEmail", t."ContactPhone", t."Address", t."LogoUrl", t."ImageUrl"
+        t."ContactName", t."ContactEmail", t."ContactPhone", t."Address", t."LogoUrl", t."ImageUrl",
+        t."IdProofType", t."IdProofUrl"
         FROM "dbo"."Tenants" t
         """;
 
@@ -62,7 +63,7 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
         {
             r.Name, r.Slug, r.Country,
             ContactName = r.AdminName, ContactEmail = r.AdminEmail, ContactPhone = r.AdminPhone,
-            r.Address, r.PlanId, r.Csm, r.LogoUrl, r.ImageUrl
+            r.Address, r.PlanId, r.Csm, r.LogoUrl, r.ImageUrl, r.IdProofType, r.IdProofUrl
         }, ct);
 
     public Task<ClientRow?> UpdateProfileAsync(Guid id, UpdateSchoolProfileRequest r, CancellationToken ct = default) =>

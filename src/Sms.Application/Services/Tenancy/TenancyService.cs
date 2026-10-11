@@ -102,8 +102,20 @@ public sealed class TenancyService(
 
     public async Task<ApiResult<ClientResponse>> CreateClientAsync(CreateClientRequest req, CancellationToken ct = default)
     {
+        if (!string.IsNullOrWhiteSpace(req.IdProofType) &&
+            req.IdProofType is not ("pan" or "aadhaar"))
+            return ApiResult<ClientResponse>.Fail(
+                new Error("invalid_request", "ID proof type must be 'pan' or 'aadhaar'"), 422);
+        if (DocumentUrlValidation.Validate(req.IdProofUrl) is { } idProofError)
+            return ApiResult<ClientResponse>.Fail(idProofError, 422);
+
         var slug = await clients.AllocateUniqueSlugAsync(req.Slug, ct);
-        var create = req with { Slug = slug };
+        var create = req with
+        {
+            Slug = slug,
+            IdProofType = string.IsNullOrWhiteSpace(req.IdProofType) ? null : req.IdProofType,
+            IdProofUrl = DocumentUrlValidation.Normalize(req.IdProofUrl),
+        };
         ClientRow? row;
         try
         {

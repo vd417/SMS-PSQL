@@ -145,6 +145,64 @@ public class CatreClientsTests(PostgresFixture fx)
     }
 
     [Fact]
+    public async Task Client_create_persists_id_proof()
+    {
+        await using var app = App();
+        var client = PlatformClient(app);
+        var gold = await CreatePlanAsync(client, "Gold", "gold", 14999);
+
+        var created = await Data(await client.PostAsJsonAsync("/v1/clients", new
+        {
+            name = "Greenwood High", slug = $"greenwood-{Guid.NewGuid():N}", country = "Maharashtra",
+            admin_name = "Priya Sharma", admin_email = "admin@greenwood.edu.in", admin_phone = "+91 98200 11111",
+            plan_id = gold, trial_days = 14,
+            id_proof_type = "pan", id_proof_url = "data:application/pdf;base64,JVBERi0="
+        }), HttpStatusCode.Created);
+
+        created.GetProperty("id_proof_type").GetString().Should().Be("pan");
+        created.GetProperty("id_proof_url").GetString().Should().StartWith("data:application/pdf");
+
+        var id = created.GetProperty("id").GetGuid();
+        var got = await Data(await client.GetAsync($"/v1/clients/{id}"), HttpStatusCode.OK);
+        got.GetProperty("id_proof_type").GetString().Should().Be("pan");
+        got.GetProperty("id_proof_url").GetString().Should().StartWith("data:application/pdf");
+    }
+
+    [Fact]
+    public async Task Client_create_rejects_bad_id_proof_type()
+    {
+        await using var app = App();
+        var client = PlatformClient(app);
+        var gold = await CreatePlanAsync(client, "Gold", "gold", 14999);
+
+        var res = await client.PostAsJsonAsync("/v1/clients", new
+        {
+            name = "Bad Type", slug = $"bad-type-{Guid.NewGuid():N}", country = "Maharashtra",
+            admin_name = "A", admin_email = "a@b.com", admin_phone = "+91 90000 00000",
+            plan_id = gold, trial_days = 14,
+            id_proof_type = "passport", id_proof_url = "data:application/pdf;base64,JVBERi0="
+        });
+        res.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task Client_create_rejects_oversize_id_proof()
+    {
+        await using var app = App();
+        var client = PlatformClient(app);
+        var gold = await CreatePlanAsync(client, "Gold", "gold", 14999);
+
+        var res = await client.PostAsJsonAsync("/v1/clients", new
+        {
+            name = "Too Big", slug = $"too-big-{Guid.NewGuid():N}", country = "Maharashtra",
+            admin_name = "A", admin_email = "a@b.com", admin_phone = "+91 90000 00000",
+            plan_id = gold, trial_days = 14,
+            id_proof_type = "pan", id_proof_url = "data:application/pdf;base64," + new string('A', 3_500_001)
+        });
+        res.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
     public async Task Clients_requires_platform_auth()
     {
         await using var app = App();

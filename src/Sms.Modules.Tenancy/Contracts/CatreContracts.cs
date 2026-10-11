@@ -9,12 +9,14 @@ public sealed record ClientResponse(
     int StudentsCount, int StaffCount, decimal StorageGb, ClientLimits Limits,
     DateTime Created, string? Csm, int HealthScore,
     string? ContactName, string? ContactEmail, string? ContactPhone, string? Address,
-    string? LogoUrl = null, string? ImageUrl = null);
+    string? LogoUrl = null, string? ImageUrl = null,
+    string? IdProofType = null, string? IdProofUrl = null);
 
 public sealed record CreateClientRequest(
     string Name, string Slug, string? Country, string? AdminName, string? AdminEmail,
     string? AdminPhone, Guid PlanId, int TrialDays, string? Csm, string? Address = null,
-    string? LogoUrl = null, string? ImageUrl = null);
+    string? LogoUrl = null, string? ImageUrl = null,
+    string? IdProofType = null, string? IdProofUrl = null);
 
 /// <summary>Partial update of school branding / contact. Null fields are left unchanged; Logo/Image use Set* flags.</summary>
 public sealed record UpdateSchoolProfileRequest(
@@ -46,7 +48,8 @@ public sealed record ClientRow(
     string? Tier, decimal Mrr, int StudentsCount, int StaffCount, decimal StorageGb,
     int? LimitsStudents, int? LimitsStaff, int? LimitsStorageGb, DateTime CreatedAt, string? Csm, int HealthScore,
     string? ContactName, string? ContactEmail, string? ContactPhone, string? Address,
-    string? LogoUrl = null, string? ImageUrl = null);
+    string? LogoUrl = null, string? ImageUrl = null,
+    string? IdProofType = null, string? IdProofUrl = null);
 
 // ---- Plan ----
 public sealed record PlanLimits(int Students, int Staff, int StorageGb);
@@ -77,7 +80,8 @@ public static class CatreMappers
         r.StudentsCount, r.StaffCount, r.StorageGb,
         new ClientLimits(r.LimitsStudents, r.LimitsStaff, r.LimitsStorageGb),
         r.CreatedAt, r.Csm, r.HealthScore,
-        r.ContactName, r.ContactEmail, r.ContactPhone, r.Address, r.LogoUrl, r.ImageUrl);
+        r.ContactName, r.ContactEmail, r.ContactPhone, r.Address, r.LogoUrl, r.ImageUrl,
+        r.IdProofType, r.IdProofUrl);
 
     public static PlanResponse ToResponse(this PlanRow r) => new(
         r.Id, r.Name, r.Tier, r.Pricing, r.Price, r.PerStudent, r.MinStudents, r.Period,
