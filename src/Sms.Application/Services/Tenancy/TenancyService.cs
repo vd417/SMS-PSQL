@@ -483,7 +483,21 @@ public sealed class TenancyService(
         if (await onboarding.GetAsync(id) is null)
             return ApiResult<OnboardingItemResponse>.Fail(new Error("not_found", "resource not found"), 404);
         await onboarding.SetChecklistAsync(id, req.Label, req.Done);
-        return ApiResult<OnboardingItemResponse>.Ok((await onboarding.GetAsync(id))!);
+        var item = (await onboarding.GetAsync(id))!;
+
+        // When every setup task is complete, auto-activate the tied client (status -> active).
+        // SetClientStatusAsync also advances the card to the 'active' stage, so it leaves the pipeline.
+        if (item.TenantId is { } tenantId
+            && item.Stage != "active"
+            && item.Checklist.Count > 0
+            && item.Checklist.All(c => c.Done))
+        {
+            var res = await SetClientStatusAsync(tenantId, new SetStatusRequest("active", "All onboarding tasks complete"), ct);
+            if (!res.IsSuccess)
+                return ApiResult<OnboardingItemResponse>.Fail(res.Error!, res.StatusCode);
+            item = (await onboarding.GetAsync(id))!;
+        }
+        return ApiResult<OnboardingItemResponse>.Ok(item);
     }
 
     public Task<IReadOnlyList<TicketResponse>> ListTicketsAsync(string? status, string? q, CancellationToken ct = default) =>
