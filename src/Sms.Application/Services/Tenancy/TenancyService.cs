@@ -277,7 +277,9 @@ public sealed class TenancyService(
         if (plan is null)
             return;
 
-        var seats = CatreMappers.BillableSeats(plan, client.StudentsCount, client.LimitsStudents ?? 0);
+        // Bill on the actual/committed student count (seeded on the tenant at onboarding and
+        // kept live by SIS), floored at the plan minimum — NOT the plan capacity.
+        var seats = CatreMappers.BillableSeats(plan, client.StudentsCount, fallbackSeats: 0);
         var amount = CatreMappers.ComputeMonthlyAmount(plan, client.StudentsCount, seats);
 
         if (client.Mrr != amount)
@@ -326,7 +328,7 @@ public sealed class TenancyService(
         var plan = await plans.GetAsync(req.PlanId, ct);
         if (plan is not null)
         {
-            var amount = CatreMappers.ComputeMonthlyAmount(plan, row.StudentsCount, row.LimitsStudents ?? 0);
+            var amount = CatreMappers.ComputeMonthlyAmount(plan, row.StudentsCount, seats: 0);
             if (row.Mrr != amount)
                 row = await clients.SetMrrAsync(id, amount, ct) ?? row;
         }
