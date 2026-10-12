@@ -260,6 +260,57 @@ public class TripBroadcastTests(PostgresFixture fx)
         second.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
+    /// dbo.trip_start auto-supersedes an ABANDONED never-pinged trip rather than wedging the bus
+    /// (migration 0021). A trip whose driver and conductor both never pinged was started but never
+    /// tracked (device never got GPS / app closed immediately); once it's older than the 2-minute
+    /// grace, a fresh Start ends it and proceeds instead of returning 409 and stranding the bus
+    /// until the 30-minute offline sweep. A trip that HAS pinged (a real moving trip) still blocks
+    /// — covered by Starting_a_second_trip_on_a_bus_already_live_is_rejected above (its first trip
+    /// is <2 min old, so the grace also spares a genuinely fresh trip).
+    [Fact]
+    public async Task Starting_supersedes_an_abandoned_never_pinged_trip()
+    {
+        var (app, _, _) = App();
+        await using var _dispose = app;
+        var tenantId = Guid.NewGuid();
+        var busId = Guid.NewGuid();
+        var staleTripId = Guid.NewGuid();
+        var busNo = $"KA-{Guid.NewGuid():N}"[..12];
+
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
+                new { Id = busId, TenantId = tenantId, BusNo = busNo });
+            // An abandoned trip: live, started 5 minutes ago, never pinged by driver or conductor.
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Trips\" (\"Id\", \"TenantId\", \"BusId\", \"BusNo\", \"Direction\", \"Status\", \"StartedAt\") " +
+                "VALUES (@Id, @TenantId, @BusId, @BusNo, 'pickup', 'live', now() - interval '5 minutes')",
+                new { Id = staleTripId, TenantId = tenantId, BusId = busId, BusNo = busNo });
+        }
+
+        // Start must succeed — the abandoned trip is superseded, not a blocker.
+        var driver = StaffClient(app, tenantId, Guid.NewGuid());
+        var start = await driver.PostAsJsonAsync("/v1/staff/trips", new { direction = "pickup", bus_no = busNo });
+        start.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
+            // The abandoned trip is now ended, and exactly one live trip remains on the bus.
+            var staleStatus = await conn.QuerySingleAsync<string>(
+                "SELECT \"Status\" FROM \"dbo\".\"Trips\" WHERE \"Id\" = @id", new { id = staleTripId });
+            staleStatus.Should().Be("ended");
+            var liveCount = await conn.QuerySingleAsync<long>(
+                "SELECT count(*) FROM \"dbo\".\"Trips\" WHERE \"BusId\" = @busId AND \"Status\" IN ('live', 'arrived')",
+                new { busId });
+            liveCount.Should().Be(1);
+        }
+    }
+
     /// A ping landing on (or within) a route stop's arrival radius must be reflected in the
     /// same BusLiveSnapshotResponse pushed to fleet subscribers — this is the signal a live map
     /// or the confirm-arrival screen relies on to know a bus has reached its next stop, without
