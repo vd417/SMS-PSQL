@@ -311,6 +311,49 @@ public class TripBroadcastTests(PostgresFixture fx)
         }
     }
 
+    /// dbo.trip_start is idempotent for the SAME driver (migration 0022): trip_start gets the
+    /// caller's user id as DriverId, so a re-tap of Start by the same user on a bus that already
+    /// has their own live trip must RESUME that trip (return it, 201) rather than 409 on the
+    /// user's own running trip. A different driver is still rejected — covered by
+    /// Starting_a_second_trip_on_a_bus_already_live_is_rejected above.
+    [Fact]
+    public async Task Re_starting_as_the_same_driver_resumes_the_existing_trip()
+    {
+        var (app, _, _) = App();
+        await using var _dispose = app;
+        var tenantId = Guid.NewGuid();
+        var busId = Guid.NewGuid();
+        var driverUserId = Guid.NewGuid();
+        var busNo = $"KA-{Guid.NewGuid():N}"[..12];
+
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
+                new { Id = busId, TenantId = tenantId, BusNo = busNo });
+        }
+
+        var driver = StaffClient(app, tenantId, driverUserId);
+        var first = await Data(await driver.PostAsJsonAsync("/v1/staff/trips", new { direction = "pickup", bus_no = busNo }), HttpStatusCode.Created);
+        var firstTripId = first.GetProperty("id").GetGuid();
+
+        // Same driver taps Start again on the same bus — resumes the same trip, not a 409 or a dup.
+        var second = await Data(await driver.PostAsJsonAsync("/v1/staff/trips", new { direction = "pickup", bus_no = busNo }), HttpStatusCode.Created);
+        second.GetProperty("id").GetGuid().Should().Be(firstTripId);
+
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
+            var liveCount = await conn.QuerySingleAsync<long>(
+                "SELECT count(*) FROM \"dbo\".\"Trips\" WHERE \"BusId\" = @busId AND \"Status\" IN ('live', 'arrived')",
+                new { busId });
+            liveCount.Should().Be(1);
+        }
+    }
+
     /// A ping landing on (or within) a route stop's arrival radius must be reflected in the
     /// same BusLiveSnapshotResponse pushed to fleet subscribers — this is the signal a live map
     /// or the confirm-arrival screen relies on to know a bus has reached its next stop, without
