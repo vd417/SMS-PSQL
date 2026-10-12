@@ -3,7 +3,7 @@
 -- column, so a per-student plan's first invoice bills on the entered count (floored at the plan
 -- minimum) instead of the plan capacity. Reuses the existing column -- no schema change. The
 -- signature changes, so the old 13-arg client_create is dropped first to avoid overload ambiguity.
--- Rollback (restore the 13-arg form from db/postgres/migrations/0021_tenant_id_proof.sql):
+-- Rollback (restore the 13-arg form from db/postgres/migrations/0023_tenant_id_proof.sql):
 --   DROP FUNCTION IF EXISTS dbo.client_create(varchar,varchar,varchar,varchar,varchar,varchar,varchar,uuid,varchar,text,text,varchar,text,int);
 
 DROP FUNCTION IF EXISTS dbo.client_create;
