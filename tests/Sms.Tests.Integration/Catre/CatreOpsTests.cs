@@ -72,6 +72,42 @@ public class CatreOpsTests(PostgresFixture fx)
     }
 
     [Fact]
+    public async Task Completing_all_checklist_items_activates_the_client()
+    {
+        await using var app = App();
+        var client = PlatformClient(app);
+
+        var planId = (await Data(await client.PostAsJsonAsync("/v1/plans", new
+        {
+            name = "Gold", tier = "gold", pricing = "flat", price = 14999, period = "month",
+            limits = new { students = 1000, staff = 100, storage_gb = 40 }, visibility = "published", audience = "all"
+        }), HttpStatusCode.Created)).GetProperty("id").GetGuid();
+
+        var clientId = (await Data(await client.PostAsJsonAsync("/v1/clients", new
+        {
+            name = "Greenwood", slug = $"g-{Guid.NewGuid():N}", plan_id = planId, trial_days = 14
+        }), HttpStatusCode.Created)).GetProperty("id").GetGuid();
+
+        // The onboarding card auto-created for this client.
+        var board = await Data(await client.GetAsync("/v1/onboarding"), HttpStatusCode.OK);
+        var card = board.EnumerateArray().Single(e =>
+            e.TryGetProperty("tenant_id", out var t) && t.ValueKind != JsonValueKind.Null && t.GetGuid() == clientId);
+        var cardId = card.GetProperty("id").GetGuid();
+
+        // Tick every checklist item that isn't already done.
+        foreach (var item in card.GetProperty("checklist").EnumerateArray())
+        {
+            if (item.GetProperty("done").GetBoolean()) continue;
+            await client.PatchAsJsonAsync($"/v1/onboarding/{cardId}/checklist",
+                new { label = item.GetProperty("label").GetString(), done = true });
+        }
+
+        // All tasks complete -> client is auto-activated.
+        var got = await Data(await client.GetAsync($"/v1/clients/{clientId}"), HttpStatusCode.OK);
+        got.GetProperty("status").GetString().Should().Be("active");
+    }
+
+    [Fact]
     public async Task Ticket_create_add_message_and_update()
     {
         await using var app = App();

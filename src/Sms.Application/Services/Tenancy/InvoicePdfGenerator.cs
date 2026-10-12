@@ -238,7 +238,7 @@ public sealed class InvoicePdfGenerator : IInvoicePdfGenerator
     {
         var seats = subscription?.Seats
             ?? (plan is null ? Math.Max(client.StudentsCount, 1)
-                : CatreMappers.BillableSeats(plan, client.StudentsCount, client.LimitsStudents ?? 0));
+                : CatreMappers.BillableSeats(plan, client.StudentsCount, fallbackSeats: 0));
         var billable = plan is null
             ? seats
             : CatreMappers.BillableSeats(plan, client.StudentsCount, seats);

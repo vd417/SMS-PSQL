@@ -102,8 +102,20 @@ public sealed class TenancyService(
 
     public async Task<ApiResult<ClientResponse>> CreateClientAsync(CreateClientRequest req, CancellationToken ct = default)
     {
+        if (!string.IsNullOrWhiteSpace(req.IdProofType) &&
+            req.IdProofType is not ("pan" or "aadhaar"))
+            return ApiResult<ClientResponse>.Fail(
+                new Error("invalid_request", "ID proof type must be 'pan' or 'aadhaar'"), 422);
+        if (DocumentUrlValidation.Validate(req.IdProofUrl) is { } idProofError)
+            return ApiResult<ClientResponse>.Fail(idProofError, 422);
+
         var slug = await clients.AllocateUniqueSlugAsync(req.Slug, ct);
-        var create = req with { Slug = slug };
+        var create = req with
+        {
+            Slug = slug,
+            IdProofType = string.IsNullOrWhiteSpace(req.IdProofType) ? null : req.IdProofType,
+            IdProofUrl = DocumentUrlValidation.Normalize(req.IdProofUrl),
+        };
         ClientRow? row;
         try
         {
@@ -265,7 +277,9 @@ public sealed class TenancyService(
         if (plan is null)
             return;
 
-        var seats = CatreMappers.BillableSeats(plan, client.StudentsCount, client.LimitsStudents ?? 0);
+        // Bill on the actual/committed student count (seeded on the tenant at onboarding and
+        // kept live by SIS), floored at the plan minimum — NOT the plan capacity.
+        var seats = CatreMappers.BillableSeats(plan, client.StudentsCount, fallbackSeats: 0);
         var amount = CatreMappers.ComputeMonthlyAmount(plan, client.StudentsCount, seats);
 
         if (client.Mrr != amount)
@@ -314,7 +328,7 @@ public sealed class TenancyService(
         var plan = await plans.GetAsync(req.PlanId, ct);
         if (plan is not null)
         {
-            var amount = CatreMappers.ComputeMonthlyAmount(plan, row.StudentsCount, row.LimitsStudents ?? 0);
+            var amount = CatreMappers.ComputeMonthlyAmount(plan, row.StudentsCount, seats: 0);
             if (row.Mrr != amount)
                 row = await clients.SetMrrAsync(id, amount, ct) ?? row;
         }
@@ -471,7 +485,21 @@ public sealed class TenancyService(
         if (await onboarding.GetAsync(id) is null)
             return ApiResult<OnboardingItemResponse>.Fail(new Error("not_found", "resource not found"), 404);
         await onboarding.SetChecklistAsync(id, req.Label, req.Done);
-        return ApiResult<OnboardingItemResponse>.Ok((await onboarding.GetAsync(id))!);
+        var item = (await onboarding.GetAsync(id))!;
+
+        // When every setup task is complete, auto-activate the tied client (status -> active).
+        // SetClientStatusAsync also advances the card to the 'active' stage, so it leaves the pipeline.
+        if (item.TenantId is { } tenantId
+            && item.Stage != "active"
+            && item.Checklist.Count > 0
+            && item.Checklist.All(c => c.Done))
+        {
+            var res = await SetClientStatusAsync(tenantId, new SetStatusRequest("active", "All onboarding tasks complete"), ct);
+            if (!res.IsSuccess)
+                return ApiResult<OnboardingItemResponse>.Fail(res.Error!, res.StatusCode);
+            item = (await onboarding.GetAsync(id))!;
+        }
+        return ApiResult<OnboardingItemResponse>.Ok(item);
     }
 
     public Task<IReadOnlyList<TicketResponse>> ListTicketsAsync(string? status, string? q, CancellationToken ct = default) =>

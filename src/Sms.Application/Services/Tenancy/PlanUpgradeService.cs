@@ -105,7 +105,8 @@ public sealed class PlanUpgradeService(
             return ApiResult<PlanUpgradeRequestResponse>.Fail(
                 new Error("conflict", "an upgrade request is already in progress for this school"), 409);
 
-        var seats = CatreMappers.BillableSeats(toPlan, client.StudentsCount, client.LimitsStudents ?? 0);
+        // Floor on the plan minimum (not the plan capacity); the student count drives the price.
+        var seats = CatreMappers.BillableSeats(toPlan, client.StudentsCount, fallbackSeats: 0);
         var amount = CatreMappers.ComputeMonthlyAmount(toPlan, client.StudentsCount, seats);
         if (amount <= 0)
             return ApiResult<PlanUpgradeRequestResponse>.Fail(
@@ -169,7 +170,8 @@ public sealed class PlanUpgradeService(
             return ApiResult<PlanUpgradeRequestResponse>.Fail(
                 new Error("conflict", "a plan payment request is already in progress for this school"), 409);
 
-        var seats = CatreMappers.BillableSeats(toPlan, client.StudentsCount, client.LimitsStudents ?? 0);
+        // Floor on the plan minimum (not the plan capacity); the student count drives the price.
+        var seats = CatreMappers.BillableSeats(toPlan, client.StudentsCount, fallbackSeats: 0);
         var amount = CatreMappers.ComputeMonthlyAmount(toPlan, client.StudentsCount, seats);
         if (amount <= 0)
             return ApiResult<PlanUpgradeRequestResponse>.Fail(
@@ -367,7 +369,7 @@ public sealed class PlanUpgradeService(
             plan = await plans.GetAsync(approved.ToPlanId, ct);
             if (plan is not null)
             {
-                seats = CatreMappers.BillableSeats(plan, client.StudentsCount, client.LimitsStudents ?? 0);
+                seats = CatreMappers.BillableSeats(plan, client.StudentsCount, fallbackSeats: 0);
                 var amount = CatreMappers.ComputeMonthlyAmount(plan, client.StudentsCount, seats);
                 if (client.Mrr != amount)
                     client = await clients.SetMrrAsync(approved.TenantId, amount, ct) ?? client;

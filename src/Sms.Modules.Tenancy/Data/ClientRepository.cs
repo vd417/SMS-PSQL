@@ -12,13 +12,17 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
     private const string SelectLive =
         """
         SELECT t."Id", t."Name", t."Slug", t."Country", t."Status", t."PlanId", t."PlanName", t."Tier", t."Mrr",
-        CAST((SELECT count(*) FROM "dbo"."Students" s WHERE s."TenantId" = t."Id" AND s."Status" = 'active') AS int) AS "StudentsCount",
+        GREATEST(
+          CAST((SELECT count(*) FROM "dbo"."Students" s WHERE s."TenantId" = t."Id" AND s."Status" = 'active') AS int),
+          COALESCE(t."StudentsCount", 0)
+        ) AS "StudentsCount",
         CAST((
           (SELECT count(*) FROM "dbo"."Teachers" te WHERE te."TenantId" = t."Id" AND te."Status" = 'active') +
           (SELECT count(*) FROM "dbo"."Staff" st WHERE st."TenantId" = t."Id" AND st."Status" = 'active')
         ) AS int) AS "StaffCount",
         t."StorageGb", t."LimitsStudents", t."LimitsStaff", t."LimitsStorageGb", t."CreatedAt", t."Csm", t."HealthScore",
-        t."ContactName", t."ContactEmail", t."ContactPhone", t."Address", t."LogoUrl", t."ImageUrl"
+        t."ContactName", t."ContactEmail", t."ContactPhone", t."Address", t."LogoUrl", t."ImageUrl",
+        t."IdProofType", t."IdProofUrl"
         FROM "dbo"."Tenants" t
         """;
 
@@ -62,7 +66,8 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
         {
             r.Name, r.Slug, r.Country,
             ContactName = r.AdminName, ContactEmail = r.AdminEmail, ContactPhone = r.AdminPhone,
-            r.Address, r.PlanId, r.Csm, r.LogoUrl, r.ImageUrl
+            r.Address, r.PlanId, r.Csm, r.LogoUrl, r.ImageUrl, r.IdProofType, r.IdProofUrl,
+            StudentsCount = r.StudentsCount ?? 0
         }, ct);
 
     public Task<ClientRow?> UpdateProfileAsync(Guid id, UpdateSchoolProfileRequest r, CancellationToken ct = default) =>

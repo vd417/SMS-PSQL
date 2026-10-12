@@ -38,7 +38,9 @@ public sealed record FeeSummaryResponse(
 public sealed record CreateMySchoolRequest(
     string Name, string Slug, string? Country, Guid PlanId,
     string? AdminName, string? AdminPhone, string? Address, int TrialDays = 14,
-    string? LogoUrl = null, string? ImageUrl = null);
+    string? LogoUrl = null, string? ImageUrl = null,
+    // Expected student strength entered during school onboarding (per-student plans).
+    int? StudentsCount = null);
 
 /// <summary>
 /// School-owner portfolio: list/create schools for the signed-in founding owner
@@ -114,7 +116,8 @@ public sealed class MeSchoolsService(
             var create = new CreateClientRequest(
                 req.Name.Trim(), slug, req.Country,
                 req.AdminName ?? me.Email.Split('@')[0], me.Email, req.AdminPhone ?? me.Phone,
-                req.PlanId, req.TrialDays <= 0 ? 14 : req.TrialDays, null, req.Address, req.LogoUrl, req.ImageUrl);
+                req.PlanId, req.TrialDays <= 0 ? 14 : req.TrialDays, null, req.Address, req.LogoUrl, req.ImageUrl,
+                StudentsCount: req.StudentsCount);
 
             ClientRow? row;
             try
