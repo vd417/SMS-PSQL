@@ -20,6 +20,10 @@ public sealed record CreateSubscriptionRequest(Guid TenantId, Guid PlanId, int S
 internal sealed record SubscriptionCreated(
     Guid Id, Guid TenantId, Guid PlanId, string Status, DateTime StartedAt, DateTime? RenewsAt, int Seats);
 
+/// <summary>An active subscription whose current period has ended and is due for the next cycle invoice.</summary>
+public sealed record DueSubscription(
+    Guid Id, Guid TenantId, Guid PlanId, int Seats, string? BillingInterval, DateTime? RenewsAt);
+
 // ---- Dashboard overview ----
 public sealed record DashCounts(int Total, int Active, int Trial, int Suspended, int Cancelled);
 public sealed record PlanMixItem(string Label, int Value, string? Color);

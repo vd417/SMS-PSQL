@@ -124,6 +124,10 @@ public static class ServiceCollectionExtensions
         // so production and any unset environment keep the worker.
         if (builder.Configuration.GetValue("TransportOfflineSweep:Enabled", true))
             builder.Services.AddHostedService<Sms.Api.Workers.TransportOfflineSweepWorker>();
+        // Recurring cycle-billing. Gated off in integration tests (Billing:RecurringEnabled=false) so
+        // the shared test database isn't swept out from under the billing tests; defaults on.
+        if (builder.Configuration.GetValue("Billing:RecurringEnabled", true))
+            builder.Services.AddHostedService<Sms.Api.Workers.RecurringBillingWorker>();
         builder.Services.AddSingleton<IPaymentGateway, StubPaymentGateway>();
         builder.Services.AddSingleton<IAuditLogger, AuditLogger>();
         // Keys MUST be persisted somewhere durable, or every school's encrypted Razorpay secrets

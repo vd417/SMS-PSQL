@@ -66,4 +66,27 @@ public sealed class SubscriptionRepository(IDbConnectionFactory factory) : BaseR
         ExecuteInlineAsync(
             """UPDATE "dbo"."Subscriptions" SET "Seats" = @seats WHERE "TenantId" = @tid AND "Status" = 'active'""",
             new { tid = tenantId, seats }, ct);
+
+    /// <summary>Active subscriptions whose renewal date has passed — due for the next cycle invoice.</summary>
+    public Task<IReadOnlyList<DueSubscription>> ListDueForBillingAsync(DateTime nowUtc, CancellationToken ct = default) =>
+        QueryInlineAsync<DueSubscription>(
+            """
+            SELECT "Id", "TenantId", "PlanId", COALESCE("Seats", 0) AS "Seats",
+                   "BillingInterval", "RenewsAt"
+            FROM "dbo"."Subscriptions"
+            WHERE "Status" = 'active' AND "RenewsAt" IS NOT NULL AND "RenewsAt" <= @nowUtc
+            ORDER BY "RenewsAt"
+            """,
+            new { nowUtc }, ct);
+
+    /// <summary>Advance a subscription to its next period after a cycle invoice has been issued.</summary>
+    public Task<int> AdvanceRenewalAsync(
+        Guid id, DateTime renewsAt, DateTime periodStart, DateTime periodEnd, CancellationToken ct = default) =>
+        ExecuteInlineAsync(
+            """
+            UPDATE "dbo"."Subscriptions"
+            SET "RenewsAt" = @renewsAt, "PeriodStart" = @periodStart, "PeriodEnd" = @periodEnd
+            WHERE "Id" = @id
+            """,
+            new { id, renewsAt, periodStart, periodEnd }, ct);
 }

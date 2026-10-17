@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IInvitationService, InvitationService>();
         services.AddScoped<ClientBillingEmails>();
         services.AddScoped<ITenancyService, TenancyService>();
+        services.AddScoped<IBillingRunService, BillingRunService>();
         services.AddScoped<IPlanUpgradeService, PlanUpgradeService>();
         services.AddSingleton<IInvoicePdfGenerator, InvoicePdfGenerator>();
         services.AddSingleton<INoticePdfGenerator, NoticePdfGenerator>();

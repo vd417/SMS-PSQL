@@ -39,4 +39,26 @@ public sealed class InvoiceRepository(IDbConnectionFactory factory) : BaseReposi
         ExecuteInlineAsync(
             """UPDATE "dbo"."Invoices" SET "Kind" = 'proration', "Seats" = @seats WHERE "Id" = @id""",
             new { id, seats }, ct);
+
+    /// <summary>True when a recurring cycle invoice already covers this tenant's period (idempotency guard).</summary>
+    public async Task<bool> CycleInvoiceExistsAsync(Guid tenantId, DateTime periodStart, CancellationToken ct = default) =>
+        (await QueryInlineAsync<int>(
+            """
+            SELECT CASE WHEN EXISTS (
+                SELECT 1 FROM "dbo"."Invoices"
+                WHERE "TenantId" = @tid AND "Kind" = 'cycle' AND "PeriodStart" = @periodStart
+            ) THEN 1 ELSE 0 END
+            """,
+            new { tid = tenantId, periodStart }, ct)).FirstOrDefault() == 1;
+
+    /// <summary>Stamp the billed period window and seat count on a recurring cycle invoice.</summary>
+    public Task<int> SetCyclePeriodAsync(
+        Guid id, DateTime periodStart, DateTime periodEnd, int seats, CancellationToken ct = default) =>
+        ExecuteInlineAsync(
+            """
+            UPDATE "dbo"."Invoices"
+            SET "Kind" = 'cycle', "PeriodStart" = @periodStart, "PeriodEnd" = @periodEnd, "Seats" = @seats
+            WHERE "Id" = @id
+            """,
+            new { id, periodStart, periodEnd, seats }, ct);
 }
