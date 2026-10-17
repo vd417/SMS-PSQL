@@ -25,6 +25,8 @@ public interface ISisService
     /// <summary>True when the caller is the student themself or a parent linked to this roster row.</summary>
     Task<bool> IsLinkedToCallerAsync(Guid studentId, CancellationToken ct = default);
     Task<ApiResult<StudentResponse>> CreateStudentAsync(CreateStudentRequest req, CancellationToken ct = default);
+    /// <summary>Billed seat limit vs live enrolment for the current tenant, with near-limit/at-limit flags.</summary>
+    Task<ApiResult<SeatUsage>> GetSeatUsageAsync(CancellationToken ct = default);
     Task<ApiResult<StudentResponse>> UpdateStudentAsync(Guid id, UpdateStudentRequest req, CancellationToken ct = default);
     Task<ApiResult<CursorPage<StudentResponse>>> ListClassStudentsAsync(
         Guid classId, int? limit, string? cursor, CancellationToken ct = default);
@@ -104,6 +106,16 @@ public sealed class SisService(
     {
         if (tenant.TenantId is not { } tid)
             return ApiResult<StudentResponse>.Fail(new Error("forbidden", "no tenant context"), 403);
+
+        // Hard seat-limit enforcement: block new enrolment once the billed seats are full,
+        // until the CATRE team (or the auto-increase rule) raises the limit.
+        var usage = SeatUsage.From(await repo.GetSeatUsageAsync(tid, ct));
+        if (usage.AtLimit)
+            return ApiResult<StudentResponse>.Fail(
+                new Error("seat_limit_reached",
+                    $"Seat limit reached ({usage.Used}/{usage.Limit}). Increase the plan to add more students."),
+                403);
+
         StudentResponse created;
         try
         {
@@ -130,6 +142,13 @@ public sealed class SisService(
         await TrySyncParentLoginAsync(created, ct);
 
         return ApiResult<StudentResponse>.Ok(created, 201);
+    }
+
+    public async Task<ApiResult<SeatUsage>> GetSeatUsageAsync(CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { } tid)
+            return ApiResult<SeatUsage>.Fail(new Error("forbidden", "no tenant context"), 403);
+        return ApiResult<SeatUsage>.Ok(SeatUsage.From(await repo.GetSeatUsageAsync(tid, ct)));
     }
 
     public async Task<ApiResult<StudentResponse>> UpdateStudentAsync(

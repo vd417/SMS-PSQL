@@ -52,6 +52,27 @@ LEFT JOIN LATERAL (
 ) att ON true
 """;
 
+    /// <summary>
+    /// Seat usage for a tenant: billed limit (Tenants.LimitsStudents), live ACTIVE enrolment, and the
+    /// alert gap (tenant override → plan default → 5). Tenants/Plans are not RLS-guarded; the Students
+    /// count is scoped by TenantId (and by RLS). A tenant with no Tenants row reads as unlimited (0).
+    /// </summary>
+    public async Task<SeatUsageRow> GetSeatUsageAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        const string sql = """
+        SELECT
+            COALESCE(t."LimitsStudents", 0) AS "Limit",
+            (SELECT count(*)::int FROM "dbo"."Students" s
+             WHERE s."TenantId" = @tid AND s."Status" = 'active') AS "Used",
+            COALESCE(t."SeatAlertThreshold", p."SeatAlertThreshold", 5) AS "Threshold"
+        FROM "dbo"."Tenants" t
+        LEFT JOIN "dbo"."Plans" p ON p."Id" = t."PlanId"
+        WHERE t."Id" = @tid
+        """;
+        var row = (await QueryInlineAsync<SeatUsageRow>(sql, new { tid = tenantId }, ct)).FirstOrDefault();
+        return row ?? new SeatUsageRow(0, 0, 5);
+    }
+
     public Task<StudentResponse?> CreateAsync(Guid tenantId, CreateStudentRequest r, CancellationToken ct = default) =>
         QuerySingleProcAsync<StudentResponse>("dbo.Student_Create", new
         {

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Dapper;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Sms.Shared.Kernel.Auth;
@@ -65,6 +66,49 @@ public class SisStudentsTests(PostgresFixture fx)
         var updated = await Data(await client.PatchAsJsonAsync($"/v1/students/{id}",
             new { fee_status = "paid", fee_due = 0 }), HttpStatusCode.OK);
         updated.GetProperty("fee_status").GetString().Should().Be("paid");
+    }
+
+    [Fact]
+    public async Task Create_is_blocked_when_billed_seat_limit_is_reached()
+    {
+        await using var app = App();
+        var tenantId = Guid.NewGuid();
+
+        // Seed a tenant whose plan allows only 2 seats (Tenants/Plans are not RLS-guarded).
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\", \"Status\", \"LimitsStudents\") " +
+                "VALUES (@tenantId, 'Cap School', 'cap-school', 'active', 2)",
+                new { tenantId });
+        }
+
+        var client = TenantClient(app, tenantId);
+
+        // First two enrolments fit within the 2-seat limit.
+        for (int i = 1; i <= 2; i++)
+            await Data(await client.PostAsJsonAsync("/v1/students", new
+            {
+                admission_no = $"CAP-{i}", name = $"Student {i}", gender = "M",
+                grade = "X", section = "A", roll = i
+            }), HttpStatusCode.Created);
+
+        // Usage endpoint now reports the school is full.
+        var usage = await Data(await client.GetAsync("/v1/students/seat-usage"), HttpStatusCode.OK);
+        usage.GetProperty("limit").GetInt32().Should().Be(2);
+        usage.GetProperty("used").GetInt32().Should().Be(2);
+        usage.GetProperty("at_limit").GetBoolean().Should().BeTrue();
+        usage.GetProperty("warn").GetBoolean().Should().BeTrue();
+
+        // The third enrolment is hard-blocked.
+        var blocked = await client.PostAsJsonAsync("/v1/students", new
+        {
+            admission_no = "CAP-3", name = "Student 3", gender = "F",
+            grade = "X", section = "A", roll = 3
+        });
+        blocked.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await blocked.Content.ReadAsStringAsync()).Should().Contain("seat_limit_reached");
     }
 
     [Fact]

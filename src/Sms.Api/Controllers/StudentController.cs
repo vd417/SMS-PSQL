@@ -46,6 +46,12 @@ public sealed class StudentController(
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>
         FromResult(await sis.GetStudentAsync(id, ct));
 
+    /// <summary>Billed seat limit vs live enrolment for the school, with near-limit / at-limit flags
+    /// so the add-student UI can warn or block.</summary>
+    [HttpGet("students/seat-usage")]
+    public async Task<IActionResult> SeatUsage(CancellationToken ct) =>
+        FromResult(await sis.GetSeatUsageAsync(ct));
+
     [HttpPost("students")]
     public async Task<IActionResult> Create([FromBody] CreateStudentRequest req, CancellationToken ct)
     {
