@@ -119,4 +119,20 @@ public static class CatreMappers
         }
         return Math.Max(Math.Max(studentsCount, fallbackSeats), 1);
     }
+
+    /// <summary>Number of months covered by one billing cycle. Unknown/null -> monthly.</summary>
+    public static int MonthsInCycle(string? cycle) => cycle?.Trim().ToLowerInvariant() switch
+    {
+        "quarter" => 3,
+        "year" => 12,
+        _ => 1,
+    };
+
+    /// <summary>
+    /// Amount billed for one full cycle = monthly amount × months in the cycle.
+    /// Per-student plans scale with the seat count; flat plans use the fixed price.
+    /// MRR stays the monthly figure (ComputeMonthlyAmount); only the invoice uses this.
+    /// </summary>
+    public static decimal ComputeCycleAmount(PlanRow plan, int studentsCount, string? cycle, int seats = 0)
+        => ComputeMonthlyAmount(plan, studentsCount, seats) * MonthsInCycle(cycle);
 }

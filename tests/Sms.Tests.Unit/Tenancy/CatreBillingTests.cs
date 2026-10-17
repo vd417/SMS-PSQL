@@ -65,4 +65,38 @@ public class CatreBillingTests
         CatreMappers.ComputeMonthlyAmount(Silver(), students, seats: 0)
             .Should().Be(2500m);
     }
+
+    // ---- Billing cycle (monthly / quarterly / yearly) ----
+
+    [Theory]
+    [InlineData("month", 1)]
+    [InlineData("quarter", 3)]
+    [InlineData("year", 12)]
+    [InlineData("MONTH", 1)]     // case-insensitive
+    [InlineData(null, 1)]        // null -> monthly
+    [InlineData("weird", 1)]     // unknown -> monthly (safe default)
+    public void MonthsInCycle_maps_cycle_to_month_count(string? cycle, int expected)
+    {
+        CatreMappers.MonthsInCycle(cycle).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("month", 3500)]    // 350 x 10 x 1
+    [InlineData("quarter", 10500)] // 350 x 10 x 3
+    [InlineData("year", 42000)]    // 350 x 10 x 12
+    public void PerStudent_cycle_amount_is_monthly_times_months(string cycle, decimal expected)
+    {
+        CatreMappers.ComputeCycleAmount(Platinum(), studentsCount: 350, cycle: cycle, seats: 0)
+            .Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("month", 2500)]
+    [InlineData("quarter", 7500)]
+    [InlineData("year", 30000)]
+    public void Flat_cycle_amount_is_price_times_months(string cycle, decimal expected)
+    {
+        CatreMappers.ComputeCycleAmount(Silver(), studentsCount: 0, cycle: cycle, seats: 0)
+            .Should().Be(expected);
+    }
 }
