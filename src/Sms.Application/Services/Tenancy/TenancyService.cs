@@ -190,9 +190,11 @@ public sealed class TenancyService(
         try
         {
             var row = await clients.UpdateProfileAsync(id, patch, ct);
-            return row is null
-                ? ApiResult<ClientResponse>.Fail(new Error("not_found", "resource not found"), 404)
-                : ApiResult<ClientResponse>.Ok(row.ToResponse());
+            if (row is null)
+                return ApiResult<ClientResponse>.Fail(new Error("not_found", "resource not found"), 404);
+            // Re-read through SelectLive so the response carries live EnrolledStudents.
+            var view = await clients.GetAsync(id, ct) ?? row;
+            return ApiResult<ClientResponse>.Ok(view.ToResponse());
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
@@ -238,7 +240,10 @@ public sealed class TenancyService(
         if (status == "active")
             await EnsureBillingOnActivateAsync(row, ct);
 
-        return ApiResult<ClientResponse>.Ok(row.ToResponse());
+        // Re-read through SelectLive so the response carries live EnrolledStudents; the stored-proc
+        // row above is kept for billing (it holds the committed StudentsCount floor).
+        var view = await clients.GetAsync(id, ct) ?? row;
+        return ApiResult<ClientResponse>.Ok(view.ToResponse());
     }
 
     public async Task<ApiResult> DeleteClientAsync(Guid id, DeleteClientRequest req, CancellationToken ct = default)
@@ -333,7 +338,9 @@ public sealed class TenancyService(
                 row = await clients.SetMrrAsync(id, amount, ct) ?? row;
         }
 
-        return ApiResult<ClientResponse>.Ok(row.ToResponse());
+        // Re-read through SelectLive so the response carries live EnrolledStudents.
+        var view = await clients.GetAsync(id, ct) ?? row;
+        return ApiResult<ClientResponse>.Ok(view.ToResponse());
     }
 
     public async Task<IReadOnlyList<PlanResponse>> ListPlansAsync(string? visibility, string? audience, CancellationToken ct = default)

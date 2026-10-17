@@ -35,6 +35,13 @@ public class CatreClientsTests(PostgresFixture fx)
         return client;
     }
 
+    private NpgsqlConnectionFactory PlatformFactory()
+    {
+        var ctx = new TenantContext();
+        ctx.Set(null, Guid.NewGuid(), isPlatform: true);
+        return new NpgsqlConnectionFactory(fx.ConnectionString, ctx);
+    }
+
     private static async Task<JsonElement> Data(HttpResponseMessage res, HttpStatusCode expected)
     {
         res.StatusCode.Should().Be(expected);
@@ -200,6 +207,99 @@ public class CatreClientsTests(PostgresFixture fx)
             id_proof_type = "pan", id_proof_url = "data:application/pdf;base64," + new string('A', 3_500_001)
         });
         res.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task School_count_shows_live_enrolled_while_billed_count_holds_committed_floor()
+    {
+        await using var app = App();
+        var client = PlatformClient(app);
+        var gold = await CreatePlanAsync(client, "Gold", "gold", 14999);
+
+        // Onboarding commits to 350 students for billing, but nobody is enrolled in the SIS yet.
+        var created = await Data(await client.PostAsJsonAsync("/v1/clients", new
+        {
+            name = "Greenwood High", slug = $"greenwood-{Guid.NewGuid():N}", country = "Mumbai, MH",
+            admin_name = "Priya Sharma", admin_email = $"admin-{Guid.NewGuid():N}@greenwood.edu.in",
+            plan_id = gold, trial_days = 14, students_count = 350
+        }), HttpStatusCode.Created);
+        var id = created.GetProperty("id").GetGuid();
+
+        // School profile: the student count is who is actually enrolled right now (nobody),
+        // while the billed count carries the committed floor the first invoice is charged on.
+        var got = await Data(await client.GetAsync($"/v1/clients/{id}"), HttpStatusCode.OK);
+        got.GetProperty("enrolled_students").GetInt32().Should().Be(0);
+        got.GetProperty("students_count").GetInt32().Should().Be(350);
+
+        // Same split in the portfolio list.
+        var list = await Data(await client.GetAsync("/v1/clients"), HttpStatusCode.OK);
+        var row = list.EnumerateArray().Single(e => e.GetProperty("id").GetGuid() == id);
+        row.GetProperty("enrolled_students").GetInt32().Should().Be(0);
+        row.GetProperty("students_count").GetInt32().Should().Be(350);
+    }
+
+    [Fact]
+    public async Task Enrolled_count_reflects_active_students_and_billed_count_tracks_the_higher_of_the_two()
+    {
+        await using var app = App();
+        var client = PlatformClient(app);
+        var gold = await CreatePlanAsync(client, "Gold", "gold", 14999);
+
+        // Commit to 100 at onboarding, then enrol 3 active + 1 inactive student in the SIS.
+        var created = await Data(await client.PostAsJsonAsync("/v1/clients", new
+        {
+            name = "Riverside", slug = $"riverside-{Guid.NewGuid():N}", country = "Pune, MH",
+            admin_name = "A", admin_email = $"admin-{Guid.NewGuid():N}@riverside.edu.in",
+            plan_id = gold, trial_days = 14, students_count = 100
+        }), HttpStatusCode.Created);
+        var id = created.GetProperty("id").GetGuid();
+
+        var factory = PlatformFactory();
+        await using (var c = await factory.OpenAsync())
+        {
+            await c.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\") VALUES " +
+                "(gen_random_uuid(), @t, 'A1', 'Student 1', 'active'), " +
+                "(gen_random_uuid(), @t, 'A2', 'Student 2', 'active'), " +
+                "(gen_random_uuid(), @t, 'A3', 'Student 3', 'active'), " +
+                "(gen_random_uuid(), @t, 'A4', 'Student 4', 'inactive')",
+                new { t = id });
+        }
+
+        var got = await Data(await client.GetAsync($"/v1/clients/{id}"), HttpStatusCode.OK);
+        // enrolled = active students only (3), not the committed 100 and not the inactive row.
+        got.GetProperty("enrolled_students").GetInt32().Should().Be(3);
+        // billed = max(live enrolled, committed floor) = max(3, 100) = 100.
+        got.GetProperty("students_count").GetInt32().Should().Be(100);
+    }
+
+    [Fact]
+    public async Task Status_change_response_carries_live_enrolled_count()
+    {
+        await using var app = App();
+        var client = PlatformClient(app);
+        var gold = await CreatePlanAsync(client, "Gold", "gold", 14999);
+
+        var created = await Data(await client.PostAsJsonAsync("/v1/clients", new
+        {
+            name = "Hilltop", slug = $"hilltop-{Guid.NewGuid():N}", country = "Nashik, MH",
+            admin_name = "A", admin_email = $"admin-{Guid.NewGuid():N}@hilltop.edu.in",
+            plan_id = gold, trial_days = 14, students_count = 100
+        }), HttpStatusCode.Created);
+        var id = created.GetProperty("id").GetGuid();
+
+        var factory = PlatformFactory();
+        await using (var c = await factory.OpenAsync())
+            await c.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Students\" (\"Id\", \"TenantId\", \"AdmissionNo\", \"Name\", \"Status\") VALUES " +
+                "(gen_random_uuid(), @t, 'A1', 'S 1', 'active'), (gen_random_uuid(), @t, 'A2', 'S 2', 'active')",
+                new { t = id });
+
+        // A mutation response (status change) must reflect live enrolment, not a stale 0.
+        var activated = await Data(
+            await client.PostAsJsonAsync($"/v1/clients/{id}/status", new { status = "active" }), HttpStatusCode.OK);
+        activated.GetProperty("enrolled_students").GetInt32().Should().Be(2);
+        activated.GetProperty("students_count").GetInt32().Should().Be(100);
     }
 
     [Fact]

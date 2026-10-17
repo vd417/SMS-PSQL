@@ -6,11 +6,15 @@ public sealed record ClientLimits(int? Students, int? Staff, int? StorageGb);
 public sealed record ClientResponse(
     Guid Id, string Name, string Slug, string? Country, string Status,
     Guid? PlanId, string? PlanName, string? Tier, decimal Mrr,
+    // StudentsCount is the BILLED count — the committed/onboarding floor the invoice is charged on
+    // (max of live enrolment and the seeded count). EnrolledStudents is the ACTUAL live SIS
+    // enrolment shown on the school surface. See SelectLive in ClientRepository.
     int StudentsCount, int StaffCount, decimal StorageGb, ClientLimits Limits,
     DateTime Created, string? Csm, int HealthScore,
     string? ContactName, string? ContactEmail, string? ContactPhone, string? Address,
     string? LogoUrl = null, string? ImageUrl = null,
-    string? IdProofType = null, string? IdProofUrl = null);
+    string? IdProofType = null, string? IdProofUrl = null,
+    int EnrolledStudents = 0);
 
 public sealed record CreateClientRequest(
     string Name, string Slug, string? Country, string? AdminName, string? AdminEmail,
@@ -45,14 +49,44 @@ public sealed record SetStatusRequest(string? Status, string? Reason);
 public sealed record DeleteClientRequest(string? Confirm);
 public sealed record ChangePlanRequest(Guid PlanId);
 
-// Flat DB row (Dapper maps columns by name); composed into ClientResponse.
-public sealed record ClientRow(
-    Guid Id, string Name, string Slug, string? Country, string Status, Guid? PlanId, string? PlanName,
-    string? Tier, decimal Mrr, int StudentsCount, int StaffCount, decimal StorageGb,
-    int? LimitsStudents, int? LimitsStaff, int? LimitsStorageGb, DateTime CreatedAt, string? Csm, int HealthScore,
-    string? ContactName, string? ContactEmail, string? ContactPhone, string? Address,
-    string? LogoUrl = null, string? ImageUrl = null,
-    string? IdProofType = null, string? IdProofUrl = null);
+// Flat DB row (Dapper maps columns by name). Deliberately a parameterless record with settable
+// properties rather than a positional one: it is materialised from TWO different column sets — the
+// stored procs (Client_Create/SetStatus/ChangePlan/UpdateProfile) and SelectLive, which additionally
+// returns EnrolledStudents. Dapper's constructor path demands a single ctor matching every column,
+// so a positional record can't serve both; property mapping fills whatever columns each source
+// returns and leaves the rest at their defaults. Composed into ClientResponse.
+public sealed record ClientRow
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Slug { get; set; } = "";
+    public string? Country { get; set; }
+    public string Status { get; set; } = "";
+    public Guid? PlanId { get; set; }
+    public string? PlanName { get; set; }
+    public string? Tier { get; set; }
+    public decimal Mrr { get; set; }
+    /// <summary>Billed floor = GREATEST(live enrolment, seeded onboarding count). Billing reads this.</summary>
+    public int StudentsCount { get; set; }
+    public int StaffCount { get; set; }
+    public decimal StorageGb { get; set; }
+    public int? LimitsStudents { get; set; }
+    public int? LimitsStaff { get; set; }
+    public int? LimitsStorageGb { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? Csm { get; set; }
+    public int HealthScore { get; set; }
+    public string? ContactName { get; set; }
+    public string? ContactEmail { get; set; }
+    public string? ContactPhone { get; set; }
+    public string? Address { get; set; }
+    public string? LogoUrl { get; set; }
+    public string? ImageUrl { get; set; }
+    public string? IdProofType { get; set; }
+    public string? IdProofUrl { get; set; }
+    /// <summary>Live active SIS enrolment (display). Only SelectLive returns it; 0 for stored-proc rows.</summary>
+    public int EnrolledStudents { get; set; }
+}
 
 // ---- Plan ----
 public sealed record PlanLimits(int Students, int Staff, int StorageGb);
@@ -84,7 +118,7 @@ public static class CatreMappers
         new ClientLimits(r.LimitsStudents, r.LimitsStaff, r.LimitsStorageGb),
         r.CreatedAt, r.Csm, r.HealthScore,
         r.ContactName, r.ContactEmail, r.ContactPhone, r.Address, r.LogoUrl, r.ImageUrl,
-        r.IdProofType, r.IdProofUrl);
+        r.IdProofType, r.IdProofUrl, r.EnrolledStudents);
 
     public static PlanResponse ToResponse(this PlanRow r) => new(
         r.Id, r.Name, r.Tier, r.Pricing, r.Price, r.PerStudent, r.MinStudents, r.Period,

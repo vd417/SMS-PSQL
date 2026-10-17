@@ -8,10 +8,18 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
     /// <summary>
     /// Live SIS counts — denormalized Tenants.StudentsCount/StaffCount stay out of date
     /// unless procs refresh them; portfolio/Catre lists must read live.
+    ///
+    /// Two student figures are returned, deliberately distinct:
+    ///   • "EnrolledStudents" — live active SIS enrolment, for the school surface ("who is here now").
+    ///   • "StudentsCount"    — the BILLED floor = GREATEST(live, seeded onboarding count); billing
+    ///     charges on this so a freshly onboarded school is billed on its committed count until live
+    ///     enrolment overtakes it. Shown on the subscription/billing surface.
     /// </summary>
     private const string SelectLive =
         """
         SELECT t."Id", t."Name", t."Slug", t."Country", t."Status", t."PlanId", t."PlanName", t."Tier", t."Mrr",
+        CAST((SELECT count(*) FROM "dbo"."Students" s WHERE s."TenantId" = t."Id" AND s."Status" = 'active') AS int)
+          AS "EnrolledStudents",
         GREATEST(
           CAST((SELECT count(*) FROM "dbo"."Students" s WHERE s."TenantId" = t."Id" AND s."Status" = 'active') AS int),
           COALESCE(t."StudentsCount", 0)

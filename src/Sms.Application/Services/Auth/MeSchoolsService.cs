@@ -226,7 +226,9 @@ public sealed class MeSchoolsService(
                 if (row is null)
                     return ApiResult<ClientResponse>.Fail(new Error("not_found", "school not found"), 404);
 
-                return ApiResult<ClientResponse>.Ok(row.ToResponse());
+                // Re-read through SelectLive so the response carries live EnrolledStudents.
+                var view = await clients.GetAsync(tenantId, ct) ?? row;
+                return ApiResult<ClientResponse>.Ok(view.ToResponse());
             }
             catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
             {
