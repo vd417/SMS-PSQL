@@ -36,4 +36,9 @@ public sealed class ClientController(ITenancyService tenancy) : ApiControllerBas
     [HttpPost("clients/{id:guid}/change-plan")]
     public async Task<IActionResult> ChangePlan(Guid id, [FromBody] ChangePlanRequest req, CancellationToken ct) =>
         FromResult(await tenancy.ChangeClientPlanAsync(id, req, ct));
+
+    /// <summary>Raise a school's billed seat limit (CATRE team action).</summary>
+    [HttpPost("clients/{id:guid}/seats")]
+    public async Task<IActionResult> IncreaseSeats(Guid id, [FromBody] IncreaseSeatsRequest req, CancellationToken ct) =>
+        FromResult(await tenancy.IncreaseClientSeatsAsync(id, req, ct));
 }

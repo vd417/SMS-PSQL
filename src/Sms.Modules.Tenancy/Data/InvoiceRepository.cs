@@ -33,4 +33,10 @@ public sealed class InvoiceRepository(IDbConnectionFactory factory) : BaseReposi
 
     public Task<InvoiceResponse?> RefundAsync(Guid id, CancellationToken ct = default) =>
         QuerySingleProcAsync<InvoiceResponse>("dbo.Invoice_Refund", new { Id = id }, ct);
+
+    /// <summary>Tag an invoice as a mid-cycle seat proration charge and record the seats billed.</summary>
+    public Task<int> MarkProrationAsync(Guid id, int seats, CancellationToken ct = default) =>
+        ExecuteInlineAsync(
+            """UPDATE "dbo"."Invoices" SET "Kind" = 'proration', "Seats" = @seats WHERE "Id" = @id""",
+            new { id, seats }, ct);
 }

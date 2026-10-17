@@ -107,14 +107,21 @@ public sealed class SisService(
         if (tenant.TenantId is not { } tid)
             return ApiResult<StudentResponse>.Fail(new Error("forbidden", "no tenant context"), 403);
 
-        // Hard seat-limit enforcement: block new enrolment once the billed seats are full,
-        // until the CATRE team (or the auto-increase rule) raises the limit.
+        // Seat-limit enforcement. Once the billed seats are full, either auto-grow the cap
+        // (per-student schools the CATRE team set to auto) or hard-block until it is raised.
         var usage = SeatUsage.From(await repo.GetSeatUsageAsync(tid, ct));
         if (usage.AtLimit)
-            return ApiResult<StudentResponse>.Fail(
-                new Error("seat_limit_reached",
-                    $"Seat limit reached ({usage.Used}/{usage.Limit}). Increase the plan to add more students."),
-                403);
+        {
+            if (usage.AutoIncrease)
+                // Per-student auto-grow: raise the cap so this enrolment fits; billing follows the
+                // live count (the next billing run / recompute picks up the higher StudentsCount).
+                await repo.BumpSeatLimitAsync(tid, usage.Used + 1, ct);
+            else
+                return ApiResult<StudentResponse>.Fail(
+                    new Error("seat_limit_reached",
+                        $"Seat limit reached ({usage.Used}/{usage.Limit}). Increase the plan to add more students."),
+                    403);
+        }
 
         StudentResponse created;
         try

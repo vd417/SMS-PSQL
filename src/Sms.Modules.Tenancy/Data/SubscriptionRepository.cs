@@ -60,4 +60,10 @@ public sealed class SubscriptionRepository(IDbConnectionFactory factory) : BaseR
     public async Task SetPlanAsync(Guid tenantId, Guid planId, int seats, CancellationToken ct = default) =>
         await QuerySingleProcAsync<SubscriptionCreated>("dbo.Subscription_SetPlan",
             new { TenantId = tenantId, PlanId = planId, Seats = seats }, ct);
+
+    /// <summary>Update the seat count on a tenant's active subscription (no plan/period change).</summary>
+    public Task<int> SetSeatsAsync(Guid tenantId, int seats, CancellationToken ct = default) =>
+        ExecuteInlineAsync(
+            """UPDATE "dbo"."Subscriptions" SET "Seats" = @seats WHERE "TenantId" = @tid AND "Status" = 'active'""",
+            new { tid = tenantId, seats }, ct);
 }

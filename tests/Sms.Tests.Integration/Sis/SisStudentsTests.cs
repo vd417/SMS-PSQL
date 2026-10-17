@@ -112,6 +112,49 @@ public class SisStudentsTests(PostgresFixture fx)
     }
 
     [Fact]
+    public async Task Create_auto_grows_seats_for_per_student_school_instead_of_blocking()
+    {
+        await using var app = App();
+        var tenantId = Guid.NewGuid();
+        var planId = Guid.NewGuid();
+
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Plans\" (\"Id\", \"Name\", \"Tier\", \"Pricing\", \"Price\", \"PerStudent\", \"LimitsStudents\") " +
+                "VALUES (@planId, 'PerStudent', 'gold', 'per_student', 0, 10, 1)",
+                new { planId });
+            // 1-seat cap, but the CATRE team set this school to auto-grow.
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Tenants\" (\"Id\", \"Name\", \"Slug\", \"Status\", \"PlanId\", \"LimitsStudents\", \"SeatIncreaseMode\") " +
+                "VALUES (@tenantId, 'Auto School', 'auto-school', 'active', @planId, 1, 'auto')",
+                new { tenantId, planId });
+        }
+
+        var client = TenantClient(app, tenantId);
+
+        // Both enrolments succeed even past the 1-seat cap — the cap auto-grows.
+        for (int i = 1; i <= 2; i++)
+            await Data(await client.PostAsJsonAsync("/v1/students", new
+            {
+                admission_no = $"AUTO-{i}", name = $"Student {i}", gender = "M",
+                grade = "X", section = "A", roll = i
+            }), HttpStatusCode.Created);
+
+        // Both enrolments landed (no 403) and the cap kept pace with enrolment.
+        var usage = await Data(await client.GetAsync("/v1/students/seat-usage"), HttpStatusCode.OK);
+        usage.GetProperty("used").GetInt32().Should().Be(2);
+        usage.GetProperty("limit").GetInt32().Should().BeGreaterThanOrEqualTo(2);
+
+        // A further enrolment still succeeds — auto-grow continues rather than blocking.
+        await Data(await client.PostAsJsonAsync("/v1/students", new
+        {
+            admission_no = "AUTO-3", name = "Student 3", gender = "F", grade = "X", section = "A", roll = 3
+        }), HttpStatusCode.Created);
+    }
+
+    [Fact]
     public async Task Create_assigns_roll_az_by_name_and_ignores_client_roll()
     {
         await using var app = App();

@@ -30,7 +30,7 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
         ) AS int) AS "StaffCount",
         t."StorageGb", t."LimitsStudents", t."LimitsStaff", t."LimitsStorageGb", t."CreatedAt", t."Csm", t."HealthScore",
         t."ContactName", t."ContactEmail", t."ContactPhone", t."Address", t."LogoUrl", t."ImageUrl",
-        t."IdProofType", t."IdProofUrl"
+        t."IdProofType", t."IdProofUrl", t."BillingCycle"
         FROM "dbo"."Tenants" t
         """;
 
@@ -109,6 +109,26 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
     {
         await ExecuteInlineAsync("""UPDATE "dbo"."Tenants" SET "Mrr" = @mrr WHERE "Id" = @id""",
             new { id, mrr }, ct);
+        return (await QueryInlineAsync<ClientRow>($"{SelectLive} WHERE t.\"Id\" = @id", new { id }, ct))
+            .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Raise the billed seat cap (LimitsStudents). When <paramref name="bumpBilledFloor"/> is set
+    /// (per-student plans), also raises the committed StudentsCount floor so billing follows the new
+    /// seats. Returns the refreshed live row.
+    /// </summary>
+    public async Task<ClientRow?> SetSeatLimitAsync(Guid id, int limit, bool bumpBilledFloor, CancellationToken ct = default)
+    {
+        await ExecuteInlineAsync(
+            """
+            UPDATE "dbo"."Tenants"
+            SET "LimitsStudents" = @limit,
+                "StudentsCount" = CASE WHEN @bump
+                    THEN GREATEST(COALESCE("StudentsCount", 0), @limit) ELSE "StudentsCount" END
+            WHERE "Id" = @id
+            """,
+            new { id, limit, bump = bumpBilledFloor }, ct);
         return (await QueryInlineAsync<ClientRow>($"{SelectLive} WHERE t.\"Id\" = @id", new { id }, ct))
             .FirstOrDefault();
     }

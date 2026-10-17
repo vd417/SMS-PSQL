@@ -21,6 +21,8 @@ public interface ITenancyService
     Task<ApiResult<ClientResponse>> SetClientStatusAsync(Guid id, SetStatusRequest req, CancellationToken ct = default);
     Task<ApiResult> DeleteClientAsync(Guid id, DeleteClientRequest req, CancellationToken ct = default);
     Task<ApiResult<ClientResponse>> ChangeClientPlanAsync(Guid id, ChangePlanRequest req, CancellationToken ct = default);
+    /// <summary>Raise a school's billed seat limit (CATRE team). Recomputes MRR and prorates per-student.</summary>
+    Task<ApiResult<ClientResponse>> IncreaseClientSeatsAsync(Guid id, IncreaseSeatsRequest req, CancellationToken ct = default);
 
     Task<IReadOnlyList<PlanResponse>> ListPlansAsync(string? visibility, string? audience, CancellationToken ct = default);
     Task<ApiResult<PlanResponse>> GetPlanAsync(Guid id, CancellationToken ct = default);
@@ -341,6 +343,79 @@ public sealed class TenancyService(
         // Re-read through SelectLive so the response carries live EnrolledStudents.
         var view = await clients.GetAsync(id, ct) ?? row;
         return ApiResult<ClientResponse>.Ok(view.ToResponse());
+    }
+
+    public async Task<ApiResult<ClientResponse>> IncreaseClientSeatsAsync(
+        Guid id, IncreaseSeatsRequest req, CancellationToken ct = default)
+    {
+        var client = await clients.GetAsync(id, ct);
+        if (client is null)
+            return ApiResult<ClientResponse>.Fail(new Error("not_found", "resource not found"), 404);
+
+        var currentLimit = client.LimitsStudents ?? 0;
+        if (req.SeatLimit <= currentLimit)
+            return ApiResult<ClientResponse>.Fail(
+                new Error("invalid_seat_limit", "New seat limit must be greater than the current limit."), 422);
+        if (req.SeatLimit < client.EnrolledStudents)
+            return ApiResult<ClientResponse>.Fail(
+                new Error("invalid_seat_limit",
+                    $"Seat limit cannot be below current enrolment ({client.EnrolledStudents})."), 422);
+
+        var plan = client.PlanId is { } pid ? await plans.GetAsync(pid, ct) : null;
+        var perStudent = plan is not null
+            && string.Equals(plan.Pricing, "per_student", StringComparison.OrdinalIgnoreCase);
+
+        // Raise the cap; for per-student also lift the committed billed floor so billing follows.
+        var updated = await clients.SetSeatLimitAsync(id, req.SeatLimit, bumpBilledFloor: perStudent, ct) ?? client;
+        await subscriptions.SetSeatsAsync(id, req.SeatLimit, ct);
+
+        if (plan is not null)
+        {
+            var amount = CatreMappers.ComputeMonthlyAmount(plan, updated.StudentsCount, seats: 0);
+            if (updated.Mrr != amount)
+                updated = await clients.SetMrrAsync(id, amount, ct) ?? updated;
+
+            // Prorate the added seats for the rest of the current period; the next cycle bills in full.
+            if (perStudent)
+                await IssueSeatProrationAsync(updated, plan, currentLimit, req.SeatLimit, ct);
+        }
+
+        return ApiResult<ClientResponse>.Ok(updated.ToResponse());
+    }
+
+    /// <summary>
+    /// Issue a proration invoice for extra per-student seats added mid-cycle: the delta seats billed
+    /// for the fraction of the current period still remaining (rate × months × days-left / days-in-period).
+    /// </summary>
+    private async Task IssueSeatProrationAsync(
+        ClientRow client, PlanRow plan, int oldSeats, int newSeats, CancellationToken ct)
+    {
+        var deltaSeats = newSeats - oldSeats;
+        var perSeatMonthly = plan.PerStudent ?? 0m;
+        if (deltaSeats <= 0 || perSeatMonthly <= 0m)
+            return;
+
+        var cycleMonths = CatreMappers.MonthsInCycle(client.BillingCycle);
+
+        // Fraction of the current billing period still to run (defaults to the whole period).
+        var fraction = 1m;
+        var sub = (await subscriptions.ListAsync(client.Id, "active", ct)).FirstOrDefault();
+        if (sub?.CurrentPeriodEnd is { } end)
+        {
+            var totalDays = Math.Max((end - sub.CurrentPeriodStart).TotalDays, 1);
+            var remainingDays = Math.Clamp((end - DateTime.UtcNow).TotalDays, 0, totalDays);
+            fraction = (decimal)(remainingDays / totalDays);
+        }
+
+        var proration = decimal.Round(deltaSeats * perSeatMonthly * cycleMonths * fraction, 2);
+        if (proration <= 0m)
+            return;
+
+        var invoice = await invoices.CreateAsync(new CreateInvoiceRequest(
+            client.Id, client.Name, client.PlanName ?? plan.Name, proration,
+            DateTime.UtcNow.Date.AddDays(14)), ct);
+        if (invoice is not null)
+            await invoices.MarkProrationAsync(invoice.Id, deltaSeats, ct);
     }
 
     public async Task<IReadOnlyList<PlanResponse>> ListPlansAsync(string? visibility, string? audience, CancellationToken ct = default)

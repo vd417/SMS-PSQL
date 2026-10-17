@@ -14,7 +14,10 @@ public sealed record ClientResponse(
     string? ContactName, string? ContactEmail, string? ContactPhone, string? Address,
     string? LogoUrl = null, string? ImageUrl = null,
     string? IdProofType = null, string? IdProofUrl = null,
-    int EnrolledStudents = 0);
+    int EnrolledStudents = 0, string? BillingCycle = null);
+
+/// <summary>Raise a school's billed seat limit (CATRE team action). Only increases are allowed.</summary>
+public sealed record IncreaseSeatsRequest(int SeatLimit, string? Reason = null);
 
 public sealed record CreateClientRequest(
     string Name, string Slug, string? Country, string? AdminName, string? AdminEmail,
@@ -86,6 +89,8 @@ public sealed record ClientRow
     public string? IdProofUrl { get; set; }
     /// <summary>Live active SIS enrolment (display). Only SelectLive returns it; 0 for stored-proc rows.</summary>
     public int EnrolledStudents { get; set; }
+    /// <summary>Billing cycle ("month" | "quarter" | "year"). Only SelectLive returns it.</summary>
+    public string? BillingCycle { get; set; }
 }
 
 // ---- Plan ----
@@ -118,7 +123,7 @@ public static class CatreMappers
         new ClientLimits(r.LimitsStudents, r.LimitsStaff, r.LimitsStorageGb),
         r.CreatedAt, r.Csm, r.HealthScore,
         r.ContactName, r.ContactEmail, r.ContactPhone, r.Address, r.LogoUrl, r.ImageUrl,
-        r.IdProofType, r.IdProofUrl, r.EnrolledStudents);
+        r.IdProofType, r.IdProofUrl, r.EnrolledStudents, r.BillingCycle);
 
     public static PlanResponse ToResponse(this PlanRow r) => new(
         r.Id, r.Name, r.Tier, r.Pricing, r.Price, r.PerStudent, r.MinStudents, r.Period,

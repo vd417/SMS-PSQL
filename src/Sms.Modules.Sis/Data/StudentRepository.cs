@@ -64,14 +64,26 @@ LEFT JOIN LATERAL (
             COALESCE(t."LimitsStudents", 0) AS "Limit",
             (SELECT count(*)::int FROM "dbo"."Students" s
              WHERE s."TenantId" = @tid AND s."Status" = 'active') AS "Used",
-            COALESCE(t."SeatAlertThreshold", p."SeatAlertThreshold", 5) AS "Threshold"
+            COALESCE(t."SeatAlertThreshold", p."SeatAlertThreshold", 5) AS "Threshold",
+            COALESCE(t."SeatIncreaseMode", 'manual') AS "Mode",
+            (p."Pricing" = 'per_student') AS "PerStudent"
         FROM "dbo"."Tenants" t
         LEFT JOIN "dbo"."Plans" p ON p."Id" = t."PlanId"
         WHERE t."Id" = @tid
         """;
         var row = (await QueryInlineAsync<SeatUsageRow>(sql, new { tid = tenantId }, ct)).FirstOrDefault();
-        return row ?? new SeatUsageRow(0, 0, 5);
+        return row ?? new SeatUsageRow(0, 0, 5, "manual", false);
     }
+
+    /// <summary>
+    /// Auto-grow the billed seat cap (Tenants.LimitsStudents) to at least <paramref name="newLimit"/>.
+    /// Used when a per-student school is set to auto-increase: enrolment is allowed past the old cap
+    /// and billing follows the live count. Only ever raises the cap, never lowers it.
+    /// </summary>
+    public Task<int> BumpSeatLimitAsync(Guid tenantId, int newLimit, CancellationToken ct = default) =>
+        ExecuteInlineAsync(
+            """UPDATE "dbo"."Tenants" SET "LimitsStudents" = GREATEST(COALESCE("LimitsStudents", 0), @newLimit) WHERE "Id" = @tid""",
+            new { tid = tenantId, newLimit }, ct);
 
     public Task<StudentResponse?> CreateAsync(Guid tenantId, CreateStudentRequest r, CancellationToken ct = default) =>
         QuerySingleProcAsync<StudentResponse>("dbo.Student_Create", new
