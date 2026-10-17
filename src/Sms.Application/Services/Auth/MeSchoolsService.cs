@@ -2,6 +2,7 @@ using Npgsql;
 using Sms.Application.Common;
 using Sms.Application.DTOs.Auth;
 using Sms.Application.Interfaces.DAO;
+using Sms.Application.Services.Tenancy;
 using Sms.Modules.Finance;
 using Sms.Modules.Tenancy.Contracts;
 using Sms.Modules.Tenancy.Data;
@@ -21,6 +22,10 @@ public interface IMeSchoolsService
     Task<ApiResult<SeatRequestResponse>> RequestSeatsAsync(Guid tenantId, RaiseSeatRequest req, CancellationToken ct = default);
     /// <summary>School owner's own seat-increase requests (newest first).</summary>
     Task<IReadOnlyList<SeatRequestResponse>> ListSeatRequestsAsync(Guid tenantId, CancellationToken ct = default);
+    /// <summary>Invoices for a school the owner owns (billing history).</summary>
+    Task<IReadOnlyList<InvoiceResponse>> ListInvoicesAsync(Guid tenantId, CancellationToken ct = default);
+    /// <summary>Render an invoice PDF for a school the owner owns.</summary>
+    Task<ApiResult<(byte[] Pdf, string FileName)>> GetInvoicePdfAsync(Guid tenantId, Guid invoiceId, CancellationToken ct = default);
     Task<ApiResult> DeleteAsync(Guid tenantId, DeleteClientRequest req, CancellationToken ct = default);
     Task<IReadOnlyList<PlanResponse>> ListPublishedPlansAsync(CancellationToken ct = default);
     Task<ApiResult<TokenResponse>> SwitchTenantAsync(Guid tenantId, CancellationToken ct = default);
@@ -60,6 +65,8 @@ public sealed class MeSchoolsService(
     OnboardingRepository onboarding,
     FeeInvoiceRepository feeInvoices,
     SeatRequestRepository seatRequests,
+    InvoiceRepository invoices,
+    ITenancyService tenancy,
     IJwtTokenService jwt,
     IRefreshTokenStore tokens) : IMeSchoolsService
 {
@@ -320,6 +327,55 @@ public sealed class MeSchoolsService(
         {
             tenant.Set(savedTid, uid, wasPlatform);
         }
+    }
+
+    public async Task<IReadOnlyList<InvoiceResponse>> ListInvoicesAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        if (tenant.UserId is not { } uid) return [];
+        var me = await auth.GetByIdAsync(uid, ct);
+        if (me?.Email is null) return [];
+
+        var savedTid = tenant.TenantId;
+        var wasPlatform = tenant.IsPlatform;
+        tenant.Set(null, uid, isPlatform: true);
+        try
+        {
+            if (!wasPlatform)
+            {
+                var owned = await auth.GetByEmailAndTenantAsync(me.Email, tenantId, ct);
+                if (owned is null) return [];
+            }
+            return await invoices.ListAsync(null, tenantId, ct);
+        }
+        finally { tenant.Set(savedTid, uid, wasPlatform); }
+    }
+
+    public async Task<ApiResult<(byte[] Pdf, string FileName)>> GetInvoicePdfAsync(
+        Guid tenantId, Guid invoiceId, CancellationToken ct = default)
+    {
+        if (tenant.UserId is not { } uid)
+            return ApiResult<(byte[], string)>.Fail(new Error("unauthorized", "unauthorized"), 401);
+        var me = await auth.GetByIdAsync(uid, ct);
+        if (me?.Email is null)
+            return ApiResult<(byte[], string)>.Fail(new Error("unauthorized", "unauthorized"), 401);
+
+        var savedTid = tenant.TenantId;
+        var wasPlatform = tenant.IsPlatform;
+        tenant.Set(null, uid, isPlatform: true);
+        try
+        {
+            if (!wasPlatform)
+            {
+                var owned = await auth.GetByEmailAndTenantAsync(me.Email, tenantId, ct);
+                if (owned is null)
+                    return ApiResult<(byte[], string)>.Fail(new Error("forbidden", "You do not own that school."), 403);
+            }
+            var inv = await invoices.GetAsync(invoiceId, ct);
+            if (inv is null || inv.TenantId != tenantId)
+                return ApiResult<(byte[], string)>.Fail(new Error("not_found", "invoice not found"), 404);
+            return await tenancy.GetInvoicePdfAsync(invoiceId, ct);
+        }
+        finally { tenant.Set(savedTid, uid, wasPlatform); }
     }
 
     public async Task<ApiResult> DeleteAsync(Guid tenantId, DeleteClientRequest req, CancellationToken ct = default)

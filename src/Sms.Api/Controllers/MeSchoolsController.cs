@@ -46,6 +46,19 @@ public sealed class MeSchoolsController(IMeSchoolsService schools, IUserSettings
     public async Task<IActionResult> ListSeatRequests(Guid tenantId, CancellationToken ct) =>
         OkData(await schools.ListSeatRequestsAsync(tenantId, ct));
 
+    [HttpGet("schools/{tenantId:guid}/invoices")]
+    public async Task<IActionResult> Invoices(Guid tenantId, CancellationToken ct) =>
+        OkData(await schools.ListInvoicesAsync(tenantId, ct));
+
+    [HttpGet("schools/{tenantId:guid}/invoices/{invoiceId:guid}/pdf")]
+    public async Task<IActionResult> InvoicePdf(Guid tenantId, Guid invoiceId, CancellationToken ct)
+    {
+        var result = await schools.GetInvoicePdfAsync(tenantId, invoiceId, ct);
+        if (!result.IsSuccess) return FromResult(result);
+        var (pdf, fileName) = result.Data!;
+        return File(pdf, "application/pdf", fileName);
+    }
+
     [HttpDelete("schools/{tenantId:guid}")]
     public async Task<IActionResult> Delete(Guid tenantId, [FromBody] DeleteClientRequest req, CancellationToken ct) =>
         FromResult(await schools.DeleteAsync(tenantId, req, ct));
