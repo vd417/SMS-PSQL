@@ -23,6 +23,12 @@ public interface ITenancyService
     Task<ApiResult<ClientResponse>> ChangeClientPlanAsync(Guid id, ChangePlanRequest req, CancellationToken ct = default);
     /// <summary>Raise a school's billed seat limit (CATRE team). Recomputes MRR and prorates per-student.</summary>
     Task<ApiResult<ClientResponse>> IncreaseClientSeatsAsync(Guid id, IncreaseSeatsRequest req, CancellationToken ct = default);
+    /// <summary>Seat-increase requests raised by schools, for CATRE review.</summary>
+    Task<IReadOnlyList<SeatRequestResponse>> ListSeatRequestsAsync(string? status, CancellationToken ct = default);
+    /// <summary>Approve a pending seat request: applies the increase (cap + MRR + proration) and marks it approved.</summary>
+    Task<ApiResult<SeatRequestResponse>> ApproveSeatRequestAsync(Guid id, ReviewSeatRequest req, CancellationToken ct = default);
+    /// <summary>Reject a pending seat request without applying it.</summary>
+    Task<ApiResult<SeatRequestResponse>> RejectSeatRequestAsync(Guid id, ReviewSeatRequest req, CancellationToken ct = default);
 
     Task<IReadOnlyList<PlanResponse>> ListPlansAsync(string? visibility, string? audience, CancellationToken ct = default);
     Task<ApiResult<PlanResponse>> GetPlanAsync(Guid id, CancellationToken ct = default);
@@ -72,6 +78,7 @@ public sealed class TenancyService(
     PlanRepository plans,
     InvoiceRepository invoices,
     SubscriptionRepository subscriptions,
+    SeatRequestRepository seatRequests,
     DashboardRepository dashboard,
     OnboardingRepository onboarding,
     TicketRepository tickets,
@@ -381,6 +388,41 @@ public sealed class TenancyService(
         }
 
         return ApiResult<ClientResponse>.Ok(updated.ToResponse());
+    }
+
+    public Task<IReadOnlyList<SeatRequestResponse>> ListSeatRequestsAsync(string? status, CancellationToken ct = default)
+        => seatRequests.ListAsync(status, null, ct);
+
+    public async Task<ApiResult<SeatRequestResponse>> ApproveSeatRequestAsync(
+        Guid id, ReviewSeatRequest req, CancellationToken ct = default)
+    {
+        var row = await seatRequests.GetAsync(id, ct);
+        if (row is null)
+            return ApiResult<SeatRequestResponse>.Fail(new Error("not_found", "request not found"), 404);
+        if (!string.Equals(row.Status, "pending", StringComparison.OrdinalIgnoreCase))
+            return ApiResult<SeatRequestResponse>.Fail(new Error("invalid_state", "request is not pending"), 409);
+
+        // Apply the increase (raise cap, recompute MRR, prorate per-student) — same path as the direct action.
+        var applied = await IncreaseClientSeatsAsync(
+            row.TenantId, new IncreaseSeatsRequest(row.RequestedSeats, req.Note), ct);
+        if (!applied.IsSuccess)
+            return ApiResult<SeatRequestResponse>.Fail(applied.Error!, applied.StatusCode);
+
+        var updated = await seatRequests.SetStatusAsync(id, "approved", null, ct);
+        return ApiResult<SeatRequestResponse>.Ok(updated ?? row);
+    }
+
+    public async Task<ApiResult<SeatRequestResponse>> RejectSeatRequestAsync(
+        Guid id, ReviewSeatRequest req, CancellationToken ct = default)
+    {
+        var row = await seatRequests.GetAsync(id, ct);
+        if (row is null)
+            return ApiResult<SeatRequestResponse>.Fail(new Error("not_found", "request not found"), 404);
+        if (!string.Equals(row.Status, "pending", StringComparison.OrdinalIgnoreCase))
+            return ApiResult<SeatRequestResponse>.Fail(new Error("invalid_state", "request is not pending"), 409);
+
+        var updated = await seatRequests.SetStatusAsync(id, "rejected", null, ct);
+        return ApiResult<SeatRequestResponse>.Ok(updated ?? row);
     }
 
     /// <summary>

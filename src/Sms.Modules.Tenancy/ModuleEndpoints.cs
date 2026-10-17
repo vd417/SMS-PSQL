@@ -12,6 +12,7 @@ public static class ModuleEndpoints
         services.AddScoped<InvoiceRepository>();
         services.AddScoped<SubscriptionRepository>();
         services.AddScoped<PlanUpgradeRequestRepository>();
+        services.AddScoped<SeatRequestRepository>();
         services.AddScoped<DashboardRepository>();
         services.AddScoped<OnboardingRepository>();
         services.AddScoped<TicketRepository>();

@@ -24,6 +24,17 @@ internal sealed record SubscriptionCreated(
 public sealed record DueSubscription(
     Guid Id, Guid TenantId, Guid PlanId, int Seats, string? BillingInterval, DateTime? RenewsAt);
 
+// ---- Seat-increase requests (owner raises, CATRE approves) ----
+public sealed record SeatRequestResponse(
+    Guid Id, Guid TenantId, string? TenantName, int CurrentSeats, int RequestedSeats,
+    string Status, string? Note, DateTime CreatedAt, DateTime UpdatedAt);
+
+/// <summary>School owner raises a seat-increase request.</summary>
+public sealed record RaiseSeatRequest(int RequestedSeats, string? Note = null);
+
+/// <summary>CATRE approves/rejects a seat-increase request.</summary>
+public sealed record ReviewSeatRequest(string? Note = null);
+
 // ---- Dashboard overview ----
 public sealed record DashCounts(int Total, int Active, int Trial, int Suspended, int Cancelled);
 public sealed record PlanMixItem(string Label, int Value, string? Color);

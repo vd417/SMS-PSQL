@@ -37,6 +37,15 @@ public sealed class MeSchoolsController(IMeSchoolsService schools, IUserSettings
         Guid tenantId, [FromBody] UpdateSchoolProfileRequest req, CancellationToken ct) =>
         FromResult(await schools.UpdateAsync(tenantId, req, ct));
 
+    [HttpPost("schools/{tenantId:guid}/seat-requests")]
+    public async Task<IActionResult> RequestSeats(
+        Guid tenantId, [FromBody] RaiseSeatRequest req, CancellationToken ct) =>
+        FromResult(await schools.RequestSeatsAsync(tenantId, req, ct));
+
+    [HttpGet("schools/{tenantId:guid}/seat-requests")]
+    public async Task<IActionResult> ListSeatRequests(Guid tenantId, CancellationToken ct) =>
+        OkData(await schools.ListSeatRequestsAsync(tenantId, ct));
+
     [HttpDelete("schools/{tenantId:guid}")]
     public async Task<IActionResult> Delete(Guid tenantId, [FromBody] DeleteClientRequest req, CancellationToken ct) =>
         FromResult(await schools.DeleteAsync(tenantId, req, ct));

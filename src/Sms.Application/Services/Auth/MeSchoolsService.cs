@@ -17,6 +17,10 @@ public interface IMeSchoolsService
     Task<IReadOnlyList<ClientResponse>> ListAsync(CancellationToken ct = default);
     Task<ApiResult<ClientResponse>> CreateAsync(CreateMySchoolRequest req, CancellationToken ct = default);
     Task<ApiResult<ClientResponse>> UpdateAsync(Guid tenantId, UpdateSchoolProfileRequest req, CancellationToken ct = default);
+    /// <summary>School owner raises a seat-increase request for CATRE to approve (does not apply it).</summary>
+    Task<ApiResult<SeatRequestResponse>> RequestSeatsAsync(Guid tenantId, RaiseSeatRequest req, CancellationToken ct = default);
+    /// <summary>School owner's own seat-increase requests (newest first).</summary>
+    Task<IReadOnlyList<SeatRequestResponse>> ListSeatRequestsAsync(Guid tenantId, CancellationToken ct = default);
     Task<ApiResult> DeleteAsync(Guid tenantId, DeleteClientRequest req, CancellationToken ct = default);
     Task<IReadOnlyList<PlanResponse>> ListPublishedPlansAsync(CancellationToken ct = default);
     Task<ApiResult<TokenResponse>> SwitchTenantAsync(Guid tenantId, CancellationToken ct = default);
@@ -55,6 +59,7 @@ public sealed class MeSchoolsService(
     PlanRepository plans,
     OnboardingRepository onboarding,
     FeeInvoiceRepository feeInvoices,
+    SeatRequestRepository seatRequests,
     IJwtTokenService jwt,
     IRefreshTokenStore tokens) : IMeSchoolsService
 {
@@ -235,6 +240,81 @@ public sealed class MeSchoolsService(
                 return ApiResult<ClientResponse>.Fail(
                     new Error("slug_taken", "That school id is already in use. Choose another."), 409);
             }
+        }
+        finally
+        {
+            tenant.Set(savedTid, uid, wasPlatform);
+        }
+    }
+
+    public async Task<ApiResult<SeatRequestResponse>> RequestSeatsAsync(
+        Guid tenantId, RaiseSeatRequest req, CancellationToken ct = default)
+    {
+        if (tenant.UserId is not { } uid)
+            return ApiResult<SeatRequestResponse>.Fail(new Error("unauthorized", "unauthorized"), 401);
+
+        var me = await auth.GetByIdAsync(uid, ct);
+        if (me?.Email is null)
+            return ApiResult<SeatRequestResponse>.Fail(new Error("unauthorized", "unauthorized"), 401);
+
+        var roles = await auth.GetRolesAsync(uid, ct);
+        var canRequest = tenant.IsPlatform
+            || roles.Contains(Policies.SchoolOwner)
+            || roles.Contains(Policies.SchoolAdmin);
+        if (!canRequest)
+            return ApiResult<SeatRequestResponse>.Fail(
+                new Error("forbidden", "Only school owners or admins can request more seats."), 403);
+
+        var savedTid = tenant.TenantId;
+        var wasPlatform = tenant.IsPlatform;
+        tenant.Set(null, uid, isPlatform: true);
+        try
+        {
+            if (!wasPlatform)
+            {
+                var owned = await auth.GetByEmailAndTenantAsync(me.Email, tenantId, ct);
+                if (owned is null)
+                    return ApiResult<SeatRequestResponse>.Fail(new Error("forbidden", "You do not own that school."), 403);
+            }
+
+            var client = await clients.GetAsync(tenantId, ct);
+            if (client is null)
+                return ApiResult<SeatRequestResponse>.Fail(new Error("not_found", "school not found"), 404);
+
+            var current = client.LimitsStudents ?? 0;
+            if (req.RequestedSeats <= current)
+                return ApiResult<SeatRequestResponse>.Fail(
+                    new Error("invalid_request", $"Requested seats must be above the current {current}."), 422);
+
+            var created = await seatRequests.CreateAsync(
+                tenantId, client.Name, current, req.RequestedSeats, req.Note, uid, ct);
+            return created is null
+                ? ApiResult<SeatRequestResponse>.Fail(new Error("internal_error", "could not create request"), 500)
+                : ApiResult<SeatRequestResponse>.Ok(created, 201);
+        }
+        finally
+        {
+            tenant.Set(savedTid, uid, wasPlatform);
+        }
+    }
+
+    public async Task<IReadOnlyList<SeatRequestResponse>> ListSeatRequestsAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        if (tenant.UserId is not { } uid) return [];
+        var me = await auth.GetByIdAsync(uid, ct);
+        if (me?.Email is null) return [];
+
+        var savedTid = tenant.TenantId;
+        var wasPlatform = tenant.IsPlatform;
+        tenant.Set(null, uid, isPlatform: true);
+        try
+        {
+            if (!wasPlatform)
+            {
+                var owned = await auth.GetByEmailAndTenantAsync(me.Email, tenantId, ct);
+                if (owned is null) return [];
+            }
+            return await seatRequests.ListAsync(null, tenantId, ct);
         }
         finally
         {

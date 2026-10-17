@@ -37,8 +37,21 @@ public sealed class ClientController(ITenancyService tenancy) : ApiControllerBas
     public async Task<IActionResult> ChangePlan(Guid id, [FromBody] ChangePlanRequest req, CancellationToken ct) =>
         FromResult(await tenancy.ChangeClientPlanAsync(id, req, ct));
 
-    /// <summary>Raise a school's billed seat limit (CATRE team action).</summary>
+    /// <summary>Raise a school's billed seat limit directly (CATRE team action).</summary>
     [HttpPost("clients/{id:guid}/seats")]
     public async Task<IActionResult> IncreaseSeats(Guid id, [FromBody] IncreaseSeatsRequest req, CancellationToken ct) =>
         FromResult(await tenancy.IncreaseClientSeatsAsync(id, req, ct));
+
+    /// <summary>Seat-increase requests raised by schools (CATRE review queue).</summary>
+    [HttpGet("seat-requests")]
+    public async Task<IActionResult> ListSeatRequests([FromQuery] string? status, CancellationToken ct) =>
+        OkData(await tenancy.ListSeatRequestsAsync(status, ct));
+
+    [HttpPost("seat-requests/{id:guid}/approve")]
+    public async Task<IActionResult> ApproveSeatRequest(Guid id, [FromBody] ReviewSeatRequest req, CancellationToken ct) =>
+        FromResult(await tenancy.ApproveSeatRequestAsync(id, req ?? new ReviewSeatRequest(), ct));
+
+    [HttpPost("seat-requests/{id:guid}/reject")]
+    public async Task<IActionResult> RejectSeatRequest(Guid id, [FromBody] ReviewSeatRequest req, CancellationToken ct) =>
+        FromResult(await tenancy.RejectSeatRequestAsync(id, req ?? new ReviewSeatRequest(), ct));
 }
