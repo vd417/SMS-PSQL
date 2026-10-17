@@ -1,4 +1,4 @@
--- 0023: seat-limit + usage-based billing foundations (additive columns only).
+-- 0025: seat-limit + usage-based billing foundations (additive columns only).
 --
 -- Billed-vs-enrolled is already modelled (Tenants.StudentsCount billed vs live
 -- EnrolledStudents). The billed SEAT LIMIT reuses the existing Tenants."LimitsStudents"

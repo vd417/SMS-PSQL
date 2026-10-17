@@ -1,6 +1,6 @@
--- 0027: expose the plan-level seat/billing fields in the plan editor. Extends dbo.plan_upsert with
+-- 0029: expose the plan-level seat/billing fields in the plan editor. Extends dbo.plan_upsert with
 -- trailing IncludedStudents (flat-plan bundled seats), AllowedCycles (CSV of month,quarter,year) and
--- SeatAlertThreshold (default near-limit gap) params, persists them (columns added in 0023), and
+-- SeatAlertThreshold (default near-limit gap) params, persists them (columns added in 0025), and
 -- returns them. Signature changes, so the old 19-arg function is dropped first.
 -- Rollback: restore the 19-arg dbo.plan_upsert from db/postgres/10_tenancy_procs.sql and
 --   DROP FUNCTION IF EXISTS dbo.plan_upsert(uuid,varchar,varchar,varchar,numeric,numeric,int,varchar,varchar,int,int,int,varchar,varchar,varchar,varchar,int,varchar,varchar,int,varchar,int);

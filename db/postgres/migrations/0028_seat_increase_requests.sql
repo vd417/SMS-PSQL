@@ -1,4 +1,4 @@
--- 0026: seat-increase requests. A school owner RAISES a request to increase their billed seats;
+-- 0028: seat-increase requests. A school owner RAISES a request to increase their billed seats;
 -- the CATRE team APPROVES it (which applies the increase + bills the top-up) or rejects it. Mirrors
 -- the plan-upgrade-request flow. Not RLS-guarded (owner writes run under the elevated platform
 -- context in MeSchoolsService; CATRE is platform).
