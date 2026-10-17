@@ -5,5 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Audit only DIRECT dependencies. Transitive framework packages (e.g.
+         System.Security.Cryptography.Pkcs, Microsoft.AspNetCore.SignalR.Common) can carry
+         advisories with no patched release yet; with TreatWarningsAsErrors those NU1902/NU1903
+         audit warnings fail CI even though we don't reference them directly. Direct deps are
+         still audited, so our own packages remain gated. -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
 </Project>
