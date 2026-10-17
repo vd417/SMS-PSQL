@@ -75,7 +75,8 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
             r.Name, r.Slug, r.Country,
             ContactName = r.AdminName, ContactEmail = r.AdminEmail, ContactPhone = r.AdminPhone,
             r.Address, r.PlanId, r.Csm, r.LogoUrl, r.ImageUrl, r.IdProofType, r.IdProofUrl,
-            StudentsCount = r.StudentsCount ?? 0
+            StudentsCount = r.StudentsCount ?? 0,
+            BillingCycle = string.IsNullOrWhiteSpace(r.BillingCycle) ? "month" : r.BillingCycle
         }, ct);
 
     public Task<ClientRow?> UpdateProfileAsync(Guid id, UpdateSchoolProfileRequest r, CancellationToken ct = default) =>

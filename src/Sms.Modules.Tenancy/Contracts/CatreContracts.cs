@@ -24,9 +24,11 @@ public sealed record CreateClientRequest(
     string? AdminPhone, Guid PlanId, int TrialDays, string? Csm, string? Address = null,
     string? LogoUrl = null, string? ImageUrl = null,
     string? IdProofType = null, string? IdProofUrl = null,
-    // Initial student count entered at onboarding (per-student plans). Seeds Tenants.StudentsCount
-    // so the first invoice bills on it until live SIS enrolment takes over. Null for flat plans.
-    int? StudentsCount = null);
+    // Initial student count entered at onboarding. Seeds Tenants.StudentsCount so the first invoice
+    // bills on it until live SIS enrolment takes over. Carried for both plan types.
+    int? StudentsCount = null,
+    // Billing cycle chosen at onboarding: "month" | "quarter" | "year". Defaults to monthly.
+    string? BillingCycle = null);
 
 /// <summary>Partial update of school branding / contact. Null fields are left unchanged; Logo/Image use Set* flags.</summary>
 public sealed record UpdateSchoolProfileRequest(
