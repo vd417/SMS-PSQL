@@ -30,7 +30,7 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
         ) AS int) AS "StaffCount",
         t."StorageGb", t."LimitsStudents", t."LimitsStaff", t."LimitsStorageGb", t."CreatedAt", t."Csm", t."HealthScore",
         t."ContactName", t."ContactEmail", t."ContactPhone", t."Address", t."LogoUrl", t."ImageUrl",
-        t."IdProofType", t."IdProofUrl", t."BillingCycle"
+        t."IdProofType", t."IdProofUrl", t."BillingCycle", t."SeatIncreaseMode", t."SeatAlertThreshold"
         FROM "dbo"."Tenants" t
         """;
 
@@ -130,6 +130,25 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
             WHERE "Id" = @id
             """,
             new { id, limit, bump = bumpBilledFloor }, ct);
+        return (await QueryInlineAsync<ClientRow>($"{SelectLive} WHERE t.\"Id\" = @id", new { id }, ct))
+            .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Update a school's seat policy: increase mode ("auto"/"manual") and/or the near-limit alert gap.
+    /// Null arguments leave the respective column unchanged. Returns the refreshed live row.
+    /// </summary>
+    public async Task<ClientRow?> SetSeatSettingsAsync(
+        Guid id, string? mode, int? threshold, CancellationToken ct = default)
+    {
+        await ExecuteInlineAsync(
+            """
+            UPDATE "dbo"."Tenants"
+            SET "SeatIncreaseMode" = COALESCE(@mode, "SeatIncreaseMode"),
+                "SeatAlertThreshold" = CASE WHEN @hasThreshold THEN @threshold ELSE "SeatAlertThreshold" END
+            WHERE "Id" = @id
+            """,
+            new { id, mode, threshold, hasThreshold = threshold.HasValue }, ct);
         return (await QueryInlineAsync<ClientRow>($"{SelectLive} WHERE t.\"Id\" = @id", new { id }, ct))
             .FirstOrDefault();
     }

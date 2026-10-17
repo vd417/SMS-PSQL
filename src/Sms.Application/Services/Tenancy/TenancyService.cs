@@ -23,6 +23,8 @@ public interface ITenancyService
     Task<ApiResult<ClientResponse>> ChangeClientPlanAsync(Guid id, ChangePlanRequest req, CancellationToken ct = default);
     /// <summary>Raise a school's billed seat limit (CATRE team). Recomputes MRR and prorates per-student.</summary>
     Task<ApiResult<ClientResponse>> IncreaseClientSeatsAsync(Guid id, IncreaseSeatsRequest req, CancellationToken ct = default);
+    /// <summary>Update a school's seat policy (auto/manual increase mode + near-limit alert gap).</summary>
+    Task<ApiResult<ClientResponse>> UpdateSeatSettingsAsync(Guid id, SeatSettingsRequest req, CancellationToken ct = default);
     /// <summary>Seat-increase requests raised by schools, for CATRE review.</summary>
     Task<IReadOnlyList<SeatRequestResponse>> ListSeatRequestsAsync(string? status, CancellationToken ct = default);
     /// <summary>Approve a pending seat request: applies the increase (cap + MRR + proration) and marks it approved.</summary>
@@ -388,6 +390,30 @@ public sealed class TenancyService(
         }
 
         return ApiResult<ClientResponse>.Ok(updated.ToResponse());
+    }
+
+    public async Task<ApiResult<ClientResponse>> UpdateSeatSettingsAsync(
+        Guid id, SeatSettingsRequest req, CancellationToken ct = default)
+    {
+        string? mode = null;
+        if (!string.IsNullOrWhiteSpace(req.SeatIncreaseMode))
+        {
+            mode = req.SeatIncreaseMode.Trim().ToLowerInvariant();
+            if (mode is not ("auto" or "manual"))
+                return ApiResult<ClientResponse>.Fail(
+                    new Error("invalid_request", "mode must be 'auto' or 'manual'"), 422);
+        }
+        if (req.SeatAlertThreshold is < 0)
+            return ApiResult<ClientResponse>.Fail(
+                new Error("invalid_request", "threshold cannot be negative"), 422);
+        if (mode is null && req.SeatAlertThreshold is null)
+            return ApiResult<ClientResponse>.Fail(
+                new Error("invalid_request", "nothing to update"), 422);
+
+        var row = await clients.SetSeatSettingsAsync(id, mode, req.SeatAlertThreshold, ct);
+        return row is null
+            ? ApiResult<ClientResponse>.Fail(new Error("not_found", "resource not found"), 404)
+            : ApiResult<ClientResponse>.Ok(row.ToResponse());
     }
 
     public Task<IReadOnlyList<SeatRequestResponse>> ListSeatRequestsAsync(string? status, CancellationToken ct = default)

@@ -14,10 +14,14 @@ public sealed record ClientResponse(
     string? ContactName, string? ContactEmail, string? ContactPhone, string? Address,
     string? LogoUrl = null, string? ImageUrl = null,
     string? IdProofType = null, string? IdProofUrl = null,
-    int EnrolledStudents = 0, string? BillingCycle = null);
+    int EnrolledStudents = 0, string? BillingCycle = null,
+    string? SeatIncreaseMode = null, int? SeatAlertThreshold = null);
 
 /// <summary>Raise a school's billed seat limit (CATRE team action). Only increases are allowed.</summary>
 public sealed record IncreaseSeatsRequest(int SeatLimit, string? Reason = null);
+
+/// <summary>CATRE updates a school's seat policy: auto/manual increase mode and the near-limit alert gap.</summary>
+public sealed record SeatSettingsRequest(string? SeatIncreaseMode = null, int? SeatAlertThreshold = null);
 
 public sealed record CreateClientRequest(
     string Name, string Slug, string? Country, string? AdminName, string? AdminEmail,
@@ -93,6 +97,10 @@ public sealed record ClientRow
     public int EnrolledStudents { get; set; }
     /// <summary>Billing cycle ("month" | "quarter" | "year"). Only SelectLive returns it.</summary>
     public string? BillingCycle { get; set; }
+    /// <summary>Seat increase mode ("auto" | "manual"). Only SelectLive returns it.</summary>
+    public string? SeatIncreaseMode { get; set; }
+    /// <summary>Per-school near-limit alert gap override (null = use plan/default). Only SelectLive returns it.</summary>
+    public int? SeatAlertThreshold { get; set; }
 }
 
 // ---- Plan ----
@@ -102,12 +110,14 @@ public sealed record PlanOffer(string Label, int Pct);
 public sealed record PlanResponse(
     Guid Id, string Name, string Tier, string Pricing, decimal Price, decimal? PerStudent,
     int? MinStudents, string Period, IReadOnlyList<string> Features, PlanLimits Limits,
-    string Visibility, string Audience, string? Band, PlanOffer? Offer, string? Color, string? Description);
+    string Visibility, string Audience, string? Band, PlanOffer? Offer, string? Color, string? Description,
+    int? IncludedStudents = null, string? AllowedCycles = null, int? SeatAlertThreshold = null);
 
 public sealed record PlanUpsertRequest(
     Guid? Id, string Name, string? Tier, string Pricing, decimal Price, decimal? PerStudent, int? MinStudents,
     string Period, IReadOnlyList<string>? Features, PlanLimits Limits, string Visibility, string Audience,
-    string? Band, PlanOffer? Offer, string? Color, string? Description);
+    string? Band, PlanOffer? Offer, string? Color, string? Description,
+    int? IncludedStudents = null, string? AllowedCycles = null, int? SeatAlertThreshold = null);
 
 // Publish/unpublish a plan: visibility is "published" or "draft".
 public sealed record PublishPlanRequest(string Visibility);
@@ -115,7 +125,8 @@ public sealed record PublishPlanRequest(string Visibility);
 public sealed record PlanRow(
     Guid Id, string Name, string Tier, string Pricing, decimal Price, decimal? PerStudent, int? MinStudents,
     string Period, string? FeaturesCsv, int LimitsStudents, int LimitsStaff, int LimitsStorageGb,
-    string Visibility, string Audience, string? Band, string? OfferLabel, int? OfferPct, string? Color, string? Description);
+    string Visibility, string Audience, string? Band, string? OfferLabel, int? OfferPct, string? Color, string? Description,
+    int? IncludedStudents = null, string? AllowedCycles = null, int? SeatAlertThreshold = null);
 
 public static class CatreMappers
 {
@@ -125,7 +136,8 @@ public static class CatreMappers
         new ClientLimits(r.LimitsStudents, r.LimitsStaff, r.LimitsStorageGb),
         r.CreatedAt, r.Csm, r.HealthScore,
         r.ContactName, r.ContactEmail, r.ContactPhone, r.Address, r.LogoUrl, r.ImageUrl,
-        r.IdProofType, r.IdProofUrl, r.EnrolledStudents, r.BillingCycle);
+        r.IdProofType, r.IdProofUrl, r.EnrolledStudents, r.BillingCycle,
+        r.SeatIncreaseMode, r.SeatAlertThreshold);
 
     public static PlanResponse ToResponse(this PlanRow r) => new(
         r.Id, r.Name, r.Tier, r.Pricing, r.Price, r.PerStudent, r.MinStudents, r.Period,
@@ -133,7 +145,7 @@ public static class CatreMappers
         new PlanLimits(r.LimitsStudents, r.LimitsStaff, r.LimitsStorageGb),
         r.Visibility, r.Audience, r.Band,
         r.OfferLabel is null ? null : new PlanOffer(r.OfferLabel, r.OfferPct ?? 0),
-        r.Color, r.Description);
+        r.Color, r.Description, r.IncludedStudents, r.AllowedCycles, r.SeatAlertThreshold);
 
     /// <summary>
     /// Monthly bill for a tenant on a plan. Per-student plans: rate × max(students, seats, min_students, 1).

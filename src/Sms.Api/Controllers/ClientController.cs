@@ -42,6 +42,11 @@ public sealed class ClientController(ITenancyService tenancy) : ApiControllerBas
     public async Task<IActionResult> IncreaseSeats(Guid id, [FromBody] IncreaseSeatsRequest req, CancellationToken ct) =>
         FromResult(await tenancy.IncreaseClientSeatsAsync(id, req, ct));
 
+    /// <summary>Update a school's seat policy (auto/manual increase mode + alert threshold).</summary>
+    [HttpPost("clients/{id:guid}/seat-settings")]
+    public async Task<IActionResult> SeatSettings(Guid id, [FromBody] SeatSettingsRequest req, CancellationToken ct) =>
+        FromResult(await tenancy.UpdateSeatSettingsAsync(id, req, ct));
+
     /// <summary>Seat-increase requests raised by schools (CATRE review queue).</summary>
     [HttpGet("seat-requests")]
     public async Task<IActionResult> ListSeatRequests([FromQuery] string? status, CancellationToken ct) =>

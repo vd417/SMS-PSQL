@@ -7,7 +7,8 @@ public sealed class PlanRepository(IDbConnectionFactory factory) : BaseRepositor
 {
     private const string Cols =
         "\"Id\", \"Name\", \"Tier\", \"Pricing\", \"Price\", \"PerStudent\", \"MinStudents\", \"Period\", \"FeaturesCsv\", " +
-        "\"LimitsStudents\", \"LimitsStaff\", \"LimitsStorageGb\", \"Visibility\", \"Audience\", \"Band\", \"OfferLabel\", \"OfferPct\", \"Color\", \"Description\"";
+        "\"LimitsStudents\", \"LimitsStaff\", \"LimitsStorageGb\", \"Visibility\", \"Audience\", \"Band\", \"OfferLabel\", \"OfferPct\", \"Color\", \"Description\", " +
+        "\"IncludedStudents\", \"AllowedCycles\", \"SeatAlertThreshold\"";
 
     public Task<PlanRow?> UpsertAsync(PlanUpsertRequest r, CancellationToken ct = default) =>
         QuerySingleProcAsync<PlanRow>("dbo.Plan_Upsert", new
@@ -16,7 +17,9 @@ public sealed class PlanRepository(IDbConnectionFactory factory) : BaseRepositor
             FeaturesCsv = r.Features is null || r.Features.Count == 0 ? null : string.Join(',', r.Features),
             LimitsStudents = r.Limits.Students, LimitsStaff = r.Limits.Staff, LimitsStorageGb = r.Limits.StorageGb,
             r.Visibility, r.Audience, r.Band,
-            OfferLabel = r.Offer?.Label, OfferPct = r.Offer?.Pct, r.Color, r.Description
+            OfferLabel = r.Offer?.Label, OfferPct = r.Offer?.Pct, r.Color, r.Description,
+            r.IncludedStudents, AllowedCycles = string.IsNullOrWhiteSpace(r.AllowedCycles) ? "month,quarter,year" : r.AllowedCycles,
+            r.SeatAlertThreshold
         }, ct);
 
     public async Task<PlanRow?> SetVisibilityAsync(Guid id, string visibility, CancellationToken ct = default) =>
