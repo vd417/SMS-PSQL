@@ -917,7 +917,10 @@ public sealed record FeeStructureSummaryResponse(
     [property: JsonPropertyName("class")] string? ClassGrade,
     string? Section, string Currency, DateOnly EffectiveFrom, DateOnly? EffectiveTo,
     string Status, string? Description, DateTime CreatedAt, decimal TotalAmount,
-    IReadOnlyList<FeeStructureHeadAmountResponse> HeadAmounts);
+    IReadOnlyList<FeeStructureHeadAmountResponse> HeadAmounts,
+    // True only while this version was never published - the only versions that can be deleted.
+    // A version that was ever published is treated as "used" (it may have been billed) and kept.
+    bool Deletable);
 
 /// <summary>One fee head's projected revenue for a saved structure version — e.g. "Exam Fee —
 /// ₹8,000" — summed (rate × enrolled students) across every class that charges it.</summary>
@@ -927,7 +930,7 @@ public sealed record FeeStructureHeadAmountResponse(
 public sealed record FeeStructureListRow(
     Guid Id, Guid TenantId, string Name, string AcademicYear, string? ClassGrade, string? Section,
     string Currency, DateTime EffectiveFrom, DateTime? EffectiveTo, string Status,
-    string? Description, DateTime CreatedAt, string? AmountsJson);
+    string? Description, DateTime CreatedAt, string? AmountsJson, DateTime? PublishedAt);
 
 public sealed record FeeStructurePublishRow(bool Found, Guid? Id);
 public sealed record FeeStructureDeleteRow(bool Deleted, string? Reason);
@@ -988,8 +991,9 @@ public sealed class FeeStructureRepository(IDbConnectionFactory factory) : BaseR
     public Task<FeeStructurePublishRow?> UnpublishAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>
         QuerySingleProcAsync<FeeStructurePublishRow>("dbo.FeeStructure_Unpublish", new { TenantId = tenantId, Id = id }, ct);
 
-    /// <summary>Deletes a draft version outright. Refuses (Deleted = false, Reason = "is_active")
-    /// to delete the currently-published version — publish something else first.</summary>
+    /// <summary>Soft-deletes (archives, Status = "archived") a version that was never published.
+    /// Refuses (Deleted = false, Reason = "in_use") any version that was ever published — it may
+    /// have been billed against — and (Reason = "not_found") a missing or already-archived one.</summary>
     public Task<FeeStructureDeleteRow?> DeleteAsync(Guid tenantId, Guid id, CancellationToken ct = default) =>
         QuerySingleProcAsync<FeeStructureDeleteRow>("dbo.FeeStructure_Delete", new { TenantId = tenantId, Id = id }, ct);
 

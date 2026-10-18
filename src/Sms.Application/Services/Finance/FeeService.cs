@@ -418,6 +418,8 @@ public sealed class FeeService(
         {
             return row?.Reason switch
             {
+                // Ever published => may have been billed against; only never-published versions can be deleted.
+                "in_use" => ApiResult.Fail(new Error("conflict", "Only versions that were never published can be deleted. This one has been published, so it can't be removed."), 409),
                 "is_active" => ApiResult.Fail(new Error("conflict", "Cannot delete the currently published version — publish another version first."), 409),
                 _ => ApiResult.Fail(new Error("not_found", "Fee structure version not found"), 404),
             };
@@ -841,7 +843,9 @@ public sealed class FeeService(
         return new(
             row.Id, row.Name, row.AcademicYear, row.ClassGrade, row.Section, row.Currency,
             DateOnly.FromDateTime(row.EffectiveFrom), row.EffectiveTo is { } et ? DateOnly.FromDateTime(et) : null,
-            row.Status, row.Description, row.CreatedAt, total, headAmounts);
+            row.Status, row.Description, row.CreatedAt, total, headAmounts,
+            // Deletable only if never published: PublishedAt unset AND not currently active.
+            Deletable: row.PublishedAt is null && !string.Equals(row.Status, "active", StringComparison.OrdinalIgnoreCase));
     }
 
     /// For each class in the amounts JSON, resolves each fee head's rate, multiplies by however

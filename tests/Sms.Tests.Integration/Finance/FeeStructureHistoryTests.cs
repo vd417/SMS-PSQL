@@ -331,6 +331,42 @@ public class FeeStructureHistoryTests(PostgresFixture fx)
     }
 
     [Fact]
+    public async Task A_version_that_was_published_then_unpublished_still_cannot_be_deleted()
+    {
+        await using var app = App();
+        var tenantId = Guid.NewGuid();
+        var client = PrincipalClient(app, tenantId);
+
+        // Publish it (so it may have been billed against), then unpublish it.
+        var version = await SaveStructureAsync(client, "Once live", "2025-26", "active");
+        var versionId = version.GetProperty("id").GetGuid();
+        await Data(await client.PostAsync($"/v1/fees/structures/{versionId}/unpublish", new StringContent("")), HttpStatusCode.OK);
+
+        var res = await client.DeleteAsync($"/v1/fees/structures/{versionId}");
+        res.StatusCode.Should().Be(HttpStatusCode.Conflict, "unpublishing does not make an ever-published version deletable");
+
+        var history = await Data(await client.GetAsync("/v1/fees/structures"), HttpStatusCode.OK);
+        history.EnumerateArray().Any(e => e.GetProperty("id").GetGuid() == versionId).Should().BeTrue("a refused delete must not remove the row");
+    }
+
+    [Fact]
+    public async Task History_marks_only_never_published_versions_as_deletable()
+    {
+        await using var app = App();
+        var tenantId = Guid.NewGuid();
+        var client = PrincipalClient(app, tenantId);
+
+        var draft = await SaveStructureAsync(client, "Never published", "2025-26", "inactive");
+        var published = await SaveStructureAsync(client, "Published", "2025-26", "active");
+
+        var draftEntry = await HistoryEntryAsync(client, draft.GetProperty("id").GetGuid());
+        draftEntry.GetProperty("deletable").GetBoolean().Should().BeTrue("a never-published draft can be deleted");
+
+        var publishedEntry = await HistoryEntryAsync(client, published.GetProperty("id").GetGuid());
+        publishedEntry.GetProperty("deletable").GetBoolean().Should().BeFalse("a published version may have been billed against and cannot be deleted");
+    }
+
+    [Fact]
     public async Task Editing_a_draft_and_saving_updates_it_in_place_instead_of_creating_another_one()
     {
         await using var app = App();
