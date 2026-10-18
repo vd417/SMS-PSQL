@@ -76,14 +76,18 @@ public sealed class LeaveRepository(IDbConnectionFactory factory) : BaseReposito
             """;
         // Scalar subquery, not a JOIN — UserRoles' key is (UserId, Role), so a user with more
         // than one role would fan-out a plain join and duplicate the leave row per role.
+        // RequesterRole is the account role (teacher/principal/admin/...) — the approval inbox keys
+        // its Teacher/Staff/Admin category tabs off it, so it must stay a role token, not a job title.
+        // RequesterTitle is the human job title (teacher Designation, else staff Role) shown alongside
+        // the role for context ("Teacher · HOD"); null when the requester has neither.
         const string select = """
             SELECT lr."Id", lr."TenantId", lr."RequesterId", lr."ChildId", lr."Type", lr."FromDate", lr."ToDate",
                    lr."Reason", lr."Substitute", lr."Status", lr."AppliedOn", lr."DecidedNote", lr."Priority", lr."AttachmentUrls",
                    u."Name" AS "RequesterName", d."Name" AS "DecidedByName",
+                   (SELECT "Role" FROM "dbo"."UserRoles" WHERE "UserId" = lr."RequesterId" ORDER BY "Role" LIMIT 1) AS "RequesterRole",
                    COALESCE(
                        NULLIF(trim((SELECT t2."Designation" FROM "dbo"."Teachers" t2 WHERE t2."UserId" = lr."RequesterId" AND t2."TenantId" = lr."TenantId" LIMIT 1)), ''),
-                       NULLIF(trim((SELECT st2."Role" FROM "dbo"."Staff" st2 WHERE st2."UserId" = lr."RequesterId" AND st2."TenantId" = lr."TenantId" LIMIT 1)), ''),
-                       (SELECT "Role" FROM "dbo"."UserRoles" WHERE "UserId" = lr."RequesterId" ORDER BY "Role" LIMIT 1)) AS "RequesterRole",
+                       NULLIF(trim((SELECT st2."Role" FROM "dbo"."Staff" st2 WHERE st2."UserId" = lr."RequesterId" AND st2."TenantId" = lr."TenantId" LIMIT 1)), '')) AS "RequesterTitle",
                    st."Name" AS "StudentName", st."AdmissionNo" AS "AdmissionNo",
                    COALESCE(st."ClassLabel", st."Grade") AS "StudentClass",
                    st."Section" AS "StudentSection", st."Roll" AS "StudentRoll"

@@ -16,6 +16,8 @@ public sealed record LeaveResponse(
     public string? RequesterName { get; init; }
     public string? DecidedByName { get; init; }
     public string? RequesterRole { get; init; }
+    // Human job title (teacher Designation / staff Role), shown next to RequesterRole; null if neither.
+    public string? RequesterTitle { get; init; }
     public string? StudentName { get; init; }
     public string? AdmissionNo { get; init; }
     public string? StudentClass { get; init; }
@@ -60,6 +62,17 @@ public sealed record LeaveResponse(
         this.StudentSection = StudentSection;
         this.StudentRoll = StudentRoll;
     }
+
+    // ListByStatusAsync with RequesterTitle (23 columns). The materializer matches the constructor
+    // POSITIONALLY to the SELECT column order, so RequesterTitle must sit right after RequesterRole,
+    // before the student fields — exactly as the query lists it.
+    public LeaveResponse(
+        Guid Id, Guid TenantId, Guid? RequesterId, Guid? ChildId, string Type, DateTime? FromDate, DateTime? ToDate,
+        string? Reason, string? Substitute, string Status, DateTime? AppliedOn, string? DecidedNote, string Priority,
+        string? AttachmentUrls, string? RequesterName, string? DecidedByName, string? RequesterRole, string? RequesterTitle,
+        string? StudentName, string? AdmissionNo, string? StudentClass, string? StudentSection, int? StudentRoll)
+        : this(Id, TenantId, RequesterId, ChildId, Type, FromDate, ToDate, Reason, Substitute, Status, AppliedOn, DecidedNote, Priority, AttachmentUrls, RequesterName, DecidedByName, RequesterRole, StudentName, AdmissionNo, StudentClass, StudentSection, StudentRoll) =>
+        this.RequesterTitle = RequesterTitle;
 }
 
 public sealed record LeaveBalanceResponse(string Type, int Total, int Used);
