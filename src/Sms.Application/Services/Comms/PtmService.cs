@@ -127,13 +127,16 @@ public sealed class PtmService(
             return ApiResult<PtmMeetingResponse>.Fail(new Error("validation_failed", "mode is required (max 120 chars)"), 422);
         if (req.Subject is { Length: > 120 })
             return ApiResult<PtmMeetingResponse>.Fail(new Error("validation_failed", "subject must be at most 120 chars"), 422);
+        if (req.MeetingLink is { Length: > 1000 })
+            return ApiResult<PtmMeetingResponse>.Fail(new Error("validation_failed", "meeting_link must be at most 1000 chars"), 422);
 
         if (!await repo.StudentExistsAsync(tid, studentId, ct))
             return ApiResult<PtmMeetingResponse>.Fail(new Error("not_found", "resource not found"), 404);
         if (!await repo.TeacherExistsAsync(tid, teacherId, ct))
             return ApiResult<PtmMeetingResponse>.Fail(new Error("not_found", "resource not found"), 404);
 
-        var id = await repo.CreateAsync(tid, studentId, teacherId, req.Subject, date, time, req.Mode!, ct);
+        var meetingLink = string.IsNullOrWhiteSpace(req.MeetingLink) ? null : req.MeetingLink.Trim();
+        var id = await repo.CreateAsync(tid, studentId, teacherId, req.Subject, date, time, req.Mode!, meetingLink, ct);
         var created = (await repo.GetAsync(id, tid, ct))!;
         await notifier.NotifyMeetingScheduledAsync(tid, created, ct);
         return ApiResult<PtmMeetingResponse>.Ok(created, 201);

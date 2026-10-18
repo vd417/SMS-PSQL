@@ -7,10 +7,10 @@ namespace Sms.Modules.Comms;
 /// the staff (teacher/admin) apps; existing keys are unchanged so the parent app is unaffected.
 public sealed record PtmMeetingResponse(
     Guid Id, string Date, string Time, string Teacher, string? Subject, Guid Child, string Mode, string Status,
-    string StudentName, Guid? TeacherId);
+    string StudentName, Guid? TeacherId, string? MeetingLink);
 
 public sealed record CreatePtmRequest(
-    Guid? StudentId, Guid? TeacherId, string? Subject, string? Date, string? Time, string? Mode);
+    Guid? StudentId, Guid? TeacherId, string? Subject, string? Date, string? Time, string? Mode, string? MeetingLink);
 
 /// The parent path only reads Status; the staff path ignores Status (and instead resets it to
 /// "pending" itself whenever Date or Time changes).
@@ -22,7 +22,7 @@ public sealed class PtmRepository(IDbConnectionFactory factory) : BaseRepository
         "SELECT m.\"Id\", to_char(m.\"MeetingDate\", 'YYYY-MM-DD') AS \"Date\", " +
         "to_char(m.\"MeetingTime\", 'HH24:MI') AS \"Time\", COALESCE(t.\"Name\", '') AS \"Teacher\", " +
         "m.\"Subject\", m.\"StudentId\" AS \"Child\", m.\"Mode\", m.\"Status\", " +
-        "COALESCE(s.\"Name\", '') AS \"StudentName\", m.\"TeacherId\" " +
+        "COALESCE(s.\"Name\", '') AS \"StudentName\", m.\"TeacherId\", m.\"MeetingLink\" " +
         "FROM \"dbo\".\"PtmMeetings\" m " +
         "LEFT JOIN \"dbo\".\"Teachers\" t ON t.\"Id\" = m.\"TeacherId\" AND t.\"TenantId\" = m.\"TenantId\" " +
         "LEFT JOIN \"dbo\".\"Students\" s ON s.\"Id\" = m.\"StudentId\" AND s.\"TenantId\" = m.\"TenantId\" ";
@@ -81,20 +81,20 @@ public sealed class PtmRepository(IDbConnectionFactory factory) : BaseRepository
     /// value handler); the target columns are still "date" and "time" respectively.
     public async Task<Guid> CreateAsync(
         Guid tenantId, Guid studentId, Guid teacherId, string? subject, DateOnly date, TimeOnly time, string mode,
-        CancellationToken ct = default)
+        string? meetingLink, CancellationToken ct = default)
     {
         var id = Guid.NewGuid();
         await ExecuteInlineAsync(
             "INSERT INTO \"dbo\".\"PtmMeetings\" " +
             "(\"Id\", \"TenantId\", \"StudentId\", \"TeacherId\", \"Subject\", \"MeetingDate\", \"MeetingTime\", " +
-            "\"Mode\", \"Status\") VALUES " +
-            "(@id, @tenantId, @studentId, @teacherId, @subject, @date, @time, @mode, 'pending')",
+            "\"Mode\", \"Status\", \"MeetingLink\") VALUES " +
+            "(@id, @tenantId, @studentId, @teacherId, @subject, @date, @time, @mode, 'pending', @meetingLink)",
             new
             {
                 id, tenantId, studentId, teacherId, subject,
                 date = date.ToDateTime(TimeOnly.MinValue),
                 time = time.ToTimeSpan(),
-                mode,
+                mode, meetingLink,
             }, ct);
         return id;
     }

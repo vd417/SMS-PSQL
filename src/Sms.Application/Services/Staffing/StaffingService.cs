@@ -9,6 +9,8 @@ using Sms.Shared.Kernel.Data;
 using Sms.Shared.Kernel.Http;
 using Sms.Shared.Kernel.Results;
 using Sms.Application.Services.Realtime;
+using Sms.Application.Services.Comms;
+using Sms.Modules.Comms;
 using Sms.Shared.Kernel.Tenancy;
 
 namespace Sms.Application.Services.Staffing;
@@ -49,6 +51,7 @@ public sealed class StaffingService(
     IAuthDao users,
     ITenantContext tenant,
     ITenantFeatureSet features,
+    INotificationService notifications,
     ILiveBroadcaster live) : IStaffingService
 {
     private bool StaffSupportAllowed => FeatureGate.Allowed(tenant, features, FeatureCatalog.StaffSupport);
@@ -287,6 +290,18 @@ public sealed class StaffingService(
 
         var created = (await leave.CreateAsync(tid, tenant.UserId, req, attachmentUrlsJson, ct))!;
         await live.PublishAsync(tid, LiveEventTypes.Leave, ct: ct);
+
+        // Notify leave approvers (admin / owner / principal) so it surfaces in their CRM notifications.
+        foreach (var managerId in await leave.GetManagerUserIdsAsync(tid, ct))
+        {
+            await notifications.CreateAsync(new CreateNotificationRequest(
+                Icon: "calendar",
+                Tone: "info",
+                Title: $"New leave request: {created.Type}",
+                Body: $"A {created.Type} leave request is pending your approval.",
+                UserId: managerId), ct);
+        }
+
         return ApiResult<LeaveResponse>.Ok(created, 201);
     }
 
@@ -322,6 +337,20 @@ public sealed class StaffingService(
         var decided = (await leave.DecideAsync(id, req.Status, tenant.UserId, req.DecidedNote, ct))!;
         if (tenant.TenantId is { } tid)
             await live.PublishAsync(tid, LiveEventTypes.Leave, ct: ct);
+
+        // Notify the requester (their teacher/staff app reads this) of the decision.
+        if (existing.RequesterId is { } requesterId)
+        {
+            var approved = string.Equals(req.Status, "approved", StringComparison.OrdinalIgnoreCase);
+            await notifications.CreateAsync(new CreateNotificationRequest(
+                Icon: approved ? "checkmark-circle" : "close-circle",
+                Tone: approved ? "success" : "warning",
+                Title: $"Leave {req.Status}",
+                Body: $"Your {existing.Type} leave was {req.Status}."
+                    + (string.IsNullOrWhiteSpace(req.DecidedNote) ? "" : $" Note: {req.DecidedNote}"),
+                UserId: requesterId), ct);
+        }
+
         return ApiResult<LeaveResponse>.Ok(decided);
     }
 

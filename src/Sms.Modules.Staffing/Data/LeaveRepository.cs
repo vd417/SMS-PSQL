@@ -1,4 +1,5 @@
 using Sms.Modules.Staffing.Contracts;
+using Sms.Shared.Kernel.Authz;
 using Sms.Shared.Kernel.Data;
 
 namespace Sms.Modules.Staffing.Data;
@@ -52,6 +53,16 @@ public sealed class LeaveRepository(IDbConnectionFactory factory) : BaseReposito
               AND s."TenantId" = @tenantId
             """, new { teacherUserId, tenantId }, ct);
 
+    /// User-ids of this tenant's leave approvers (Admin / Owner / Principal) — the audience for a
+    /// "new leave request" notification. Mirrors the per-module manager query used by Issues/VehicleChecks.
+    public Task<IReadOnlyList<Guid>> GetManagerUserIdsAsync(Guid tenantId, CancellationToken ct = default) =>
+        QueryInlineAsync<Guid>("""
+            SELECT DISTINCT u."Id"
+            FROM "dbo"."Users" u
+            INNER JOIN "dbo"."UserRoles" ur ON ur."UserId" = u."Id"
+            WHERE u."TenantId" = @tenantId AND ur."Role" IN (@admin, @owner, @principal)
+            """, new { tenantId, admin = Policies.SchoolAdmin, owner = Policies.SchoolOwner, principal = Policies.Principal }, ct);
+
     public Task<IReadOnlyList<LeaveResponse>> ListByStatusAsync(
         string? status, IReadOnlyCollection<Guid>? childScope = null, CancellationToken ct = default)
     {
@@ -69,7 +80,10 @@ public sealed class LeaveRepository(IDbConnectionFactory factory) : BaseReposito
             SELECT lr."Id", lr."TenantId", lr."RequesterId", lr."ChildId", lr."Type", lr."FromDate", lr."ToDate",
                    lr."Reason", lr."Substitute", lr."Status", lr."AppliedOn", lr."DecidedNote", lr."Priority", lr."AttachmentUrls",
                    u."Name" AS "RequesterName", d."Name" AS "DecidedByName",
-                   (SELECT "Role" FROM "dbo"."UserRoles" WHERE "UserId" = lr."RequesterId" ORDER BY "Role" LIMIT 1) AS "RequesterRole",
+                   COALESCE(
+                       NULLIF(trim((SELECT t2."Designation" FROM "dbo"."Teachers" t2 WHERE t2."UserId" = lr."RequesterId" AND t2."TenantId" = lr."TenantId" LIMIT 1)), ''),
+                       NULLIF(trim((SELECT st2."Role" FROM "dbo"."Staff" st2 WHERE st2."UserId" = lr."RequesterId" AND st2."TenantId" = lr."TenantId" LIMIT 1)), ''),
+                       (SELECT "Role" FROM "dbo"."UserRoles" WHERE "UserId" = lr."RequesterId" ORDER BY "Role" LIMIT 1)) AS "RequesterRole",
                    st."Name" AS "StudentName", st."AdmissionNo" AS "AdmissionNo",
                    COALESCE(st."ClassLabel", st."Grade") AS "StudentClass",
                    st."Section" AS "StudentSection", st."Roll" AS "StudentRoll"

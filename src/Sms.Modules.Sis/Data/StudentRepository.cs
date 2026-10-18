@@ -37,7 +37,7 @@ LEFT JOIN (
 """;
 
     private const string ListWhere = """
-WHERE (@q IS NULL OR s."Name" LIKE '%' || @q || '%' OR s."AdmissionNo" LIKE '%' || @q || '%' OR s."ClassLabel" LIKE '%' || @q || '%')
+WHERE (@q IS NULL OR s."Name" ILIKE '%' || @q || '%' OR s."AdmissionNo" ILIKE '%' || @q || '%' OR s."ClassLabel" ILIKE '%' || @q || '%')
   AND (@grade IS NULL OR s."Grade" = @grade) AND (@status IS NULL OR s."Status" = @status)
   AND (@fee IS NULL OR s."FeeStatus" = @fee)
 """;
