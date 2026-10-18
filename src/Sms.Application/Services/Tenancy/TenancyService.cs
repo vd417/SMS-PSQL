@@ -143,12 +143,13 @@ public sealed class TenancyService(
         {
             await users.CreateUserAsync(row.Id, create.AdminEmail, create.AdminPhone, false,
                 [Policies.SchoolOwner], ct);
-            /* Welcome onboard email/SMS with school name + password-setup OTP. */
+            /* Warm welcome onboard email/SMS — NO OTP. The owner sets their password from the
+               panel's "Create a password" flow, where the one-time code is sent. */
             var inviteId = create.AdminEmail ?? create.AdminPhone;
             if (!string.IsNullOrWhiteSpace(inviteId))
             {
-                try { await auth.SendInviteSetupAsync(inviteId!, row.Name, "Owner", ct: ct); }
-                catch { /* invite is best-effort — school already created */ }
+                try { await auth.SendWelcomeOnboardAsync(inviteId!, row.Name, "Owner", ct: ct); }
+                catch { /* welcome is best-effort — school already created */ }
             }
         }
         if (row is not null)

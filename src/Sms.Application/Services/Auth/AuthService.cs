@@ -24,6 +24,11 @@ public interface IAuthService
     Task<ApiResult<object>> SendInviteSetupAsync(
         string identifier, string schoolName, string? roleLabel = null, TimeSpan? validFor = null,
         string method = "code", string? customMessage = null, CancellationToken ct = default, string? requestedRole = null);
+    /// <summary>Onboard welcome: a warm welcome email/SMS with NO one-time code. The owner
+    /// sets their password themselves from the panel's "Create a password" flow (where the
+    /// OTP lives). Used at school create, keeping the OTP out of the welcome message.</summary>
+    Task<ApiResult<object>> SendWelcomeOnboardAsync(
+        string identifier, string schoolName, string? roleLabel = null, CancellationToken ct = default);
     Task<ApiResult> ResetPasswordAsync(ResetPasswordRequest req, CancellationToken ct = default);
     Task<ApiResult> SetPasswordAsync(SetPasswordRequest req, CancellationToken ct = default);
     Task<ApiResult> UpdatePhotoAsync(UpdatePhotoRequest req, CancellationToken ct = default);
@@ -212,6 +217,24 @@ public sealed class AuthService(
             sent_to = MaskDestination(target, channel),
             recipient,
         });
+    }
+
+    public async Task<ApiResult<object>> SendWelcomeOnboardAsync(
+        string identifier, string schoolName, string? roleLabel = null, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(identifier))
+            return ApiResult<object>.Fail(new Error("invalid_request", "email or phone required"), 422);
+
+        var target = identifier.Trim();
+        var isEmail = target.Contains('@');
+        var loginUrl = frontend.BaseUrl.TrimEnd('/') + "/";
+
+        if (isEmail)
+            emailQueue.Enqueue(WelcomeOnboardEmail.Build(target, schoolName, loginUrl, roleLabel));
+        else
+            await sms.SendAsync(target, WelcomeOnboardEmail.SmsBody(schoolName, loginUrl, roleLabel), ct);
+
+        return ApiResult<object>.Ok(new { sent = true, channel = isEmail ? "email" : "sms" });
     }
 
     private static string? RoleLabel(string? role) => role?.ToLowerInvariant() switch
