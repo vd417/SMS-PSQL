@@ -10,7 +10,8 @@ public sealed record PtmMeetingResponse(
     string StudentName, Guid? TeacherId, string? MeetingLink);
 
 public sealed record CreatePtmRequest(
-    Guid? StudentId, Guid? TeacherId, string? Subject, string? Date, string? Time, string? Mode, string? MeetingLink);
+    Guid? StudentId, Guid? TeacherId, string? Subject, string? Date, string? Time, string? Mode, string? MeetingLink,
+    IReadOnlyList<Guid>? TeacherIds = null, bool AllTeachers = false, bool NotifyTeacher = false, bool NotifyCrm = false);
 
 /// The parent path only reads Status; the staff path ignores Status (and instead resets it to
 /// "pending" itself whenever Date or Time changes).
@@ -76,6 +77,18 @@ public sealed class PtmRepository(IDbConnectionFactory factory) : BaseRepository
             "SELECT \"Id\" FROM \"dbo\".\"Teachers\" WHERE \"Id\" = @teacherId AND \"TenantId\" = @tenantId",
             new { tenantId, teacherId }, ct))
         .Any();
+
+    public Task<IReadOnlyList<Guid>> ListTeacherIdsAsync(Guid tenantId, CancellationToken ct = default) =>
+        QueryInlineAsync<Guid>(
+            "SELECT \"Id\" FROM \"dbo\".\"Teachers\" WHERE \"TenantId\" = @tenantId ORDER BY \"Name\"",
+            new { tenantId }, ct);
+
+    public Task<IReadOnlyList<Guid>> ListTeacherUserIdsAsync(
+        Guid tenantId, Guid[] teacherIds, CancellationToken ct = default) =>
+        QueryInlineAsync<Guid>(
+            "SELECT \"UserId\" FROM \"dbo\".\"Teachers\" WHERE \"TenantId\" = @tenantId " +
+            "AND \"Id\" = ANY(@teacherIds) AND \"UserId\" IS NOT NULL",
+            new { tenantId, teacherIds }, ct);
 
     /// date/time are passed as DateTime/TimeSpan (Dapper/Npgsql has no built-in DateOnly/TimeOnly
     /// value handler); the target columns are still "date" and "time" respectively.

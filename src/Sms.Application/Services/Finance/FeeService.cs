@@ -206,6 +206,10 @@ public sealed class FeeService(
         var body = $"Invoice for {period} for {student.Name} has been paid successfully. " +
                    $"Amount received: {payment.Amount:N0}. Payment method: {payment.Method ?? "Cash"}.";
         Guid? userId = email.Length > 0 ? (await auth.GetByEmailAndTenantAsync(email, tenantId, ct))?.Id : null;
+        // The app channel with a null UserId is stored as a school-wide notification and
+        // shows up for every teacher. Only the guardian's own login should get the receipt.
+        var channels = new List<string> { "email" };
+        if (userId is not null) channels.Add("app");
 
         string? attachmentBase64 = null;
         try
@@ -236,7 +240,7 @@ public sealed class FeeService(
                 "Invoice Paid", body, "fee_payment", "specific",
                 email.Length > 0 ? [email] : null,
                 phone.Length > 0 ? [phone] : null,
-                ["email", "app"],
+                channels,
                 AttachmentBase64: attachmentBase64,
                 AttachmentFileName: attachmentBase64 is not null ? $"Invoice-{period.Replace(' ', '-')}.pdf" : null,
                 AttachmentContentType: attachmentBase64 is not null ? "application/pdf" : null,

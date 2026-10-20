@@ -18,7 +18,8 @@ public sealed class PtmCommsNotifier(
     ILiveBroadcaster live)
 {
     public async Task NotifyMeetingScheduledAsync(
-        Guid tenantId, PtmMeetingResponse meeting, CancellationToken ct = default)
+        Guid tenantId, PtmMeetingResponse meeting, CancellationToken ct = default,
+        IReadOnlyList<string>? teacherNames = null)
     {
         var student = await students.GetAsync(meeting.Child, ct);
         var recipients = await students.ListParentUserIdsAsync(
@@ -27,9 +28,17 @@ public sealed class PtmCommsNotifier(
 
         var name = string.IsNullOrWhiteSpace(meeting.StudentName) ? "your child" : meeting.StudentName.Trim();
         var subject = string.IsNullOrWhiteSpace(meeting.Subject) ? null : meeting.Subject!.Trim();
+        var teachers = teacherNames?
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var teacherLabel = teachers is { Count: > 0 }
+            ? string.Join(", ", teachers)
+            : meeting.Teacher;
         var body = subject is null
-            ? $"{name} with {meeting.Teacher} · {meeting.Date} {meeting.Time} · {meeting.Mode}"
-            : $"{name} · {subject} with {meeting.Teacher} · {meeting.Date} {meeting.Time} · {meeting.Mode}";
+            ? $"{name} with {teacherLabel} · {meeting.Date} {meeting.Time} · {meeting.Mode}"
+            : $"{name} · {subject} with {teacherLabel} · {meeting.Date} {meeting.Time} · {meeting.Mode}";
 
         foreach (var userId in recipients)
         {
@@ -37,6 +46,35 @@ public sealed class PtmCommsNotifier(
                 Icon: "calendar",
                 Tone: "brand",
                 Title: "Parent-teacher meeting scheduled",
+                Body: body,
+                UserId: userId), ct);
+        }
+
+        await live.PublishAsync(tenantId, LiveEventTypes.Notification, ct: ct);
+    }
+
+    /// <summary>
+    /// In-app notice for each selected teacher. The family notice stays separate so a meeting
+    /// sent to several teachers does not alert the parent once per teacher.
+    /// </summary>
+    public async Task NotifyTeachersAsync(
+        Guid tenantId, PtmMeetingResponse meeting, IReadOnlyList<Guid> teacherUserIds, CancellationToken ct = default)
+    {
+        var recipients = teacherUserIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (recipients.Count == 0) return;
+
+        var name = string.IsNullOrWhiteSpace(meeting.StudentName) ? "a student" : meeting.StudentName.Trim();
+        var subject = string.IsNullOrWhiteSpace(meeting.Subject) ? null : meeting.Subject!.Trim();
+        var body = subject is null
+            ? $"{name} · {meeting.Date} {meeting.Time} · {meeting.Mode}"
+            : $"{name} · {subject} · {meeting.Date} {meeting.Time} · {meeting.Mode}";
+
+        foreach (var userId in recipients)
+        {
+            await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
+                Icon: "calendar",
+                Tone: "brand",
+                Title: "Parent-teacher meeting",
                 Body: body,
                 UserId: userId), ct);
         }

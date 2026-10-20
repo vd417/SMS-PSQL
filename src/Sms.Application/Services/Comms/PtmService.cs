@@ -95,13 +95,13 @@ public sealed class PtmService(
             return ApiResult<PtmMeetingResponse>.Fail(new Error("forbidden", "no tenant context"), 403);
 
         var roles = caller.FindAll("role").Select(c => c.Value).ToList();
-        Guid teacherId;
+        List<Guid> teacherIds;
 
         if (RoleChecks.IsManagerTier(caller))
         {
-            if (req.TeacherId is not { } given)
+            teacherIds = await ResolveManagerTeacherIdsAsync(tid, req, ct);
+            if (teacherIds.Count == 0)
                 return ApiResult<PtmMeetingResponse>.Fail(new Error("validation_failed", "teacher_id is required"), 422);
-            teacherId = given;
         }
         else if (roles.Contains(Policies.Teacher))
         {
@@ -110,7 +110,7 @@ public sealed class PtmService(
             var ownId = await classes.TeacherIdForUserAsync(uid, ct);
             if (ownId is null)
                 return ApiResult<PtmMeetingResponse>.Fail(new Error("forbidden", "no teacher profile"), 403);
-            teacherId = ownId.Value; // a teacher's teacher_id is always forced to their own
+            teacherIds = [ownId.Value]; // a teacher's teacher_id is always forced to their own
         }
         else
         {
@@ -132,14 +132,45 @@ public sealed class PtmService(
 
         if (!await repo.StudentExistsAsync(tid, studentId, ct))
             return ApiResult<PtmMeetingResponse>.Fail(new Error("not_found", "resource not found"), 404);
-        if (!await repo.TeacherExistsAsync(tid, teacherId, ct))
-            return ApiResult<PtmMeetingResponse>.Fail(new Error("not_found", "resource not found"), 404);
+        foreach (var teacherId in teacherIds)
+        {
+            if (!await repo.TeacherExistsAsync(tid, teacherId, ct))
+                return ApiResult<PtmMeetingResponse>.Fail(new Error("not_found", "resource not found"), 404);
+        }
 
         var meetingLink = string.IsNullOrWhiteSpace(req.MeetingLink) ? null : req.MeetingLink.Trim();
-        var id = await repo.CreateAsync(tid, studentId, teacherId, req.Subject, date, time, req.Mode!, meetingLink, ct);
-        var created = (await repo.GetAsync(id, tid, ct))!;
-        await notifier.NotifyMeetingScheduledAsync(tid, created, ct);
-        return ApiResult<PtmMeetingResponse>.Ok(created, 201);
+        var createdMeetings = new List<PtmMeetingResponse>(teacherIds.Count);
+        foreach (var teacherId in teacherIds)
+        {
+            var id = await repo.CreateAsync(tid, studentId, teacherId, req.Subject, date, time, req.Mode!, meetingLink, ct);
+            createdMeetings.Add((await repo.GetAsync(id, tid, ct))!);
+        }
+
+        var first = createdMeetings[0];
+        await notifier.NotifyMeetingScheduledAsync(
+            tid, first, ct, createdMeetings.Select(m => m.Teacher).ToList());
+        if (req.NotifyTeacher)
+        {
+            var teacherUsers = await repo.ListTeacherUserIdsAsync(tid, teacherIds.ToArray(), ct);
+            await notifier.NotifyTeachersAsync(tid, first, teacherUsers, ct);
+        }
+        return ApiResult<PtmMeetingResponse>.Ok(first, 201);
+    }
+
+    /// <summary>
+    /// Principals send one meeting per picked teacher. teacher_ids wins over the single
+    /// teacher_id. all_teachers with an empty list means every teacher in the school.
+    /// </summary>
+    private async Task<List<Guid>> ResolveManagerTeacherIdsAsync(
+        Guid tenantId, CreatePtmRequest req, CancellationToken ct)
+    {
+        if (req.TeacherIds is { Count: > 0 })
+            return req.TeacherIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (req.AllTeachers)
+            return (await repo.ListTeacherIdsAsync(tenantId, ct)).Distinct().ToList();
+        if (req.TeacherId is { } single && single != Guid.Empty)
+            return [single];
+        return [];
     }
 
     public async Task<ApiResult<PtmMeetingResponse>> UpdateAsync(
