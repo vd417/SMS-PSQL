@@ -21,6 +21,9 @@ public sealed record ChatThreadResponse(
     // "Guardian" (null for staff/student threads or when unknown). Shown beneath the student so a
     // teacher sees whether the mother or father is messaging. Resolved from ParentStudentLinks.
     public string? Relationship { get; init; }
+    /// Profile photo for this thread: the student's photo on a student thread, otherwise the
+    /// linked user's photo (parent, teacher, driver, or other staff).
+    public string? PhotoUrl { get; init; }
     // The Inbox list's read-receipt tick: whether the OWNER sent the last message (only then
     // does a tick make sense — an incoming last message never shows one), and its delivery
     // state. Null status means the thread has no messages yet.
@@ -62,6 +65,15 @@ public sealed record ChatThreadResponse(
         : this(Id, TenantId, Name, Role, LastMessage, LastAt, Unread, Group, ChildId, Online, ChildName, ChildClassLabel,
             ChildRoll, LastMessageMine, LastMessageStatus) =>
         this.Relationship = Relationship;
+
+    // ListThreadsAsync shape (+ PhotoUrl = 17 columns).
+    public ChatThreadResponse(
+        Guid Id, Guid TenantId, string Name, string? Role, string? LastMessage, DateTime? LastAt,
+        int Unread, bool Group, Guid? ChildId, bool Online, string? ChildName, string? ChildClassLabel,
+        int? ChildRoll, bool LastMessageMine, string? LastMessageStatus, string? Relationship, string? PhotoUrl)
+        : this(Id, TenantId, Name, Role, LastMessage, LastAt, Unread, Group, ChildId, Online, ChildName, ChildClassLabel,
+            ChildRoll, LastMessageMine, LastMessageStatus, Relationship) =>
+        this.PhotoUrl = PhotoUrl;
 }
 /// <param name="ContactKind">"teacher" | "staff" | "student" (student ⇒ message that student's
 /// parent) | "user" (another CRM login account, addressed by its own Users id) — when set with
@@ -200,7 +212,12 @@ SELECT th.""Id"", th.""TenantId"", th.""Name"", th.""Role"", th.""LastMessage"",
            WHEN lm.""DeliveredAt"" IS NOT NULL THEN 'delivered'
            ELSE 'sent'
        END AS ""LastMessageStatus"",
-       psl.""Relationship"" AS ""Relationship""
+       psl.""Relationship"" AS ""Relationship"",
+       CASE
+           WHEN lower(coalesce(th.""Role"", '')) LIKE '%student%'
+               THEN COALESCE(NULLIF(btrim(c.""PhotoUrl""), ''), NULLIF(btrim(u.""PhotoUrl""), ''))
+           ELSE NULLIF(btrim(u.""PhotoUrl""), '')
+       END AS ""PhotoUrl""
 FROM ""dbo"".""ChatThreads"" th
 LEFT JOIN ""dbo"".""Users"" u
     ON (th.""ContactUserId"" IS NOT NULL AND u.""Id"" = th.""ContactUserId"")
