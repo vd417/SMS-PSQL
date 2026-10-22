@@ -34,6 +34,10 @@ public sealed record UpdateClassRequest(
 
 public sealed record ReplaceClassSubjectsRequest(IReadOnlyList<string>? Subjects = null);
 
+public sealed record ClassPeriodOverrideResponse(Guid ClassId, int PeriodCount);
+
+public sealed record SetClassPeriodOverrideRequest(int? PeriodCount);
+
 // ---- Subject ----
 // TeacherName is a trailing init-only property with a secondary constructor, not a primary-
 // constructor parameter: Dapper materializes via a constructor matching the exact column count

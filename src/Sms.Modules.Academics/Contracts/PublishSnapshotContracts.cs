@@ -13,3 +13,9 @@ public sealed record UpsertPublishSnapshotRequest(
     string? PublishedJson,
     DateTime? DraftSavedAt,
     DateTime? PublishedAt);
+
+public sealed record TimetableHistoryResponse(
+    Guid Id,
+    string Kind,
+    string? SnapshotJson,
+    DateTime SavedAt);

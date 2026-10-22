@@ -34,6 +34,19 @@ public sealed class ClassController(IAcademicsService academics) : ApiController
         return FromResult(await academics.UpdateClassAsync(id, req, ct));
     }
 
+    [HttpGet("classes/period-overrides")]
+    public async Task<IActionResult> ListPeriodOverrides(CancellationToken ct) =>
+        FromResult(await academics.ListClassPeriodOverridesAsync(ct));
+
+    [HttpPut("classes/{id:guid}/period-override")]
+    public async Task<IActionResult> SetPeriodOverride(
+        Guid id, [FromBody] SetClassPeriodOverrideRequest req, CancellationToken ct)
+    {
+        if (!RoleChecks.IsStaff(User))
+            return ForbiddenResult("staff only");
+        return FromResult(await academics.SetClassPeriodOverrideAsync(id, req?.PeriodCount, ct));
+    }
+
     [HttpGet("classes/{id:guid}/subjects")]
     public async Task<IActionResult> ListSubjects(Guid id, CancellationToken ct) =>
         FromResult(await academics.ListClassSubjectsAsync(id, ct));

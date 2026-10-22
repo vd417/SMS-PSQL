@@ -91,6 +91,60 @@ public class PublishAndExtrasTests(PostgresFixture fx)
     }
 
     [Fact]
+    public async Task Timetable_schedule_round_trip()
+    {
+        await using var app = App();
+        var tenant = Guid.NewGuid();
+        var client = Client(app, tenant, Policies.Principal);
+
+        var empty = await Data(await client.GetAsync("/v1/class-routine"), HttpStatusCode.OK);
+        empty.GetProperty("draft_json").ValueKind.Should().BeOneOf(JsonValueKind.Null, JsonValueKind.Undefined, JsonValueKind.String);
+
+        var draft = "{\"grids\":{\"IX-A\":{\"0-0\":{\"subject\":\"Mathematics\",\"teacherId\":\"t1\"}}},\"mode\":{\"IX-A\":\"build\"}}";
+        var saved = await Data(await client.PutAsJsonAsync("/v1/class-routine", new
+        {
+            draft_json = draft,
+            published_json = draft,
+            draft_saved_at = "2026-10-22T08:00:00Z",
+            published_at = "2026-10-22T08:00:00Z",
+        }), HttpStatusCode.OK);
+        saved.GetProperty("draft_json").GetString().Should().Contain("IX-A");
+        saved.GetProperty("published_json").GetString().Should().Contain("Mathematics");
+
+        var again = await Data(await client.GetAsync("/v1/class-routine"), HttpStatusCode.OK);
+        again.GetProperty("published_json").GetString().Should().Contain("Mathematics");
+    }
+
+    [Fact]
+    public async Task Timetable_history_keeps_the_last_five_saves()
+    {
+        await using var app = App();
+        var tenant = Guid.NewGuid();
+        var client = Client(app, tenant, Policies.Principal);
+
+        for (var i = 1; i <= 6; i++)
+        {
+            var draft = $"{{\"grids\":{{\"IX-A\":{{\"0-0\":{{\"subject\":\"S{i}\",\"teacherId\":\"t1\"}}}}}},\"mode\":{{\"IX-A\":\"build\"}}}}";
+            var saved = await Data(await client.PutAsJsonAsync("/v1/class-routine", new
+            {
+                draft_json = draft,
+                published_json = (string?)null,
+                draft_saved_at = $"2026-10-22T08:0{i}:00Z",
+                published_at = (string?)null,
+            }), HttpStatusCode.OK);
+            saved.GetProperty("draft_json").GetString().Should().Contain($"S{i}");
+        }
+
+        var history = await Data(await client.GetAsync("/v1/class-routine/history"), HttpStatusCode.OK);
+        history.GetArrayLength().Should().Be(5);
+        history[0].GetProperty("kind").GetString().Should().Be("draft");
+        history[0].GetProperty("snapshot_json").GetString().Should().Contain("S6");
+        var all = string.Join('\n', history.EnumerateArray().Select(r => r.GetProperty("snapshot_json").GetString()));
+        all.Should().NotContain("\"subject\":\"S1\"");
+        all.Should().Contain("\"subject\":\"S2\"");
+    }
+
+    [Fact]
     public async Task Class_tests_save_notifies_student_teacher_and_parent()
     {
         await using var app = App();

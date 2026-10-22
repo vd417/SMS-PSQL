@@ -149,6 +149,28 @@ public sealed class AcademicsService(
         return ApiResult<IReadOnlyList<string>>.Ok(saved);
     }
 
+    public async Task<ApiResult<IReadOnlyList<ClassPeriodOverrideResponse>>> ListClassPeriodOverridesAsync(CancellationToken ct = default) =>
+        ApiResult<IReadOnlyList<ClassPeriodOverrideResponse>>.Ok(await classes.ListPeriodOverridesAsync(ct));
+
+    public async Task<ApiResult<ClassPeriodOverrideResponse?>> SetClassPeriodOverrideAsync(
+        Guid classId, int? periodCount, CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { } tid)
+            return ApiResult<ClassPeriodOverrideResponse?>.Fail(new Error("forbidden", "no tenant context"), 403);
+        if (await classes.GetAsync(classId, ct) is null)
+            return ApiResult<ClassPeriodOverrideResponse?>.Fail(new Error("not_found", "resource not found"), 404);
+        if (periodCount is null)
+        {
+            await classes.ClearPeriodOverrideAsync(tid, classId, ct);
+            return ApiResult<ClassPeriodOverrideResponse?>.Ok(null);
+        }
+        if (periodCount is not (5 or 6 or 8))
+            return ApiResult<ClassPeriodOverrideResponse?>.Fail(
+                new Error("validation_error", "Period count must be 5, 6, or 8"), 400);
+        await classes.SetPeriodOverrideAsync(tid, classId, periodCount.Value, ct);
+        return ApiResult<ClassPeriodOverrideResponse?>.Ok(new ClassPeriodOverrideResponse(classId, periodCount.Value));
+    }
+
     public async Task<ApiResult<IReadOnlyList<string>>> ListSchoolHousesAsync(CancellationToken ct = default) =>
         ApiResult<IReadOnlyList<string>>.Ok(await schoolHouses.ListNamesAsync(ct));
 
@@ -1200,6 +1222,53 @@ public sealed class AcademicsService(
         }
         return ApiResult<PublishSnapshotResponse>.Ok(saved);
     }
+
+    public async Task<ApiResult<PublishSnapshotResponse>> GetTimetableScheduleAsync(CancellationToken ct = default)
+    {
+        var row = await academicPublish.GetTimetableAsync(ct);
+        if (row is not null) return ApiResult<PublishSnapshotResponse>.Ok(row);
+        return ApiResult<PublishSnapshotResponse>.Ok(new PublishSnapshotResponse(
+            Guid.Empty, tenant.TenantId ?? Guid.Empty, null, null, null, null));
+    }
+
+    public async Task<ApiResult<PublishSnapshotResponse>> UpsertTimetableScheduleAsync(
+        UpsertPublishSnapshotRequest req, CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { } tid)
+            return ApiResult<PublishSnapshotResponse>.Fail(new Error("forbidden", "no tenant context"), 403);
+        var previous = await academicPublish.GetTimetableAsync(ct);
+        var saved = (await academicPublish.UpsertTimetableAsync(tid, req, ct))!;
+        await RememberTimetableHistoryAsync(tid, previous, saved, ct);
+        return ApiResult<PublishSnapshotResponse>.Ok(saved);
+    }
+
+    public async Task<ApiResult<IReadOnlyList<TimetableHistoryResponse>>> ListTimetableHistoryAsync(CancellationToken ct = default) =>
+        ApiResult<IReadOnlyList<TimetableHistoryResponse>>.Ok(await academicPublish.ListTimetableHistoryAsync(ct));
+
+    /// Keep the last 5 changed snapshots. A publish is one row; a draft save is one row.
+    /// Saving the same JSON again does not consume a slot.
+    private async Task RememberTimetableHistoryAsync(
+        Guid tenantId, PublishSnapshotResponse? previous, PublishSnapshotResponse saved, CancellationToken ct)
+    {
+        var publishedChanged = !SameJson(previous?.PublishedJson, saved.PublishedJson)
+            && !string.IsNullOrWhiteSpace(saved.PublishedJson);
+        var draftChanged = !SameJson(previous?.DraftJson, saved.DraftJson)
+            && !string.IsNullOrWhiteSpace(saved.DraftJson);
+        if (publishedChanged)
+        {
+            await academicPublish.AppendTimetableHistoryAsync(
+                tenantId, "published", saved.PublishedJson!, saved.PublishedAt ?? clock.UtcNow, ct);
+            return;
+        }
+        if (draftChanged)
+        {
+            await academicPublish.AppendTimetableHistoryAsync(
+                tenantId, "draft", saved.DraftJson!, saved.DraftSavedAt ?? clock.UtcNow, ct);
+        }
+    }
+
+    private static bool SameJson(string? a, string? b) =>
+        string.Equals(a ?? "", b ?? "", StringComparison.Ordinal);
 
     private static string? NormExtrasPersonType(string? t)
     {

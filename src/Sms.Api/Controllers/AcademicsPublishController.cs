@@ -27,4 +27,17 @@ public sealed class AcademicsPublishController(IAcademicsService academics) : Ap
     [Authorize(Policy = Policies.Principal)]
     public async Task<IActionResult> UpsertClassTests([FromBody] UpsertPublishSnapshotRequest req, CancellationToken ct) =>
         FromResult(await academics.UpsertClassTestScheduleAsync(req, ct));
+
+    [HttpGet("class-routine/history")]
+    public async Task<IActionResult> ListTimetableHistory(CancellationToken ct) =>
+        FromResult(await academics.ListTimetableHistoryAsync(ct));
+
+    [HttpGet("class-routine")]
+    public async Task<IActionResult> GetTimetableSchedule(CancellationToken ct) =>
+        FromResult(await academics.GetTimetableScheduleAsync(ct));
+
+    [HttpPut("class-routine")]
+    [Authorize(Policy = Policies.Principal)]
+    public async Task<IActionResult> UpsertTimetableSchedule([FromBody] UpsertPublishSnapshotRequest req, CancellationToken ct) =>
+        FromResult(await academics.UpsertTimetableScheduleAsync(req, ct));
 }

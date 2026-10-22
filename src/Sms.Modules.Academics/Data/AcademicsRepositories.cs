@@ -131,6 +131,23 @@ LEFT JOIN LATERAL (
 WHERE c.""ClassTeacherId"" = t.""Id"" OR ts.""TeacherId"" = t.""Id"" OR sub.""TeacherId"" = t.""Id""
 ORDER BY c.""Name""", new { teacherUserId, localDay, localTime }, ct);
     }
+
+    public Task<IReadOnlyList<ClassPeriodOverrideResponse>> ListPeriodOverridesAsync(CancellationToken ct = default) =>
+        QueryInlineAsync<ClassPeriodOverrideResponse>(
+            "SELECT \"ClassId\", \"PeriodCount\" FROM \"dbo\".\"ClassPeriodOverrides\" ORDER BY \"ClassId\"",
+            null, ct);
+
+    public Task SetPeriodOverrideAsync(Guid tenantId, Guid classId, int periodCount, CancellationToken ct = default) =>
+        ExecuteInlineAsync(@"
+INSERT INTO ""dbo"".""ClassPeriodOverrides"" (""TenantId"", ""ClassId"", ""PeriodCount"")
+VALUES (@tenantId, @classId, @periodCount)
+ON CONFLICT (""TenantId"", ""ClassId"") DO UPDATE SET ""PeriodCount"" = EXCLUDED.""PeriodCount""",
+            new { tenantId, classId, periodCount }, ct);
+
+    public Task ClearPeriodOverrideAsync(Guid tenantId, Guid classId, CancellationToken ct = default) =>
+        ExecuteInlineAsync(
+            "DELETE FROM \"dbo\".\"ClassPeriodOverrides\" WHERE \"TenantId\" = @tenantId AND \"ClassId\" = @classId",
+            new { tenantId, classId }, ct);
 }
 
 public sealed class SubjectRepository(IDbConnectionFactory factory) : BaseRepository(factory)

@@ -13,6 +13,9 @@ public interface IAcademicsService
     Task<ApiResult<IReadOnlyList<string>>> ListClassSubjectsAsync(Guid classId, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<string>>> ReplaceClassSubjectsAsync(
         Guid classId, IReadOnlyList<string> names, CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<ClassPeriodOverrideResponse>>> ListClassPeriodOverridesAsync(CancellationToken ct = default);
+    Task<ApiResult<ClassPeriodOverrideResponse?>> SetClassPeriodOverrideAsync(
+        Guid classId, int? periodCount, CancellationToken ct = default);
 
     Task<ApiResult<IReadOnlyList<string>>> ListSchoolHousesAsync(CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<string>>> ReplaceSchoolHousesAsync(
@@ -172,6 +175,10 @@ public interface IAcademicsService
     Task<ApiResult<PublishSnapshotResponse>> GetClassTestScheduleAsync(CancellationToken ct = default);
     Task<ApiResult<PublishSnapshotResponse>> UpsertClassTestScheduleAsync(
         UpsertPublishSnapshotRequest req, CancellationToken ct = default);
+    Task<ApiResult<PublishSnapshotResponse>> GetTimetableScheduleAsync(CancellationToken ct = default);
+    Task<ApiResult<PublishSnapshotResponse>> UpsertTimetableScheduleAsync(
+        UpsertPublishSnapshotRequest req, CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<TimetableHistoryResponse>>> ListTimetableHistoryAsync(CancellationToken ct = default);
 
     Task<ApiResult<PersonExtrasResponse>> GetPersonExtrasAsync(
         string personType, Guid personId, CancellationToken ct = default);
