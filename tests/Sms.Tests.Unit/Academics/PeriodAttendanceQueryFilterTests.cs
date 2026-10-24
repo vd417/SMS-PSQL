@@ -26,8 +26,8 @@ public class PeriodAttendanceQueryFilterTests
 
         var command = PeriodAttendanceQuerySql.Build(query);
 
-        Assert.Contains("lower(trim(par.\"Subject\")) = lower(trim(@Subject))", command.Sql);
-        Assert.Contains("par.\"Status\" = @Status", command.Sql);
+        Assert.Contains("lower(trim(par.\"Subject\")) = lower(trim(@Subject::text))", command.Sql);
+        Assert.Contains("par.\"Status\" = @Status::text", command.Sql);
         Assert.Equal("Music", command.Parameters.Get<string?>("Subject"));
         Assert.Equal("absent", command.Parameters.Get<string?>("Status"));
         Assert.Equal(10L, command.Parameters.Get<long>("Offset"));
@@ -101,8 +101,8 @@ public class PeriodAttendanceQueryFilterTests
 
         var command = PeriodAttendanceQuerySql.Build(query);
 
-        Assert.Contains("ts.\"TeacherId\" = @AuthorizedTeacherId", command.Sql);
-        Assert.Contains("c.\"ClassTeacherId\" = @AuthorizedTeacherId", command.Sql);
+        Assert.Contains("ts.\"TeacherId\" = @AuthorizedTeacherId::uuid", command.Sql);
+        Assert.Contains("c.\"ClassTeacherId\" = @AuthorizedTeacherId::uuid", command.Sql);
         Assert.Equal(teacherId, command.Parameters.Get<Guid?>("AuthorizedTeacherId"));
     }
 
@@ -114,7 +114,7 @@ public class PeriodAttendanceQueryFilterTests
         var command = PeriodAttendanceQuerySql.Build(query);
 
         Assert.Contains(
-            "replace(lower(par.\"MarkedByRole\"), 'school.', '') = lower(@MarkedByRole)",
+            "replace(lower(par.\"MarkedByRole\"), 'school.', '') = lower(@MarkedByRole::text)",
             command.Sql);
         Assert.Contains(
             "replace(lower(par.\"MarkedByRole\"), 'school.', '') AS \"MarkedByRole\"",
@@ -140,7 +140,7 @@ public class PeriodAttendanceQueryFilterTests
         var command = PeriodAttendanceQuerySql.Build(query);
 
         Assert.Contains(
-            "(@GeoFenceStatus IS NULL OR COALESCE(par.\"GeoFenceStatus\", 'not_required') = @GeoFenceStatus)",
+            "(@GeoFenceStatus::text IS NULL OR COALESCE(par.\"GeoFenceStatus\", 'not_required') = @GeoFenceStatus::text)",
             command.Sql);
         Assert.Contains("COALESCE(par.\"GeoFenceStatus\", 'not_required') AS \"GeoFenceStatus\"", command.Sql);
         Assert.Equal("outside", command.Parameters.Get<string?>("GeoFenceStatus"));
