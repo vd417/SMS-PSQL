@@ -295,9 +295,12 @@ public static class ServiceCollectionExtensions
         builder.Services.AddRateLimiter(o =>
         {
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            // Partition per authenticated user (sub) so a whole school behind one NAT/office IP
+            // does not share a single bucket; fall back to IP only for anonymous requests.
             o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
                 RateLimitPartition.GetSlidingWindowLimiter(
-                    http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    http.User.FindFirst("sub")?.Value
+                        ?? http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     _ => new SlidingWindowRateLimiterOptions
                     {
                         PermitLimit = globalPermit, Window = TimeSpan.FromSeconds(globalWindow),
