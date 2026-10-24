@@ -492,24 +492,28 @@ public static class PeriodAttendanceQuerySql
         LEFT JOIN "dbo"."Teachers" t ON t."Id" = ts."TeacherId"
         """;
 
+    // Every optional parameter is cast to its column type (@X::uuid / ::text / ::int). Without the
+    // casts, a request that omits these filters sends untyped NULLs and Postgres fails to infer the
+    // parameter type -> 42P08 "could not determine data type of parameter $N" -> 500. (The sibling
+    // BuildRange query already uses this pattern.)
     private const string Filters = """
         WHERE par."Date" >= @From
           AND par."Date" <= @To
-          AND (@ClassId IS NULL OR par."ClassId" = @ClassId)
-          AND (@Grade IS NULL OR c."Grade" = @Grade)
-          AND (@Section IS NULL OR c."Section" = @Section)
-          AND (@Subject IS NULL OR lower(trim(par."Subject")) = lower(trim(@Subject)))
-          AND (@Period IS NULL OR par."Period" = @Period)
-          AND (@AssignedTeacherId IS NULL OR ts."TeacherId" = @AssignedTeacherId)
-          AND (@AuthorizedTeacherId IS NULL
-               OR ts."TeacherId" = @AuthorizedTeacherId
-               OR c."ClassTeacherId" = @AuthorizedTeacherId)
-          AND (@MarkedBy IS NULL OR par."MarkedBy" = @MarkedBy)
-          AND (@MarkedByRole IS NULL
-               OR replace(lower(par."MarkedByRole"), 'school.', '') = lower(@MarkedByRole))
-          AND (@Status IS NULL OR par."Status" = @Status)
-          AND (@GeoFenceStatus IS NULL OR COALESCE(par."GeoFenceStatus", 'not_required') = @GeoFenceStatus)
-          AND (@Q IS NULL OR s."Name" LIKE '%' || @Q || '%' OR s."AdmissionNo" LIKE '%' || @Q || '%')
+          AND (@ClassId::uuid IS NULL OR par."ClassId" = @ClassId::uuid)
+          AND (@Grade::text IS NULL OR c."Grade" = @Grade::text)
+          AND (@Section::text IS NULL OR c."Section" = @Section::text)
+          AND (@Subject::text IS NULL OR lower(trim(par."Subject")) = lower(trim(@Subject::text)))
+          AND (@Period::int IS NULL OR par."Period" = @Period::int)
+          AND (@AssignedTeacherId::uuid IS NULL OR ts."TeacherId" = @AssignedTeacherId::uuid)
+          AND (@AuthorizedTeacherId::uuid IS NULL
+               OR ts."TeacherId" = @AuthorizedTeacherId::uuid
+               OR c."ClassTeacherId" = @AuthorizedTeacherId::uuid)
+          AND (@MarkedBy::uuid IS NULL OR par."MarkedBy" = @MarkedBy::uuid)
+          AND (@MarkedByRole::text IS NULL
+               OR replace(lower(par."MarkedByRole"), 'school.', '') = lower(@MarkedByRole::text))
+          AND (@Status::text IS NULL OR par."Status" = @Status::text)
+          AND (@GeoFenceStatus::text IS NULL OR COALESCE(par."GeoFenceStatus", 'not_required') = @GeoFenceStatus::text)
+          AND (@Q::text IS NULL OR s."Name" LIKE '%' || @Q::text || '%' OR s."AdmissionNo" LIKE '%' || @Q::text || '%')
         """;
 
     private const string Sql = "SELECT CAST(COUNT(*) AS int)\n" + FromAndJoins + "\n" + Filters + ";\n" + """

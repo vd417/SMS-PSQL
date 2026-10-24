@@ -254,13 +254,15 @@ ORDER BY s.""Name""", new { busId }, ct);
     public async Task<bool> TryInsertParentAlertAsync(
         Guid tenantId, Guid tripId, Guid studentId, Guid parentUserId, string kind, CancellationToken ct = default)
     {
+        // ON CONFLICT DO NOTHING is atomic: the old INSERT...WHERE NOT EXISTS raced under
+        // concurrent trip pings (two passed the NOT EXISTS check, the second hit the unique
+        // index UX_BusParentAlerts_Trip_Student_Kind -> 23505 -> 500). The conflict target
+        // matches that constraint (TripId, StudentId, Kind); note dedup is per that triple,
+        // NOT per ParentUserId, consistent with the method's documented contract above.
         var inserted = await ExecuteInlineAsync(@"
 INSERT INTO ""dbo"".""BusParentAlerts"" (""Id"", ""TenantId"", ""TripId"", ""StudentId"", ""ParentUserId"", ""Kind"")
-SELECT gen_random_uuid(), @tenantId, @tripId, @studentId, @parentUserId, @kind
-WHERE NOT EXISTS (
-    SELECT 1 FROM ""dbo"".""BusParentAlerts""
-    WHERE ""TripId"" = @tripId AND ""StudentId"" = @studentId AND ""ParentUserId"" = @parentUserId AND ""Kind"" = @kind
-);
+VALUES (gen_random_uuid(), @tenantId, @tripId, @studentId, @parentUserId, @kind)
+ON CONFLICT (""TripId"", ""StudentId"", ""Kind"") DO NOTHING;
 ",
             new { tenantId, tripId, studentId, parentUserId, kind }, ct);
         return inserted > 0;
