@@ -15,7 +15,9 @@ public sealed record ClientResponse(
     string? LogoUrl = null, string? ImageUrl = null,
     string? IdProofType = null, string? IdProofUrl = null,
     int EnrolledStudents = 0, string? BillingCycle = null,
-    string? SeatIncreaseMode = null, int? SeatAlertThreshold = null);
+    string? SeatIncreaseMode = null, int? SeatAlertThreshold = null,
+    // Education board: "CBSE" | "ICSE" | "State Board" | a custom board name. Null when unset.
+    string? Board = null);
 
 /// <summary>Raise a school's billed seat limit (CATRE team action). Only increases are allowed.</summary>
 public sealed record IncreaseSeatsRequest(int SeatLimit, string? Reason = null);
@@ -32,7 +34,9 @@ public sealed record CreateClientRequest(
     // bills on it until live SIS enrolment takes over. Carried for both plan types.
     int? StudentsCount = null,
     // Billing cycle chosen at onboarding: "month" | "quarter" | "year". Defaults to monthly.
-    string? BillingCycle = null);
+    string? BillingCycle = null,
+    // Education board: "CBSE" | "ICSE" | "State Board" | a custom board name. Null when unset.
+    string? Board = null);
 
 /// <summary>Partial update of school branding / contact. Null fields are left unchanged; Logo/Image use Set* flags.</summary>
 public sealed record UpdateSchoolProfileRequest(
@@ -50,7 +54,9 @@ public sealed record UpdateSchoolProfileRequest(
     double? Lat = null,
     double? Lng = null,
     int? GeofenceRadiusMeters = null,
-    bool SetGeofence = false);
+    bool SetGeofence = false,
+    // Education board: "CBSE" | "ICSE" | "State Board" | a custom board name. Null leaves it unchanged.
+    string? Board = null);
 
 public sealed record SetStatusRequest(string? Status, string? Reason);
 
@@ -101,6 +107,8 @@ public sealed record ClientRow
     public string? SeatIncreaseMode { get; set; }
     /// <summary>Per-school near-limit alert gap override (null = use plan/default). Only SelectLive returns it.</summary>
     public int? SeatAlertThreshold { get; set; }
+    /// <summary>Education board: "CBSE" | "ICSE" | "State Board" | a custom name. Null when unset.</summary>
+    public string? Board { get; set; }
 }
 
 // ---- Plan ----
@@ -137,7 +145,7 @@ public static class CatreMappers
         r.CreatedAt, r.Csm, r.HealthScore,
         r.ContactName, r.ContactEmail, r.ContactPhone, r.Address, r.LogoUrl, r.ImageUrl,
         r.IdProofType, r.IdProofUrl, r.EnrolledStudents, r.BillingCycle,
-        r.SeatIncreaseMode, r.SeatAlertThreshold);
+        r.SeatIncreaseMode, r.SeatAlertThreshold, r.Board);
 
     public static PlanResponse ToResponse(this PlanRow r) => new(
         r.Id, r.Name, r.Tier, r.Pricing, r.Price, r.PerStudent, r.MinStudents, r.Period,

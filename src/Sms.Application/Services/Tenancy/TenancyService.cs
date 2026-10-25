@@ -169,6 +169,7 @@ public sealed class TenancyService(
             && string.IsNullOrWhiteSpace(req.ContactName)
             && string.IsNullOrWhiteSpace(req.ContactEmail)
             && string.IsNullOrWhiteSpace(req.ContactPhone)
+            && string.IsNullOrWhiteSpace(req.Board)
             && !req.SetLogo
             && !req.SetImage
             && !req.SetGeofence)

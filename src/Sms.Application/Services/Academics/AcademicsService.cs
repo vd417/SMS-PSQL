@@ -131,6 +131,20 @@ public sealed class AcademicsService(
         return ApiResult<ClassResponse>.Ok(await AttachSubjectsAsync(updated, ct));
     }
 
+    public async Task<ApiResult> DeleteClassAsync(Guid id, CancellationToken ct = default)
+    {
+        if (tenant.TenantId is not { } tid)
+            return ApiResult.Fail(new Error("forbidden", "no tenant context"), 403);
+        var existing = await classes.GetAsync(id, ct);
+        if (existing is null)
+            return ApiResult.Fail(new Error("not_found", "resource not found"), 404);
+        if (existing.StudentCount > 0)
+            return ApiResult.Fail(
+                new Error("conflict", "Remove the students in this class before deleting it."), 409);
+        await classes.DeleteAsync(id, tid, ct);
+        return ApiResult.NoContent();
+    }
+
     public async Task<ApiResult<IReadOnlyList<string>>> ListClassSubjectsAsync(Guid classId, CancellationToken ct = default)
     {
         if (await classes.GetAsync(classId, ct) is null)

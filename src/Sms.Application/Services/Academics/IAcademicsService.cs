@@ -10,6 +10,7 @@ public interface IAcademicsService
     Task<ApiResult<ClassResponse>> GetClassAsync(Guid id, CancellationToken ct = default);
     Task<ApiResult<ClassResponse>> CreateClassAsync(CreateClassRequest req, CancellationToken ct = default);
     Task<ApiResult<ClassResponse>> UpdateClassAsync(Guid id, UpdateClassRequest req, CancellationToken ct = default);
+    Task<ApiResult> DeleteClassAsync(Guid id, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<string>>> ListClassSubjectsAsync(Guid classId, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<string>>> ReplaceClassSubjectsAsync(
         Guid classId, IReadOnlyList<string> names, CancellationToken ct = default);

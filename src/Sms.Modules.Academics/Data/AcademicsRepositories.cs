@@ -148,6 +148,18 @@ ON CONFLICT (""TenantId"", ""ClassId"") DO UPDATE SET ""PeriodCount"" = EXCLUDED
         ExecuteInlineAsync(
             "DELETE FROM \"dbo\".\"ClassPeriodOverrides\" WHERE \"TenantId\" = @tenantId AND \"ClassId\" = @classId",
             new { tenantId, classId }, ct);
+
+    // Delete a class and its class-scoped rows (subject map, period override, timetable slots) in
+    // one tenant-scoped command. Student rows are matched to classes by Grade+Section/ClassLabel,
+    // not by a ClassId FK, so they're never touched here — the service only allows delete when the
+    // class has zero live students. Returns rows affected (0 when nothing matched the tenant).
+    public Task<int> DeleteAsync(Guid id, Guid tenantId, CancellationToken ct = default) =>
+        ExecuteInlineAsync(@"
+DELETE FROM ""dbo"".""ClassSubjects""        WHERE ""ClassId"" = @id AND ""TenantId"" = @tenantId;
+DELETE FROM ""dbo"".""ClassPeriodOverrides"" WHERE ""ClassId"" = @id AND ""TenantId"" = @tenantId;
+DELETE FROM ""dbo"".""TimetableSlots""       WHERE ""ClassId"" = @id AND ""TenantId"" = @tenantId;
+DELETE FROM ""dbo"".""Classes""              WHERE ""Id"" = @id      AND ""TenantId"" = @tenantId;",
+            new { id, tenantId }, ct);
 }
 
 public sealed class SubjectRepository(IDbConnectionFactory factory) : BaseRepository(factory)

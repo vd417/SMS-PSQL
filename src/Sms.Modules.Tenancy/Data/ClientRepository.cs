@@ -30,7 +30,8 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
         ) AS int) AS "StaffCount",
         t."StorageGb", t."LimitsStudents", t."LimitsStaff", t."LimitsStorageGb", t."CreatedAt", t."Csm", t."HealthScore",
         t."ContactName", t."ContactEmail", t."ContactPhone", t."Address", t."LogoUrl", t."ImageUrl",
-        t."IdProofType", t."IdProofUrl", t."BillingCycle", t."SeatIncreaseMode", t."SeatAlertThreshold"
+        t."IdProofType", t."IdProofUrl", t."BillingCycle", t."SeatIncreaseMode", t."SeatAlertThreshold",
+        t."Board"
         FROM "dbo"."Tenants" t
         """;
 
@@ -69,8 +70,9 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
         return $"{baseSlug}-{Guid.NewGuid():N}"[..48];
     }
 
-    public Task<ClientRow?> CreateAsync(CreateClientRequest r, CancellationToken ct = default) =>
-        QuerySingleProcAsync<ClientRow>("dbo.Client_Create", new
+    public async Task<ClientRow?> CreateAsync(CreateClientRequest r, CancellationToken ct = default)
+    {
+        var row = await QuerySingleProcAsync<ClientRow>("dbo.Client_Create", new
         {
             r.Name, r.Slug, r.Country,
             ContactName = r.AdminName, ContactEmail = r.AdminEmail, ContactPhone = r.AdminPhone,
@@ -78,9 +80,20 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
             StudentsCount = r.StudentsCount ?? 0,
             BillingCycle = string.IsNullOrWhiteSpace(r.BillingCycle) ? "month" : r.BillingCycle
         }, ct);
+        // Board isn't a Client_Create proc param — persist it separately so the proc stays untouched.
+        var board = string.IsNullOrWhiteSpace(r.Board) ? null : r.Board.Trim();
+        if (row is not null && board is not null)
+        {
+            await ExecuteInlineAsync("""UPDATE "dbo"."Tenants" SET "Board" = @board WHERE "Id" = @id""",
+                new { id = row.Id, board }, ct);
+            row.Board = board;
+        }
+        return row;
+    }
 
-    public Task<ClientRow?> UpdateProfileAsync(Guid id, UpdateSchoolProfileRequest r, CancellationToken ct = default) =>
-        QuerySingleProcAsync<ClientRow>("dbo.Client_UpdateProfile", new
+    public async Task<ClientRow?> UpdateProfileAsync(Guid id, UpdateSchoolProfileRequest r, CancellationToken ct = default)
+    {
+        var row = await QuerySingleProcAsync<ClientRow>("dbo.Client_UpdateProfile", new
         {
             Id = id,
             r.Name,
@@ -99,6 +112,16 @@ public sealed class ClientRepository(IDbConnectionFactory factory) : BaseReposit
             r.GeofenceRadiusMeters,
             r.SetGeofence,
         }, ct);
+        // Board isn't a Client_UpdateProfile proc param — persist it separately (null leaves it unchanged).
+        var board = string.IsNullOrWhiteSpace(r.Board) ? null : r.Board.Trim();
+        if (row is not null && board is not null)
+        {
+            await ExecuteInlineAsync("""UPDATE "dbo"."Tenants" SET "Board" = @board WHERE "Id" = @id""",
+                new { id, board }, ct);
+            row.Board = board;
+        }
+        return row;
+    }
 
     public Task<ClientRow?> SetStatusAsync(Guid id, string status, CancellationToken ct = default) =>
         QuerySingleProcAsync<ClientRow>("dbo.Client_SetStatus", new { Id = id, Status = status }, ct);

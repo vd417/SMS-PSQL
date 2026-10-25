@@ -34,6 +34,14 @@ public sealed class ClassController(IAcademicsService academics) : ApiController
         return FromResult(await academics.UpdateClassAsync(id, req, ct));
     }
 
+    [HttpDelete("classes/{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        if (!RoleChecks.IsStaff(User))
+            return ForbiddenResult("staff only");
+        return FromResult(await academics.DeleteClassAsync(id, ct));
+    }
+
     [HttpGet("classes/period-overrides")]
     public async Task<IActionResult> ListPeriodOverrides(CancellationToken ct) =>
         FromResult(await academics.ListClassPeriodOverridesAsync(ct));
