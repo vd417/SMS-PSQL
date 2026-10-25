@@ -9,7 +9,7 @@ namespace Sms.Shared.Kernel.Auth;
 
 public sealed class JwtTokenService(JwtOptions options, IClock clock) : IJwtTokenService
 {
-    public string IssueAccess(Guid userId, Guid? tenantId, IEnumerable<string> roles, bool isPlatform)
+    public string IssueAccess(Guid userId, Guid? tenantId, IEnumerable<string> roles, bool isPlatform, int? accessMinutesOverride = null)
     {
         var claims = new List<Claim>
         {
@@ -24,7 +24,7 @@ public sealed class JwtTokenService(JwtOptions options, IClock clock) : IJwtToke
         var now = clock.UtcNow;
         var token = new JwtSecurityToken(
             issuer: options.Issuer, audience: options.Audience, claims: claims,
-            notBefore: now, expires: now.AddMinutes(options.AccessTokenMinutes), signingCredentials: creds);
+            notBefore: now, expires: now.AddMinutes(accessMinutesOverride ?? options.AccessTokenMinutes), signingCredentials: creds);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 

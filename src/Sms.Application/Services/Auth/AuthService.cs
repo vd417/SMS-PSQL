@@ -14,10 +14,10 @@ namespace Sms.Application.Services.Auth;
 
 public interface IAuthService
 {
-    Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest req, CancellationToken ct = default);
-    Task<ApiResult<TokenResponse>> RefreshAsync(RefreshRequest req, CancellationToken ct = default);
+    Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest req, string? client = null, CancellationToken ct = default);
+    Task<ApiResult<TokenResponse>> RefreshAsync(RefreshRequest req, string? client = null, CancellationToken ct = default);
     Task<ApiResult<object>> RequestOtpAsync(OtpRequest req, CancellationToken ct = default);
-    Task<ApiResult<TokenResponse>> VerifyOtpAsync(OtpVerifyRequest req, CancellationToken ct = default);
+    Task<ApiResult<TokenResponse>> VerifyOtpAsync(OtpVerifyRequest req, string? client = null, CancellationToken ct = default);
     Task<ApiResult<object>> ForgotPasswordAsync(ForgotPasswordRequest req, CancellationToken ct = default);
     /// <summary>Onboard invite: welcome email/SMS with school name + password-setup OTP
     /// (or a magic login link, when method is "link").</summary>
@@ -50,7 +50,21 @@ public sealed class AuthService(
     IInvitationDao invitations,
     IProfileDao profiles) : IAuthService
 {
-    public async Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest req, CancellationToken ct = default)
+    // --- Session policy per client (X-Client header, passed in by the controller) ----------
+    // The web admin panels (CRM = crm.catretech.me, sms-admin = admin.catretech.me) get a
+    // SHORT access token so refreshes happen often enough to track activity, plus a 1-hour
+    // *idle* refresh window that is reset on every refresh. Net effect: an actively-working
+    // user stays signed in, an idle one is signed out after ~1h. The mobile app sends no
+    // X-Client header and keeps the default long session (30-day refresh, config access TTL).
+    private const int WebAdminAccessMinutes = 15;
+    private static readonly TimeSpan WebAdminIdleWindow = TimeSpan.FromHours(1);
+    private static readonly TimeSpan DefaultRefreshTtl = TimeSpan.FromDays(30);
+
+    private static bool IsWebAdminClient(string? client) =>
+        string.Equals(client, "crm", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(client, "sms-admin", StringComparison.OrdinalIgnoreCase);
+
+    public async Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest req, string? client = null, CancellationToken ct = default)
     {
         var identifier = req.Email is { Length: > 0 } e ? e
             : req.StudentId is { Length: > 0 } sid ? sid
@@ -77,7 +91,7 @@ public sealed class AuthService(
         if (AccessBlockedError(user, userRoles) is { } blocked)
             return ApiResult<TokenResponse>.Fail(blocked, 403);
 
-        return await IssueTokensAsync(user, ct);
+        return await IssueTokensAsync(user, client, ct);
     }
 
     /// Null when the row is free to sign in; an Error when it's "removed" or "inactive"
@@ -103,16 +117,19 @@ public sealed class AuthService(
                      || string.Equals(r, Policies.SchoolAdmin, StringComparison.OrdinalIgnoreCase)
                      || string.Equals(r, Policies.Principal, StringComparison.OrdinalIgnoreCase));
 
-    public async Task<ApiResult<TokenResponse>> RefreshAsync(RefreshRequest req, CancellationToken ct = default)
+    public async Task<ApiResult<TokenResponse>> RefreshAsync(RefreshRequest req, string? client = null, CancellationToken ct = default)
     {
         var hash = Sha256(req.RefreshToken);
         var userId = await tokens.GetActiveUserIdAsync(hash, ct);
         if (userId is null)
             return ApiResult<TokenResponse>.Fail(new Error("invalid_token", "refresh token invalid"), 401);
 
+        // Web admins get a rolling 1-hour idle window (reset here on every refresh); app keeps 30 days.
+        var web = IsWebAdminClient(client);
         await tokens.RevokeAsync(hash, ct);
         var newRefresh = jwt.NewRefreshToken();
-        await tokens.SaveAsync(userId.Value, Sha256(newRefresh), DateTime.UtcNow.AddDays(30), ct);
+        await tokens.SaveAsync(userId.Value, Sha256(newRefresh),
+            DateTime.UtcNow.Add(web ? WebAdminIdleWindow : DefaultRefreshTtl), ct);
 
         tenant.Set(null, null, isPlatform: true);
         var user = await users.GetByIdAsync(userId.Value, ct);
@@ -120,14 +137,14 @@ public sealed class AuthService(
             return ApiResult<TokenResponse>.Fail(new Error("invalid_token", "user no longer exists"), 401);
 
         var roles = await users.GetRolesAsync(user.Id, ct);
-        var access = jwt.IssueAccess(user.Id, user.TenantId, roles, user.IsPlatform);
+        var access = jwt.IssueAccess(user.Id, user.TenantId, roles, user.IsPlatform, web ? WebAdminAccessMinutes : null);
         return ApiResult<TokenResponse>.Ok(new TokenResponse(access, newRefresh));
     }
 
     public Task<ApiResult<object>> RequestOtpAsync(OtpRequest req, CancellationToken ct = default) =>
         SendOtpToRegisteredAsync(req.Identifier, null, ct);
 
-    public async Task<ApiResult<TokenResponse>> VerifyOtpAsync(OtpVerifyRequest req, CancellationToken ct = default)
+    public async Task<ApiResult<TokenResponse>> VerifyOtpAsync(OtpVerifyRequest req, string? client = null, CancellationToken ct = default)
     {
         tenant.Set(null, null, isPlatform: true);
         var activeHash = await users.OtpActiveHashAsync(req.Identifier, ct);
@@ -143,7 +160,7 @@ public sealed class AuthService(
         if (AccessBlockedError(user, otpUserRoles) is { } blocked)
             return ApiResult<TokenResponse>.Fail(blocked, 403);
 
-        return await IssueTokensAsync(user, ct);
+        return await IssueTokensAsync(user, client, ct);
     }
 
     public async Task<ApiResult<object>> ForgotPasswordAsync(ForgotPasswordRequest req, CancellationToken ct = default)
@@ -491,14 +508,16 @@ public sealed class AuthService(
         return ApiResult.NoContent();
     }
 
-    private async Task<ApiResult<TokenResponse>> IssueTokensAsync(UserRecord user, CancellationToken ct)
+    private async Task<ApiResult<TokenResponse>> IssueTokensAsync(UserRecord user, string? client, CancellationToken ct)
     {
         var roles = (await users.GetRolesAsync(user.Id, ct)).ToList();
         if (roles.Count == 0 && !string.IsNullOrWhiteSpace(user.StudentId))
             roles.Add("student");
-        var access = jwt.IssueAccess(user.Id, user.TenantId, roles, user.IsPlatform);
+        var web = IsWebAdminClient(client);
+        var access = jwt.IssueAccess(user.Id, user.TenantId, roles, user.IsPlatform, web ? WebAdminAccessMinutes : null);
         var refresh = jwt.NewRefreshToken();
-        await tokens.SaveAsync(user.Id, Sha256(refresh), DateTime.UtcNow.AddDays(30), ct);
+        await tokens.SaveAsync(user.Id, Sha256(refresh),
+            DateTime.UtcNow.Add(web ? WebAdminIdleWindow : DefaultRefreshTtl), ct);
         return ApiResult<TokenResponse>.Ok(new TokenResponse(access, refresh));
     }
 

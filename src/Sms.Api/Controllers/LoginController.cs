@@ -14,16 +14,20 @@ namespace Sms.Api.Controllers;
 [Route("v1/auth")]
 public sealed class LoginController(IAuthService auth) : ApiControllerBase
 {
+    // Which front-end made the call ("crm" / "sms-admin" web panels, or absent for the mobile
+    // app). Drives per-client session length in AuthService (web = short, 1h idle; app = long).
+    private string? Client => Request.Headers["X-Client"].ToString() is { Length: > 0 } c ? c : null;
+
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req, CancellationToken ct) =>
-        FromResult(await auth.LoginAsync(req, ct));
+        FromResult(await auth.LoginAsync(req, Client, ct));
 
     [HttpPost("refresh")]
     [AllowAnonymous]
     public async Task<IActionResult> Refresh([FromBody] RefreshRequest req, CancellationToken ct) =>
-        FromResult(await auth.RefreshAsync(req, ct));
+        FromResult(await auth.RefreshAsync(req, Client, ct));
 
     [HttpPost("otp/request")]
     [AllowAnonymous]
@@ -35,7 +39,7 @@ public sealed class LoginController(IAuthService auth) : ApiControllerBase
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> VerifyOtp([FromBody] OtpVerifyRequest req, CancellationToken ct) =>
-        FromResult(await auth.VerifyOtpAsync(req, ct));
+        FromResult(await auth.VerifyOtpAsync(req, Client, ct));
 
     [HttpPost("password/forgot")]
     [AllowAnonymous]
