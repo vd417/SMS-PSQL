@@ -86,4 +86,49 @@ public sealed class ClientBillingEmails(
             "application/pdf"));
         return true;
     }
+
+    /// Plain notice to the school's contact that access has been suspended (with the reason, when
+    /// one is given). No invoice/PDF — this is a lifecycle alert, not a bill. Returns false
+    /// (nothing queued) when the school has no contact email.
+    public bool QueueSuspensionNotice(ClientRow client, string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(client.ContactEmail))
+            return false;
+
+        var owner = string.IsNullOrWhiteSpace(client.ContactName) ? "" : " " + client.ContactName;
+        var reasonLine = string.IsNullOrWhiteSpace(reason) ? "" : $"Reason: {reason.Trim()}\n";
+        var body =
+            $"Hello{owner},\n\n" +
+            $"Access to {client.Name}'s Catre account has been suspended. Your users will not be " +
+            "able to sign in until the account is reinstated.\n\n" +
+            reasonLine +
+            "\nIf you believe this is a mistake, or to restore access, please contact Catre support.\n\n" +
+            "— Catre Technology";
+        emailQueue.Enqueue(new EmailMessage(
+            client.ContactEmail.Trim(),
+            $"{client.Name} — Catre account suspended",
+            body));
+        return true;
+    }
+
+    /// Plain notice to the school's contact that a suspension has been lifted and access is back.
+    /// Returns false (nothing queued) when the school has no contact email.
+    public bool QueueReinstatementNotice(ClientRow client)
+    {
+        if (string.IsNullOrWhiteSpace(client.ContactEmail))
+            return false;
+
+        var owner = string.IsNullOrWhiteSpace(client.ContactName) ? "" : " " + client.ContactName;
+        var body =
+            $"Hello{owner},\n\n" +
+            $"Good news — {client.Name}'s Catre account has been reinstated. The suspension has been " +
+            "lifted and your users can sign in again.\n\n" +
+            "If anything looks off after signing back in, please contact Catre support.\n\n" +
+            "— Catre Technology";
+        emailQueue.Enqueue(new EmailMessage(
+            client.ContactEmail.Trim(),
+            $"{client.Name} — Catre account reinstated",
+            body));
+        return true;
+    }
 }

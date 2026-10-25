@@ -234,9 +234,15 @@ public sealed class TenancyService(
             return ApiResult<ClientResponse>.Fail(
                 new Error("invalid_request", "status must be trial, active, past_due, hold, deactivated, suspended, or cancelled"), 422);
 
+        // Capture the status we're leaving so we can tell a reinstatement (suspended → active)
+        // apart from a first-time activation, which share the same target status.
+        var prior = await clients.GetAsync(id, ct);
+
         var row = await clients.SetStatusAsync(id, status);
         if (row is null)
             return ApiResult<ClientResponse>.Fail(new Error("not_found", "resource not found"), 404);
+
+        var wasSuspended = string.Equals(prior?.Status, "suspended", StringComparison.OrdinalIgnoreCase);
 
         // Keep onboarding kanban in sync with tenant lifecycle.
         var onboardStage = status switch
@@ -251,6 +257,13 @@ public sealed class TenancyService(
 
         if (status == "active")
             await EnsureBillingOnActivateAsync(row, ct);
+
+        // Tell the school's contact when access is cut off, with the reason if one was given,
+        // and again when a suspension is lifted and access is restored.
+        if (status == "suspended")
+            billingEmails.QueueSuspensionNotice(row, req.Reason);
+        else if (status == "active" && wasSuspended)
+            billingEmails.QueueReinstatementNotice(row);
 
         // Re-read through SelectLive so the response carries live EnrolledStudents; the stored-proc
         // row above is kept for billing (it holds the committed StudentsCount floor).
