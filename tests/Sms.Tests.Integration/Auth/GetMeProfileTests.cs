@@ -160,7 +160,7 @@ public class GetMeProfileTests(PostgresFixture fx)
         data.GetProperty("phone").GetString().Should().Be("9000000001");
         data.GetProperty("employee").GetString().Should().Be("TCH-42");
         data.GetProperty("classroom").GetString().Should().Be("IX-A");
-        data.GetProperty("joined").GetString().Should().NotBeNullOrEmpty();
+        data.GetProperty("joined").GetString().Should().MatchRegex("^\\d{4}-\\d{2}-\\d{2}$");
     }
 
     [Fact]

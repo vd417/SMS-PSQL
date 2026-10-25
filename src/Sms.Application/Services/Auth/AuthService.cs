@@ -389,7 +389,7 @@ public sealed class AuthService(
             : FirstNonEmpty(teacher?.ClassTeacher, teacher?.HomeroomClassName);
 
         var joinedAt = teacher?.JoinedAt ?? staff?.JoinedAt ?? record.CreatedAt;
-        var joined = joinedAt.Year > 1 ? joinedAt.Year.ToString() : null;
+        var joined = joinedAt.Year > 1 ? joinedAt.ToString("yyyy-MM-dd") : null;
 
         string? title;
         if (isPrincipal)
