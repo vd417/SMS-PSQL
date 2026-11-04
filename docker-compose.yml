@@ -26,6 +26,18 @@ services:
     environment:
       SMS_MIGRATOR_CONNECTION: "Host=db;Port=5432;Database=sms_dev;Username=sms;Password=Local_Dev_Pass123!"
     command: ["migrate"]
+  # Dev-only demo data for the staff-app end-to-end check: `docker compose --profile seed up`.
+  # Idempotent (fixed ids + ON CONFLICT); runs as the schema owner after migrations.
+  seed:
+    image: postgres:18-alpine
+    profiles: ["seed"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      PGPASSWORD: "Local_Dev_Pass123!"
+    volumes:
+      - ./db/dev-seed:/seed:ro
+    command: ["psql", "-h", "db", "-U", "sms", "-d", "sms_dev", "-v", "ON_ERROR_STOP=1", "-f", "/seed/staff_e2e.sql"]
   api:
     build: { context: ., dockerfile: src/Sms.Api/Dockerfile }
     depends_on:

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Sms.Application.Services.Transport;
 using Sms.Modules.Transport;
 using Sms.Shared.Kernel.Authz;
@@ -10,6 +11,9 @@ namespace Sms.Api.Controllers;
 public sealed record AssignStudentBusRequest(Guid? StopId);
 
 public sealed record AssignBusTeacherRequest(Guid TeacherUserId);
+
+/// Optional boarding stop for a traveling teacher, supplied when adding them to a bus.
+public sealed record AddTravelingTeacherRequest(Guid? StopId);
 
 public sealed record CreateBusRequest(
     string BusNo, string? RouteName, Guid? RouteId, string? Driver, string? DriverPhone, Guid? DriverStaffId,
@@ -73,8 +77,11 @@ public sealed class TransportController(IBusService bus, IStudentBusService stud
         FromResult(await bus.ListTravelingTeachersAsync(busId, ct));
 
     [HttpPut("buses/{busId:guid}/traveling-teachers/{teacherUserId:guid}")]
-    public async Task<IActionResult> AddTravelingTeacher(Guid busId, Guid teacherUserId, CancellationToken ct) =>
-        FromResult(await bus.AddTravelingTeacherAsync(busId, teacherUserId, ct));
+    public async Task<IActionResult> AddTravelingTeacher(
+        Guid busId, Guid teacherUserId,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] AddTravelingTeacherRequest? req,
+        CancellationToken ct) =>
+        FromResult(await bus.AddTravelingTeacherAsync(busId, teacherUserId, req?.StopId, ct));
 
     [HttpDelete("buses/{busId:guid}/traveling-teachers/{teacherUserId:guid}")]
     public async Task<IActionResult> RemoveTravelingTeacher(Guid busId, Guid teacherUserId, CancellationToken ct) =>

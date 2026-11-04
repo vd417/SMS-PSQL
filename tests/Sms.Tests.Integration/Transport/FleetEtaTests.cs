@@ -67,4 +67,32 @@ public class FleetEtaTests(PostgresFixture fx)
         var row = rows.Should().ContainSingle(r => r.BusId == busId).Subject;
         row.EtaMinutes.Should().Be(2);
     }
+
+    [Fact]
+    public async Task BuildAsync_does_not_crash_when_a_bus_has_two_duty_assignments()
+    {
+        // BusAssignments has no unique constraint on BusId, so a bus can carry more than one
+        // duty-teacher row; the platform-wide fleet board must not crash on the duplicate.
+        var tenantId = Guid.NewGuid();
+        var busId = Guid.NewGuid();
+        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @T, 'BUS-DUP')",
+                new { Id = busId, T = tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"BusAssignments\" (\"TenantId\", \"TeacherUserId\", \"BusId\") VALUES (@T,@U1,@B),(@T,@U2,@B)",
+                new { T = tenantId, U1 = Guid.NewGuid(), U2 = Guid.NewGuid(), B = busId });
+        }
+        await using var app = App();
+        using var scope = app.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<ITenantContext>().Set(tenantId, null, isPlatform: true);
+        var builder = scope.ServiceProvider.GetRequiredService<FleetSnapshotBuilder>();
+
+        var rows = await builder.BuildAsync(default);
+
+        rows.Count(r => r.BusId == busId).Should().Be(1, "a bus with two duty assignments must still appear exactly once");
+    }
 }

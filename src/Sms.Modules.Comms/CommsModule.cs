@@ -705,6 +705,7 @@ public static class CommsModule
         services.AddScoped<IPushNotificationFanout, NoOpPushNotificationFanout>();
         services.AddScoped<PtmRepository>();
         services.AddScoped<UserAppSettingsRepository>();
+        services.AddScoped<DeviceTokenRepository>();
         return services;
     }
 }

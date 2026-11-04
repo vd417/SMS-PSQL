@@ -47,7 +47,9 @@ public class TripOwnershipTests(PostgresFixture fx)
     {
         await using var app = App();
         var tenantId = Guid.NewGuid();
-        var driver1 = StaffClient(app, tenantId, Guid.NewGuid());
+        var driver1Id = Guid.NewGuid();
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, "KA-01-F-9001", driver1Id);
+        var driver1 = StaffClient(app, tenantId, driver1Id);
         var driver2 = StaffClient(app, tenantId, Guid.NewGuid());
 
         // Driver 1 owns the trip.
@@ -108,7 +110,9 @@ public class TripOwnershipTests(PostgresFixture fx)
                 new { Id = busId, TenantId = tenantId, BusNo = busNo, ConductorStaffId = conductorStaffId });
         }
 
-        var driver = StaffClient(app, tenantId, Guid.NewGuid());
+        var driverId = Guid.NewGuid();
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, driverId);
+        var driver = StaffClient(app, tenantId, driverId);
         var trip = await Data(await driver.PostAsJsonAsync("/v1/staff/trips",
             new { direction = "pickup", bus_no = busNo }), HttpStatusCode.Created);
         var tripId = trip.GetProperty("id").GetGuid();
@@ -131,7 +135,9 @@ public class TripOwnershipTests(PostgresFixture fx)
     {
         await using var app = App();
         var tenantId = Guid.NewGuid();
-        var driver = StaffClient(app, tenantId, Guid.NewGuid());
+        var driverId = Guid.NewGuid();
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, "KA-01-F-7701", driverId);
+        var driver = StaffClient(app, tenantId, driverId);
         var peerConductor = ConductorClient(app, tenantId, Guid.NewGuid());
 
         var trip = await Data(await driver.PostAsJsonAsync("/v1/staff/trips",

@@ -230,7 +230,10 @@ public sealed class CheckInRepository(IDbConnectionFactory factory) : BaseReposi
     internal static (DateTime StartUtc, DateTime EndUtc) LocalDayBoundsUtc(DateOnly day, TimeSpan utcOffset)
     {
         var localMidnight = day.ToDateTime(TimeOnly.MinValue);
-        var startUtc = localMidnight - utcOffset;
+        // Kind must be Utc: these are UTC instants, and Npgsql maps an Unspecified DateTime to
+        // `timestamp` (not `timestamptz`), which Postgres then re-reads in the session time zone —
+        // shifting the whole window and dropping punches out of the day on a non-UTC connection.
+        var startUtc = DateTime.SpecifyKind(localMidnight - utcOffset, DateTimeKind.Utc);
         return (startUtc, startUtc.AddDays(1));
     }
 
