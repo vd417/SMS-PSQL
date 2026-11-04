@@ -124,6 +124,9 @@ public static class ServiceCollectionExtensions
             builder.Environment.IsDevelopment()));
         builder.Services.AddSingleton(new ConsoleOtpSender(builder.Environment.IsDevelopment()));
         builder.Services.AddSingleton<IOtpSender, ChannelOtpSender>();
+        // Dev-only: also log invite / first-password setup codes so local sign-in works without
+        // live SMTP (the regular OTP path already does this via EmailOtpSender's logCode flag).
+        builder.Services.AddSingleton(new AuthDiagnosticsOptions(builder.Environment.IsDevelopment()));
         builder.Services.AddHostedService<EmailDispatchWorker>();
         // Gated so integration tests can switch it off (TransportOfflineSweep:Enabled=false). The sweep
         // scans every tenant and auto-ends matching trips; left running against the shared test database

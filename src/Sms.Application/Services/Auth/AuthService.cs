@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Sms.Application.DTOs.Auth;
 using Sms.Application.Common;
 using Sms.Application.Interfaces.DAO;
@@ -48,7 +49,9 @@ public sealed class AuthService(
     ClientRepository clients,
     ITenantContext tenant,
     IInvitationDao invitations,
-    IProfileDao profiles) : IAuthService
+    IProfileDao profiles,
+    ILogger<AuthService> logger,
+    AuthDiagnosticsOptions diagnostics) : IAuthService
 {
     // --- Session policy per client (X-Client header, passed in by the controller) ----------
     // The web admin panels (CRM = crm.catretech.me, sms-admin = admin.catretech.me) get a
@@ -223,7 +226,14 @@ public sealed class AuthService(
             : null;
 
         if (channel == "email")
+        {
             emailQueue.Enqueue(InviteWelcomeEmail.Build(target, schoolName, code, roleLabel, link, customMessage));
+            // Dev fallback: the welcome email is dispatched out-of-band by EmailDispatchWorker, whose
+            // SMTP failures are logged and dropped. Without this line a new admin whose SMTP is down
+            // has no way to obtain the setup code. Mirrors EmailOtpSender's [DEV OTP/email] logging.
+            if (diagnostics.LogOtpCodes)
+                logger.LogWarning("[DEV OTP/email] {Identifier} -> {Code} (development only, invite/setup)", target, code);
+        }
         else
             await sms.SendAsync(target, InviteWelcomeEmail.SmsBody(schoolName, code, roleLabel, link, customMessage), ct);
 
