@@ -853,9 +853,10 @@ public sealed class AuthService(
                 // Admin stores email on Students; Users.Email may still be empty or a parent copy.
                 var viaRoster = await TryResolveStudentByRosterEmailAsync(trimmed, ct);
                 if (viaRoster is not null) return [viaRoster];
-                // Onboarded staff (dbo.Staff.Email) with no login yet — self-serve via OTP,
-                // no admin invite required. CRM roles (admin/principal/vice_principal) already
-                // get a Users row from Send invite, so this only ever fires for the rest.
+                // Onboarded staff/teachers (dbo.Staff.Email / dbo.Teachers.Email) with no login
+                // yet — self-serve via OTP, no admin invite required. CRM roles (admin/principal/
+                // vice_principal) already get a Users row from Send invite, so this only ever
+                // fires for the rest.
                 var viaStaff = await users.EnsureStaffLoginAsync(trimmed, ct);
                 if (viaStaff is not null) return [viaStaff];
                 // Onboarded teachers (dbo.Teachers.Email) with no login yet — same self-serve
