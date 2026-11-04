@@ -78,6 +78,14 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
         await work(conn);
     }
 
+    // Every planned route now starts from the tenant's configured school location, so the
+    // "available"/"insufficient stops" cases must seed one. Mirrors the attendance SchoolLocations row.
+    private static Task SeedSchool(string cs, Guid tenantId, double lat = 12.9600, double lng = 77.5800) =>
+        Seed(cs, tenantId, conn => conn.ExecuteAsync(
+            "INSERT INTO \"dbo\".\"SchoolLocations\" (\"Id\", \"TenantId\", \"Lat\", \"Lng\", \"RadiusMeters\", \"Name\") " +
+            "VALUES (@Id, @TenantId, @Lat, @Lng, 100, 'Campus')",
+            new { Id = Guid.NewGuid(), TenantId = tenantId, Lat = lat, Lng = lng }));
+
     [Fact]
     public async Task Principal_gets_available_geometry_for_own_tenant_route()
     {
@@ -85,6 +93,7 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
         var routeId = Guid.NewGuid();
         var principalId = Guid.NewGuid();
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
+        await SeedSchool(fx.ConnectionString, tenantId);
 
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
@@ -170,20 +179,21 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
     }
 
     [Fact]
-    public async Task No_stops_or_provider_unavailable_returns_200_with_unavailable_status()
+    public async Task School_configured_but_no_stops_returns_200_unavailable_insufficient_stops()
     {
         var tenantId = Guid.NewGuid();
         var routeId = Guid.NewGuid();
         var principalId = Guid.NewGuid();
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
+        await SeedSchool(fx.ConnectionString, tenantId);
 
         await Seed(fx.ConnectionString, tenantId, async conn =>
         {
             await conn.ExecuteAsync(
                 "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-GEO-4')",
                 new { Id = routeId, TenantId = tenantId });
-            // Deliberately zero RouteStops rows — the service short-circuits to Unavailable
-            // before ever calling IGoogleRoutesClient.
+            // Deliberately zero RouteStops rows — with a school origin but no stops the service
+            // short-circuits to Unavailable(insufficient_stops) before calling IGoogleRoutesClient.
         });
 
         await using var app = App(fx.ConnectionString);
@@ -195,6 +205,42 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
         using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
         var data = doc.RootElement.GetProperty("data");
         data.GetProperty("status").GetString().Should().Be("unavailable");
+        data.GetProperty("reason").GetString().Should().Be("insufficient_stops");
+        data.GetProperty("geometry").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task No_school_location_returns_200_unavailable_school_not_configured()
+    {
+        var tenantId = Guid.NewGuid();
+        var routeId = Guid.NewGuid();
+        var principalId = Guid.NewGuid();
+        await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
+        // No SchoolLocations row and no Tenants lat/lng → school not configured.
+
+        await Seed(fx.ConnectionString, tenantId, async conn =>
+        {
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"TransportRoutes\" (\"Id\", \"TenantId\", \"Name\") VALUES (@Id, @TenantId, 'ROUTE-GEO-6')",
+                new { Id = routeId, TenantId = tenantId });
+            await conn.ExecuteAsync(
+                "INSERT INTO \"dbo\".\"RouteStops\" (\"Id\", \"TenantId\", \"RouteId\", \"Name\", \"Seq\", \"Lat\", \"Lng\") VALUES " +
+                "(@Id1, @TenantId, @RouteId, 'Stop A', 1, 12.9716, 77.5946), " +
+                "(@Id2, @TenantId, @RouteId, 'Stop B', 2, 12.9816, 77.6046)",
+                new { Id1 = Guid.NewGuid(), Id2 = Guid.NewGuid(), TenantId = tenantId, RouteId = routeId });
+        });
+
+        var neverCalled = new FakeGoogleRoutesClient(new ComputedRouteGeometry("should-not-be-used", 1, 1));
+        await using var app = App(fx.ConnectionString, neverCalled);
+        var client = ClientFor(app, principalId, tenantId, Policies.Principal);
+
+        var res = await client.GetAsync($"/v1/transport/routes/{routeId}/geometry");
+
+        res.StatusCode.Should().Be(HttpStatusCode.OK);
+        using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+        var data = doc.RootElement.GetProperty("data");
+        data.GetProperty("status").GetString().Should().Be("unavailable");
+        data.GetProperty("reason").GetString().Should().Be("school_location_not_configured");
         data.GetProperty("geometry").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
@@ -211,6 +257,7 @@ public class RouteGeometryControllerTests(PostgresFixture fx)
         var routeId = Guid.NewGuid();
         var principalId = Guid.NewGuid();
         await TestTenancy.EnsureTenantAsync(fx.ConnectionString, tenantId, tier: "platinum");
+        await SeedSchool(fx.ConnectionString, tenantId);
 
         var stopAId = Guid.NewGuid();
         var stopBId = Guid.NewGuid();
