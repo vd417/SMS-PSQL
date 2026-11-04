@@ -74,7 +74,7 @@ public class TripStopProgressReadTests(PostgresFixture fx)
         await using var app = App();
         var (_, _, _, tripId, stopA, stopB, driver) = await LiveTrip(app);
 
-        var data = await Data(await driver.GetAsync($"/v1/staff/trips/{tripId}/stops"), HttpStatusCode.OK);
+        var data = await Data(await driver.GetAsync($"/v1/staff/trips/{tripId}/stop-progress"), HttpStatusCode.OK);
 
         data.GetProperty("trip_id").GetGuid().Should().Be(tripId);
         data.GetProperty("current_stop_id").ValueKind.Should().Be(JsonValueKind.Null);
@@ -94,7 +94,7 @@ public class TripStopProgressReadTests(PostgresFixture fx)
         var (tenantId, _, conductorId, tripId, stopA, _, driver) = await LiveTrip(app);
 
         (await driver.PostAsync($"/v1/staff/trips/{tripId}/stops/{stopA}/confirm-arrival", null)).IsSuccessStatusCode.Should().BeTrue();
-        var afterConfirm = await Data(await driver.GetAsync($"/v1/staff/trips/{tripId}/stops"), HttpStatusCode.OK);
+        var afterConfirm = await Data(await driver.GetAsync($"/v1/staff/trips/{tripId}/stop-progress"), HttpStatusCode.OK);
         afterConfirm.GetProperty("current_stop_id").GetGuid().Should().Be(stopA);
         afterConfirm.GetProperty("stops")[0].GetProperty("confirmed_at").ValueKind.Should().Be(JsonValueKind.String);
 
@@ -103,7 +103,7 @@ public class TripStopProgressReadTests(PostgresFixture fx)
 
         // The conductor reads the same authoritative state.
         (await Staff(app, tenantId, conductorId).PostAsync($"/v1/staff/trips/{tripId}/stops/{stopA}/complete", null)).IsSuccessStatusCode.Should().BeTrue();
-        var afterComplete = await Data(await Staff(app, tenantId, conductorId).GetAsync($"/v1/staff/trips/{tripId}/stops"), HttpStatusCode.OK);
+        var afterComplete = await Data(await Staff(app, tenantId, conductorId).GetAsync($"/v1/staff/trips/{tripId}/stop-progress"), HttpStatusCode.OK);
         afterComplete.GetProperty("current_stop_id").ValueKind.Should().Be(JsonValueKind.Null);
         afterComplete.GetProperty("stops")[0].GetProperty("departed_at").ValueKind.Should().Be(JsonValueKind.String);
     }
@@ -113,7 +113,7 @@ public class TripStopProgressReadTests(PostgresFixture fx)
     {
         await using var app = App();
         var (tenantId, _, _, tripId, _, _, _) = await LiveTrip(app);
-        (await Staff(app, tenantId, Guid.NewGuid()).GetAsync($"/v1/staff/trips/{tripId}/stops"))
+        (await Staff(app, tenantId, Guid.NewGuid()).GetAsync($"/v1/staff/trips/{tripId}/stop-progress"))
             .StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
@@ -123,7 +123,7 @@ public class TripStopProgressReadTests(PostgresFixture fx)
         await using var app = App();
         var (_, driverId, _, tripId, _, _, _) = await LiveTrip(app);
         // Same user id, different tenant claim: RLS + the tenant-filtered participant check hide the trip.
-        var res = await Staff(app, Guid.NewGuid(), driverId).GetAsync($"/v1/staff/trips/{tripId}/stops");
+        var res = await Staff(app, Guid.NewGuid(), driverId).GetAsync($"/v1/staff/trips/{tripId}/stop-progress");
         res.StatusCode.Should().BeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
     }
 }

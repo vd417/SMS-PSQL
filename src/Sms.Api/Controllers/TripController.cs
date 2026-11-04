@@ -46,7 +46,7 @@ public sealed class TripController(ITripService trips) : ApiControllerBase
     public async Task<IActionResult> ListBoarding(Guid tripId, CancellationToken ct) =>
         FromResult(await trips.ListBoardingAsync(tripId, ct));
 
-    [HttpGet("trips/{tripId:guid}/stops")]
+    [HttpGet("trips/{tripId:guid}/stop-progress")]
     public async Task<IActionResult> GetStopProgress(Guid tripId, CancellationToken ct) =>
         FromResult(await trips.GetStopProgressAsync(tripId, ct));
 
