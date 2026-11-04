@@ -30,11 +30,12 @@ public sealed class FleetSnapshotBuilder(BusRepository repo, ITenantContext tena
             DateTime? lastPing = r.LastPingAt;
             double? heading = r.Heading;
 
-            if (r.TripId is null || r.LastPingAt is null)
-                status = "idle";
+            if (r.TripId is null)
+                status = BusTrackingStatusRules.LegacyIdle;
             else if (!gpsAllowed)
             {
-                status = "idle";
+                status = BusTrackingStatusRules.LegacyRunning;
+                trackingStatus = BusTrackingStatusRules.Offline;
                 lat = null;
                 lng = null;
                 speed = null;
@@ -43,16 +44,27 @@ public sealed class FleetSnapshotBuilder(BusRepository repo, ITenantContext tena
             }
             else
             {
+                // A stored 0,0 is not a location. Treat it as "no ping" so the trip stays RUNNING
+                // and no client draws a pin in the ocean.
+                var pingAt = IsZero(r.Lat, r.Lng) ? null : r.LastPingAt;
                 var derived = BusTrackingStatusRules.Derive(
-                    now, r.LastPingAt, r.SpeedKmh, hasLiveTrip: true, gpsAllowed: true);
+                    now, pingAt, r.SpeedKmh, hasLiveTrip: true, gpsAllowed: true);
                 trackingStatus = derived.Tracking;
-                var ageMin = (now - r.LastPingAt.Value).TotalMinutes;
-                status = ageMin > 5 ? "delayed"
-                    : (r.SpeedKmh is <= 3) ? "at_stop"
-                    : "on_route";
-                var position = await repo.GetPositionAsync(r.BusId, ct);
-                nextStop = position.NextStopName;
-                etaMinutes = position.EtaMinutes;
+                status = derived.Legacy;
+                if (pingAt is null)
+                {
+                    lat = null;
+                    lng = null;
+                    speed = null;
+                    heading = null;
+                    lastPing = null;
+                }
+                else if (derived.Tracking == BusTrackingStatusRules.Live)
+                {
+                    var position = await repo.GetPositionAsync(r.BusId, ct);
+                    nextStop = position.NextStopName;
+                    etaMinutes = position.EtaMinutes;
+                }
             }
 
             var travelingTeachers = await repo.ListTravelingTeachersAsync(r.BusId, ct);
@@ -68,4 +80,6 @@ public sealed class FleetSnapshotBuilder(BusRepository repo, ITenantContext tena
 
         return list;
     }
+
+    private static bool IsZero(double? lat, double? lng) => lat is 0 && lng is 0;
 }

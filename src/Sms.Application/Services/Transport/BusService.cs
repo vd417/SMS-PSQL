@@ -377,9 +377,17 @@ public sealed class BusService(
             return ApiResult.Fail(new Error("forbidden", "no tenant context"), 403);
         if (await EnsureBusDutyAsync(busId, ct) is { } denied) return denied;
         var ok = await repo.UpsertBoardingAsync(tid, busId, req.Records, clock.UtcNow, ct);
-        return ok
-            ? ApiResult.NoContent()
-            : ApiResult.Fail(new Error("no_active_trip", "no live trip for this bus"), 409);
+        if (!ok)
+            return ApiResult.Fail(new Error("no_active_trip", "no live trip for this bus"), 409);
+        var tripId = await repo.GetLiveTripIdForBusAsync(busId, ct);
+        await fleetBroadcaster.BroadcastFleetAsync(tid, ct);
+        await live.PublishAsync(tid, LiveEventTypes.Transport, ct: ct);
+        if (tripId is { } id)
+        {
+            foreach (var record in req.Records)
+                await fleetBroadcaster.BroadcastBoardingAsync(tid, busId, id, record.StudentId, record.Status, record.At ?? clock.UtcNow, ct);
+        }
+        return ApiResult.NoContent();
     }
 
     private static FleetBusResponse ToFleetBus(CreatedBusRow r) =>

@@ -13,4 +13,5 @@ internal sealed class NoOpTransportFleetBroadcaster : ITransportFleetBroadcaster
     public Task BroadcastStopArrivedAsync(Guid busId, Guid tripId, Guid stopId, string stopName, DateTime confirmedAt, CancellationToken ct = default) => Task.CompletedTask;
     public Task BroadcastStopCompletedAsync(Guid busId, Guid tripId, Guid stopId, Guid? nextStopId, string? nextStopName, DateTime departedAt, CancellationToken ct = default) => Task.CompletedTask;
     public Task BroadcastSchoolArrivedAsync(Guid busId, Guid tripId, DateTime arrivedAt, int studentsOnboard, CancellationToken ct = default) => Task.CompletedTask;
+    public Task BroadcastBoardingAsync(Guid schoolId, Guid busId, Guid tripId, Guid studentId, string state, DateTime at, CancellationToken ct = default) => Task.CompletedTask;
 }

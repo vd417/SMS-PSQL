@@ -201,7 +201,16 @@ public sealed class TripService(
         if (!await repo.IsActiveAsync(tripId, ct))
             return ApiResult.Fail(new Error("trip_ended", "this trip has already ended"), 409);
         await repo.UpsertBoardingAsync(tid, tripId, req, ct);
+        await PublishBoardingAsync(tid, tripId, req.StudentId, req.State, req.At, ct);
         return ApiResult.NoContent();
+    }
+
+    private async Task PublishBoardingAsync(Guid tid, Guid tripId, Guid studentId, string state, DateTime at, CancellationToken ct)
+    {
+        await fleetBroadcaster.BroadcastFleetAsync(tid, ct);
+        await live.PublishAsync(tid, LiveEventTypes.Transport, ct: ct);
+        if (await repo.GetBusIdAsync(tripId, ct) is { } busId)
+            await fleetBroadcaster.BroadcastBoardingAsync(tid, busId, tripId, studentId, state, at, ct);
     }
 
     public async Task<ApiResult> ConfirmStopArrivalAsync(Guid tripId, Guid stopId, CancellationToken ct = default)

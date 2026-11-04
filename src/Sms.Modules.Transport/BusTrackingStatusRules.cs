@@ -16,6 +16,7 @@ public static class BusTrackingStatusRules
     public const string Stopped = "stopped";
 
     public const string LegacyIdle = "idle";
+    public const string LegacyRunning = "running";
     public const string LegacyDelayed = "delayed";
     public const string LegacyAtStop = "at_stop";
     public const string LegacyOnRoute = "on_route";
@@ -30,8 +31,12 @@ public static class BusTrackingStatusRules
     public static Result Derive(
         DateTime utcNow, DateTime? lastPingAt, double? speedKmh, bool hasLiveTrip, bool gpsAllowed)
     {
-        if (!gpsAllowed || !hasLiveTrip || lastPingAt is null)
+        // No trip: idle. A live trip with no fresh fix is RUNNING (legacy) and OFFLINE
+        // for GPS. LIVE is reserved for a ping inside LiveSeconds. Coordinates are never invented.
+        if (!hasLiveTrip)
             return new Result(Offline, null, LegacyIdle);
+        if (!gpsAllowed || lastPingAt is null)
+            return new Result(Offline, null, LegacyRunning);
 
         var ageSeconds = (utcNow - lastPingAt.Value).TotalSeconds;
         var motion = speedKmh is <= StoppedSpeedKmh ? Stopped : Moving;

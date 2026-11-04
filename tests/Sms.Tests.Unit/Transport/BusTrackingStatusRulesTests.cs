@@ -46,11 +46,12 @@ public class BusTrackingStatusRulesTests
     public void No_trip_or_gps_lock_is_offline_idle()
     {
         BusTrackingStatusRules.Derive(Now, Now, 30, hasLiveTrip: false, gpsAllowed: true)
-            .Tracking.Should().Be("OFFLINE");
-        BusTrackingStatusRules.Derive(Now, Now, 30, hasLiveTrip: true, gpsAllowed: false)
             .Legacy.Should().Be("idle");
-        BusTrackingStatusRules.Derive(Now, null, null, hasLiveTrip: true, gpsAllowed: true)
-            .Tracking.Should().Be("OFFLINE");
+        var started = BusTrackingStatusRules.Derive(Now, null, null, hasLiveTrip: true, gpsAllowed: true);
+        started.Tracking.Should().Be("OFFLINE");
+        started.Legacy.Should().Be("running");
+        BusTrackingStatusRules.Derive(Now, Now, 30, hasLiveTrip: true, gpsAllowed: false)
+            .Legacy.Should().Be("running");
     }
 
     [Fact]

@@ -12,4 +12,6 @@ public interface ITransportFleetBroadcaster
     Task BroadcastStopArrivedAsync(Guid busId, Guid tripId, Guid stopId, string stopName, DateTime confirmedAt, CancellationToken ct = default);
     Task BroadcastStopCompletedAsync(Guid busId, Guid tripId, Guid stopId, Guid? nextStopId, string? nextStopName, DateTime departedAt, CancellationToken ct = default);
     Task BroadcastSchoolArrivedAsync(Guid busId, Guid tripId, DateTime arrivedAt, int studentsOnboard, CancellationToken ct = default);
+    /// Pickup/drop (and absent) after the boarding row is saved. Bus group only — same authorization as other trip events.
+    Task BroadcastBoardingAsync(Guid schoolId, Guid busId, Guid tripId, Guid studentId, string state, DateTime at, CancellationToken ct = default);
 }

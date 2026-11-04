@@ -45,4 +45,11 @@ public sealed class TransportFleetBroadcaster(
     public async Task BroadcastSchoolArrivedAsync(Guid busId, Guid tripId, DateTime arrivedAt, int studentsOnboard, CancellationToken ct = default) =>
         await hub.Clients.Group(TransportFleetHub.BusGroup(busId)).SendAsync("school_arrived",
             new { busId, tripId, arrivedAt, studentsOnboard }, ct);
+
+    public async Task BroadcastBoardingAsync(Guid schoolId, Guid busId, Guid tripId, Guid studentId, string state, DateTime at, CancellationToken ct = default)
+    {
+        var name = state == "dropped" ? "student_drop" : "student_pickup";
+        await hub.Clients.Group(TransportFleetHub.BusGroup(busId)).SendAsync(name,
+            new { schoolId, busId, tripId, studentId, status = state, at }, ct);
+    }
 }
