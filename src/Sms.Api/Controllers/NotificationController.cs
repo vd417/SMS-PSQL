@@ -6,10 +6,10 @@ using Sms.Shared.Kernel.Authz;
 
 namespace Sms.Api.Controllers;
 
-[Route("v1")]
-[Authorize]
 public sealed record RegisterPushDeviceRequest(string? Token, string? Platform, string? App);
 
+[Route("v1")]
+[Authorize]
 public sealed class NotificationController(INotificationService notifications, IPushDeviceService pushDevices) : ApiControllerBase
 {
     [HttpGet("notifications")]
