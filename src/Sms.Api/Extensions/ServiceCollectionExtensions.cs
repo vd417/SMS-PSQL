@@ -245,6 +245,10 @@ public static class ServiceCollectionExtensions
         builder.Services.AddHostelModule();
         builder.Services.AddSportsModule();
         builder.Services.AddCommsModule();
+        builder.Services.Configure<FirebaseOptions>(builder.Configuration.GetSection("Firebase"));
+        builder.Services.AddHttpClient("fcm");
+        builder.Services.AddSingleton<FcmAccessTokenProvider>();
+        builder.Services.AddScoped<IPushNotificationFanout, FcmPushFanout>();
         builder.Services.AddIssuesModule();
         builder.Services.AddReportingModule();
         builder.Services.AddTasksModule();

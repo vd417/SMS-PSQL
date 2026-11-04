@@ -8,7 +8,9 @@ namespace Sms.Api.Controllers;
 
 [Route("v1")]
 [Authorize]
-public sealed class NotificationController(INotificationService notifications) : ApiControllerBase
+public sealed record RegisterPushDeviceRequest(string? Token, string? Platform, string? App);
+
+public sealed class NotificationController(INotificationService notifications, IPushDeviceService pushDevices) : ApiControllerBase
 {
     [HttpGet("notifications")]
     public async Task<IActionResult> List(CancellationToken ct) =>
@@ -17,6 +19,10 @@ public sealed class NotificationController(INotificationService notifications) :
     [HttpPost("notifications/read")]
     public async Task<IActionResult> MarkRead(CancellationToken ct) =>
         FromResult(await notifications.MarkReadAsync(ct));
+
+    [HttpPost("push-devices")]
+    public async Task<IActionResult> RegisterPushDevice([FromBody] RegisterPushDeviceRequest req, CancellationToken ct) =>
+        FromResult(await pushDevices.RegisterAsync(req.Token, req.Platform, req.App, ct));
 
     [HttpPost("notifications")]
     public async Task<IActionResult> Create([FromBody] CreateNotificationRequest req, CancellationToken ct)

@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<PtmCommsNotifier>();
         services.AddScoped<IPtmService, PtmService>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IPushDeviceService, PushDeviceService>();
         services.AddScoped<IIssueService, IssueService>();
         services.AddScoped<IVehicleCheckService, VehicleCheckService>();
         services.AddScoped<IUserSettingsService, UserSettingsService>();

@@ -137,7 +137,7 @@ public sealed record CreateNotificationRequest(string? Icon, string? Tone, strin
 /// exactly against message tokens) | "phrase" (multi-word, matched as a collapsed substring).
 public sealed record ChatBannedWord(string Kind, string Word);
 
-public sealed class CommsRepository(IDbConnectionFactory factory) : BaseRepository(factory)
+public sealed class CommsRepository(IDbConnectionFactory factory, IPushNotificationFanout push) : BaseRepository(factory)
 {
     private sealed record MessageRow(
         Guid Id, Guid ThreadId, Guid? SenderId, string Text, string? ImageUrl, DateTime SentAt,
@@ -194,9 +194,15 @@ public sealed class CommsRepository(IDbConnectionFactory factory) : BaseReposito
             "UPDATE \"dbo\".\"Notifications\" SET \"Unread\" = false WHERE \"Unread\" = true AND (\"UserId\" IS NULL OR \"UserId\" = @userId)",
             new { userId }, ct);
 
-    public Task<NotificationResponse?> CreateNotificationAsync(Guid tenantId, CreateNotificationRequest r, CancellationToken ct = default) =>
-        QuerySingleProcAsync<NotificationResponse>("dbo.Notification_Create",
+    public async Task<NotificationResponse?> CreateNotificationAsync(Guid tenantId, CreateNotificationRequest r, CancellationToken ct = default)
+    {
+        var created = await QuerySingleProcAsync<NotificationResponse>("dbo.Notification_Create",
             new { TenantId = tenantId, r.Icon, r.Tone, r.Title, r.Body, r.UserId }, ct);
+        if (created is null) return null;
+        try { push.Enqueue(tenantId, r.UserId, created.Title, created.Body); }
+        catch { /* the notice row is already saved */ }
+        return created;
+    }
 
     // ContactUserId is the real link where present (set explicitly on create, or backfilled);
     // older threads without one fall back to matching Name against Users, same as delivery.
@@ -695,6 +701,8 @@ public static class CommsModule
     public static IServiceCollection AddCommsModule(this IServiceCollection services)
     {
         services.AddScoped<CommsRepository>();
+        services.AddScoped<PushDeviceRepository>();
+        services.AddScoped<IPushNotificationFanout, NoOpPushNotificationFanout>();
         services.AddScoped<PtmRepository>();
         services.AddScoped<UserAppSettingsRepository>();
         return services;
