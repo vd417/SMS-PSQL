@@ -175,8 +175,9 @@ public sealed class TaskRepository(IDbConnectionFactory factory) : BaseRepositor
             r.DueDate,
         }, ct);
 
-    public Task<TaskResponse?> CompleteAsync(Guid id, Guid completedByUserId, CancellationToken ct = default) =>
-        QuerySingleProcAsync<TaskResponse>("dbo.Task_Complete", new { Id = id, CompletedByUserId = completedByUserId }, ct);
+    public Task<TaskResponse?> CompleteAsync(Guid id, Guid completedByUserId, string? remarks = null, CancellationToken ct = default) =>
+        QuerySingleProcAsync<TaskResponse>("dbo.Task_Complete",
+            new { Id = id, CompletedByUserId = completedByUserId, Remarks = remarks }, ct);
 
     public Task<TaskResponse?> AttachPhotoAsync(Guid id, string? photoUrl, CancellationToken ct = default) =>
         QuerySingleProcAsync<TaskResponse>("dbo.Task_AttachPhoto", new { Id = id, PhotoUrl = photoUrl }, ct);

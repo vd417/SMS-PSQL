@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Sms.Application.Services.Tasks;
 using Sms.Modules.Tasks;
 
@@ -18,8 +19,9 @@ public sealed class TaskController(ITaskService tasks) : ApiControllerBase
         FromResult(await tasks.ListMineAsync(User, ct));
 
     [HttpPost("staff/tasks/{id:guid}/complete")]
-    public async Task<IActionResult> Complete(Guid id, CancellationToken ct) =>
-        FromResult(await tasks.CompleteAsync(id, User, ct));
+    public async Task<IActionResult> Complete(
+        Guid id, [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] CompleteTaskRequest? req, CancellationToken ct) =>
+        FromResult(await tasks.CompleteAsync(id, req?.Remark, User, ct));
 
     [HttpPost("staff/tasks/{id:guid}/photo")]
     public async Task<IActionResult> AttachPhoto(Guid id, [FromBody] AttachPhotoRequest req, CancellationToken ct) =>
@@ -52,3 +54,6 @@ public sealed class TaskController(ITaskService tasks) : ApiControllerBase
 }
 
 public sealed record AttachPhotoRequest(string? PhotoBase64);
+
+/// Optional remark submitted by staff when completing a task (JSON: remark).
+public sealed record CompleteTaskRequest(string? Remark);
