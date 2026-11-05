@@ -24,6 +24,10 @@ public sealed class NotificationController(INotificationService notifications, I
     public async Task<IActionResult> RegisterPushDevice([FromBody] RegisterPushDeviceRequest req, CancellationToken ct) =>
         FromResult(await pushDevices.RegisterAsync(req.Token, req.Platform, req.App, ct));
 
+    [HttpDelete("push-devices")]
+    public async Task<IActionResult> RemovePushDevice([FromBody] RegisterPushDeviceRequest req, CancellationToken ct) =>
+        FromResult(await pushDevices.RemoveAsync(req.Token, ct));
+
     [HttpPost("notifications")]
     public async Task<IActionResult> Create([FromBody] CreateNotificationRequest req, CancellationToken ct)
     {

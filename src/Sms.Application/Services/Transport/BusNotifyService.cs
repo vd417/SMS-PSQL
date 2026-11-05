@@ -72,7 +72,9 @@ public sealed class BusNotifyService(
             {
                 foreach (var parentId in await riders.ListParentUserIdsAsync(rider.StudentId, rider.AdmissionNo, ct))
                 {
-                    await comms.CreateNotificationAsync(tid, new CreateNotificationRequest("bus", "bus", title, body, parentId), ct);
+                    var notice = await comms.CreateNotificationAsync(tid, new CreateNotificationRequest("bus", "bus", title, body, parentId), ct);
+                    if (notice is not null)
+                        await Sms.Application.Services.Comms.NotificationEvents.PublishAsync(live, tid, notice, parentId, ct);
                     pushed.Add(parentId);
                 }
             }
@@ -86,7 +88,7 @@ public sealed class BusNotifyService(
         }
 
         if (pushed.Count > 0)
-            await live.PublishAsync(tid, LiveEventTypes.Notification, ct: ct);
+            await live.PublishAsync(tid, LiveEventTypes.Transport, ct: ct);
         logger.LogInformation("Bus {Bus} manual {Event} notice → push {Push}, sms {Sms}",
             busId, eventType, pushed.Count, texted.Count);
 

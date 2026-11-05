@@ -32,13 +32,14 @@ public sealed class AcademicsCommsNotifier(
         var due = dueDate is { } d ? d.ToString("yyyy-MM-dd") : null;
         var body = due is null ? cls : $"{cls} · due {due}";
 
-        await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
+        var notice = await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
             Icon: "book",
             Tone: "brand",
             Title: $"Homework: {trimmed}",
             Body: body), ct);
         await live.PublishAsync(tenantId, LiveEventTypes.Homework, ct: ct);
-        await live.PublishAsync(tenantId, LiveEventTypes.Notification, ct: ct);
+        if (notice is not null)
+            await NotificationEvents.PublishAsync(live, tenantId, notice, null, ct);
     }
 
     public async Task NotifyClassTestScheduledAsync(
@@ -100,13 +101,14 @@ public sealed class AcademicsCommsNotifier(
 
         var clsLabel = classCount == 1 ? "1 class" : $"{classCount} classes";
         var slotLabel = slotCount == 1 ? "1 period" : $"{slotCount} periods";
-        await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
+        var notice = await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
             Icon: "calendar",
             Tone: "brand",
             Title: "Timetable updated",
             Body: $"{clsLabel} · {slotLabel} with bell times — open Schedule to refresh."), ct);
         await live.PublishAsync(tenantId, LiveEventTypes.Timetable, ct: ct);
-        await live.PublishAsync(tenantId, LiveEventTypes.Notification, ct: ct);
+        if (notice is not null)
+            await NotificationEvents.PublishAsync(live, tenantId, notice, null, ct);
     }
 
     public async Task NotifyAbsenceMarksAsync(
@@ -121,7 +123,6 @@ public sealed class AcademicsCommsNotifier(
             (records ?? []).Select(r => (r.StudentId, (string?)r.Status)));
         if (absentIds.Count == 0) return;
 
-        var notified = false;
         foreach (var studentId in absentIds)
         {
             var student = await students.GetAsync(studentId, ct);
@@ -130,18 +131,16 @@ public sealed class AcademicsCommsNotifier(
             var parents = await students.ListParentUserIdsAsync(studentId, student?.AdmissionNo ?? "", ct);
             foreach (var parentId in parents)
             {
-                await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
+                var notice = await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
                     Icon: "alert",
                     Tone: "warn",
                     Title: AttendanceParentNotice.Title(name),
                     Body: AttendanceParentNotice.Body(date, subject, period),
                     UserId: parentId), ct);
-                notified = true;
+                if (notice is not null)
+                    await NotificationEvents.PublishAsync(live, tenantId, notice, parentId, ct);
             }
         }
-
-        if (notified)
-            await live.PublishAsync(tenantId, LiveEventTypes.Notification, ct: ct);
     }
 
     private static void AddEmail(List<string> list, string? email)

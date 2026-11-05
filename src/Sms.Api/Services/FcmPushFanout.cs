@@ -126,8 +126,13 @@ public sealed class FcmPushFanout(
         try
         {
             var projectId = options.Value.ProjectId;
-            if (string.IsNullOrWhiteSpace(projectId))
+            if (string.IsNullOrWhiteSpace(projectId) || string.IsNullOrWhiteSpace(options.Value.ServiceAccountPath))
+            {
+                logger.LogWarning(
+                    "Firebase push is not configured for tenant {Tenant}; the in-app notice was saved and no device push was sent",
+                    tenantId);
                 return;
+            }
 
             List<string> deviceTokens;
             await using (var scope = scopes.CreateAsyncScope())
@@ -138,23 +143,43 @@ public sealed class FcmPushFanout(
                 deviceTokens = (await repo.ListAsync(userId)).Select(r => r.Token).ToList();
             }
             if (deviceTokens.Count == 0)
+            {
+                logger.LogInformation(
+                    "No push tokens for tenant {Tenant} user {UserId}; in-app notice was saved",
+                    tenantId, userId);
                 return;
+            }
 
             var access = await tokens.GetAsync(CancellationToken.None);
             if (access is null)
+            {
+                logger.LogWarning(
+                    "Firebase access token was not issued for tenant {Tenant}; push was not sent",
+                    tenantId);
                 return;
+            }
 
             var client = http.CreateClient("fcm");
+            var accepted = 0;
             foreach (var device in deviceTokens)
             {
-                var stale = await SendAsync(client, projectId, access, device, title, body);
-                if (!stale) continue;
+                var outcome = await SendAsync(client, projectId, access, device, title, body);
+                if (outcome == PushSendOutcome.Accepted)
+                {
+                    accepted++;
+                    continue;
+                }
+                if (outcome != PushSendOutcome.Stale) continue;
                 await using var scope = scopes.CreateAsyncScope();
                 var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
                 tenant.Set(tenantId, null, false);
                 var repo = scope.ServiceProvider.GetRequiredService<PushDeviceRepository>();
                 await repo.DeleteAsync(device);
+                logger.LogInformation("Removed an unregistered push token for tenant {Tenant}", tenantId);
             }
+            logger.LogInformation(
+                "Firebase accepted {Accepted} of {Total} push sends for tenant {Tenant} user {UserId}",
+                accepted, deviceTokens.Count, tenantId, userId);
         }
         catch (Exception ex)
         {
@@ -162,7 +187,7 @@ public sealed class FcmPushFanout(
         }
     }
 
-    private async Task<bool> SendAsync(
+    private async Task<PushSendOutcome> SendAsync(
         HttpClient client, string projectId, string access, string device, string title, string? body)
     {
         var payload = JsonSerializer.Serialize(new
@@ -171,7 +196,7 @@ public sealed class FcmPushFanout(
             {
                 token = device,
                 notification = new { title, body = body ?? "" },
-                android = new { priority = "HIGH" },
+                android = new { priority = "HIGH", notification = new { channel_id = "default" } },
                 apns = new { payload = new { aps = new { sound = "default" } } },
                 webpush = new { notification = new { title, body = body ?? "" } },
             }
@@ -182,9 +207,12 @@ public sealed class FcmPushFanout(
         req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
         using var res = await client.SendAsync(req);
         if (res.IsSuccessStatusCode)
-            return false;
+            return PushSendOutcome.Accepted;
         var text = await res.Content.ReadAsStringAsync();
-        logger.LogWarning("FCM send failed: {Status}", (int)res.StatusCode);
-        return (int)res.StatusCode is 404 || text.Contains("UNREGISTERED", StringComparison.OrdinalIgnoreCase);
+        var stale = (int)res.StatusCode is 404 || text.Contains("UNREGISTERED", StringComparison.OrdinalIgnoreCase);
+        logger.LogWarning("FCM rejected a push: {Status} stale={Stale}", (int)res.StatusCode, stale);
+        return stale ? PushSendOutcome.Stale : PushSendOutcome.Rejected;
     }
+
+    private enum PushSendOutcome { Accepted, Rejected, Stale }
 }

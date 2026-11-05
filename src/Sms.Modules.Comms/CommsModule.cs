@@ -96,6 +96,9 @@ public sealed record ChatMessageResponse(
     public bool IsRead => ReadAt is not null;
 }
 public sealed record SendMessageRequest(string? Text, string? ImageUrl);
+
+/// <summary>The sender's stored message, plus the recipient's in-app notice when delivery succeeded.</summary>
+public sealed record SentChatMessage(ChatMessageResponse Message, NotificationResponse? Notice, Guid? NoticeUserId);
 public sealed record AnnouncementResponse(
     Guid Id, Guid TenantId, string Title, string? Body, DateTime Date, string? From, string? Role,
     string Type, bool Pinned, string? Audience)
@@ -345,7 +348,7 @@ ORDER BY x.""Sort"", x.""Name""", new { tenantId, callerId }, ct);
         return rows.Select(m => ToResponse(m, callerId)).ToList();
     }
 
-    public async Task<ChatMessageResponse?> AddMessageAsync(
+    public async Task<SentChatMessage?> AddMessageAsync(
         Guid tenantId, Guid threadId, Guid ownerUserId, Guid? senderId, string text, string? imageUrl,
         CancellationToken ct = default)
     {
@@ -366,7 +369,8 @@ ORDER BY x.""Sort"", x.""Name""", new { tenantId, callerId }, ct);
         if (m is null)
             return null;
 
-        var delivered = await DeliverToPeerInboxAsync(tenantId, threadId, senderId, text, imageUrl, correlationId, ct);
+        var (delivered, notice, noticeUserId) =
+            await DeliverToPeerInboxAsync(tenantId, threadId, senderId, text, imageUrl, correlationId, ct);
         DateTime? deliveredAt = m.DeliveredAt;
         if (delivered)
         {
@@ -376,7 +380,7 @@ ORDER BY x.""Sort"", x.""Name""", new { tenantId, callerId }, ct);
             deliveredAt = DateTime.UtcNow;
         }
 
-        return ToResponse(m, senderId, deliveredAt);
+        return new SentChatMessage(ToResponse(m, senderId, deliveredAt), notice, noticeUserId);
     }
 
     /// <summary>
@@ -411,23 +415,23 @@ WHERE incoming.""CorrelationId"" = m.""CorrelationId""
     /// Prefers the thread's own ContactUserId (set explicitly on create, or backfilled); falls
     /// back to best-effort name matching only for threads that still have neither.
     /// </summary>
-    private async Task<bool> DeliverToPeerInboxAsync(
+    private async Task<(bool Delivered, NotificationResponse? Notice, Guid? NoticeUserId)> DeliverToPeerInboxAsync(
         Guid tenantId, Guid sourceThreadId, Guid? senderId, string text, string? imageUrl,
         Guid correlationId, CancellationToken ct)
     {
         if (senderId is not { } sid)
-            return false;
+            return (false, null, null);
 
         var threadRows = await QueryInlineAsync<ThreadInfoRow>(
             "SELECT \"Id\", \"Name\", \"Role\", \"OwnerUserId\", \"IsGroup\", \"ContactUserId\", \"ChildId\" FROM \"dbo\".\"ChatThreads\" WHERE \"Id\" = @sourceThreadId",
             new { sourceThreadId }, ct);
         var thread = threadRows.FirstOrDefault();
         if (thread is null || thread.IsGroup)
-            return false;
+            return (false, null, null);
 
         var recipientId = thread.ContactUserId ?? await ResolveContactUserIdAsync(tenantId, thread.Name, thread.Role, sid, ct);
         if (recipientId is null || recipientId == sid)
-            return false;
+            return (false, null, null);
 
         // dbo.User_Create never sets Users.Name (only Teacher/Staff onboarding backfills it) —
         // accounts created straight from signup (owner/admin/principal with no Teacher/Staff
@@ -435,7 +439,7 @@ WHERE incoming.""CorrelationId"" = m.""CorrelationId""
         // because that account never got a display name; fall back to a role label.
         var senderName = await ResolveSenderDisplayNameAsync(tenantId, sid, ct);
         if (string.IsNullOrWhiteSpace(senderName))
-            return false;
+            return (false, null, null);
 
         var senderRole = await ResolveSenderRoleLabelAsync(tenantId, sid, ct) ?? "Staff";
         // Prefer the child explicitly set on the sender's own thread (parent messaging about a
@@ -456,7 +460,7 @@ WHERE incoming.""CorrelationId"" = m.""CorrelationId""
                 ContactUserId = (Guid?)sid,
             }, ct);
         if (peerThread is null)
-            return false;
+            return (false, null, null);
 
         var peer = await QuerySingleProcAsync<MessageRow>("dbo.Message_Add",
             new
@@ -469,7 +473,7 @@ WHERE incoming.""CorrelationId"" = m.""CorrelationId""
                 CorrelationId = correlationId,
             }, ct);
         if (peer is null)
-            return false;
+            return (false, null, null);
 
         await ExecuteInlineAsync(
             "UPDATE \"dbo\".\"ChatThreads\" SET \"Unread\" = \"Unread\" + 1 WHERE \"Id\" = @threadId",
@@ -479,13 +483,13 @@ WHERE incoming.""CorrelationId"" = m.""CorrelationId""
             ? (string.IsNullOrWhiteSpace(imageUrl) ? "New message" : "[Image]")
             : text.Trim();
         if (preview.Length > 80) preview = preview[..77] + "...";
-        await CreateNotificationAsync(tenantId, new CreateNotificationRequest(
+        var notice = await CreateNotificationAsync(tenantId, new CreateNotificationRequest(
             Icon: "chatbubbles",
             Tone: "chat",
             Title: senderName,
             Body: preview,
             UserId: recipientId), ct);
-        return true;
+        return (true, notice, recipientId);
     }
 
     private const string ParentSuffix = " (parent)";

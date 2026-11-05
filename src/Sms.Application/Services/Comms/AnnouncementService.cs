@@ -57,7 +57,6 @@ public sealed class AnnouncementService(
             return ApiResult<AnnouncementResponse>.Fail(new Error("internal_error", "failed to create announcement"), 500);
 
         await live.PublishAsync(tid, LiveEventTypes.Announcement, ct: ct);
-        await live.PublishAsync(tid, LiveEventTypes.Notification, ct: ct);
 
         var recipientsJson = System.Text.Json.JsonSerializer.Serialize(new
         {
@@ -203,15 +202,22 @@ public sealed class AnnouncementService(
                 logger.LogInformation("Announcement {Id} sms → {Count}", created.Id, smsed);
             }
 
-            if (channels.Contains("app") || channels.Contains("push"))
+            if (channels.Contains("app"))
             {
-                await repo.CreateNotificationAsync(tid, new CreateNotificationRequest(
+                var notice = await repo.CreateNotificationAsync(tid, new CreateNotificationRequest(
                     Icon: "bell",
                     Tone: "brand",
                     Title: $"{kind}: {displayTitle}",
                     Body: string.IsNullOrWhiteSpace(dateLabel) ? details ?? body : $"{dateLabel} · {details ?? body}",
                     UserId: req.UserId), ct);
-                app = 1;
+                if (notice is not null)
+                {
+                    await NotificationEvents.PublishAsync(live, tid, notice, req.UserId, ct);
+                    app = 1;
+                    logger.LogInformation(
+                        "Announcement {Id} in-app notice {NoticeId} for user {UserId}",
+                        created.Id, notice.Id, req.UserId);
+                }
             }
         }
         catch (Exception ex)

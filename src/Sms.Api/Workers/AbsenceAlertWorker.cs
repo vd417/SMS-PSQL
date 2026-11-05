@@ -100,9 +100,13 @@ public sealed class AbsenceAlertWorker(
         var summaryTitle = $"Absence alerts · {flagged.Count} flagged";
 
         // Always drop an in-app notice for the office.
-        await comms.CreateNotificationAsync(cfg.TenantId, new CreateNotificationRequest(
+        var officeNotice = await comms.CreateNotificationAsync(cfg.TenantId, new CreateNotificationRequest(
             "bell", "warn", summaryTitle,
             $"{flagged.Count} absent {cfg.NoticeDays}+ day(s) in a row: {names}{moreSuffix}"), ct);
+        if (officeNotice is not null)
+            await Sms.Application.Services.Comms.NotificationEvents.PublishAsync(
+                sp.GetRequiredService<Sms.Application.Services.Realtime.ILiveBroadcaster>(),
+                cfg.TenantId, officeNotice, null, ct);
 
         // Persist an announcement row for the history feed.
         await comms.CreateAnnouncementAsync(cfg.TenantId,

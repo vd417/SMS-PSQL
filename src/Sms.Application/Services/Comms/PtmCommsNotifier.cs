@@ -42,15 +42,15 @@ public sealed class PtmCommsNotifier(
 
         foreach (var userId in recipients)
         {
-            await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
+            var notice = await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
                 Icon: "calendar",
                 Tone: "brand",
                 Title: "Parent-teacher meeting scheduled",
                 Body: body,
                 UserId: userId), ct);
+            if (notice is not null)
+                await NotificationEvents.PublishAsync(live, tenantId, notice, userId, ct);
         }
-
-        await live.PublishAsync(tenantId, LiveEventTypes.Notification, ct: ct);
     }
 
     /// <summary>
@@ -71,14 +71,14 @@ public sealed class PtmCommsNotifier(
 
         foreach (var userId in recipients)
         {
-            await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
+            var notice = await comms.CreateNotificationAsync(tenantId, new CreateNotificationRequest(
                 Icon: "calendar",
                 Tone: "brand",
                 Title: "Parent-teacher meeting",
                 Body: body,
                 UserId: userId), ct);
+            if (notice is not null)
+                await NotificationEvents.PublishAsync(live, tenantId, notice, userId, ct);
         }
-
-        await live.PublishAsync(tenantId, LiveEventTypes.Notification, ct: ct);
     }
 }

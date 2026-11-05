@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using Sms.Application.Common;
+using Sms.Application.Services.Comms;
+using Sms.Modules.Comms;
 using Sms.Modules.Tasks;
 using Sms.Shared.Kernel.Authz;
 using Sms.Shared.Kernel.Http;
@@ -32,7 +34,8 @@ public interface ITaskService
         ClaimsPrincipal caller, CancellationToken ct = default);
 }
 
-public sealed class TaskService(TaskRepository repo, ITenantContext tenant, IClock clock) : ITaskService
+public sealed class TaskService(
+    TaskRepository repo, ITenantContext tenant, IClock clock, INotificationService notifications) : ITaskService
 {
     public async Task<ApiResult<IReadOnlyList<StaffTaskDto>>> ListMineAsync(
         ClaimsPrincipal caller, CancellationToken ct = default)
@@ -94,6 +97,18 @@ public sealed class TaskService(TaskRepository repo, ITenantContext tenant, IClo
         var created = await repo.CreateAsync(tid, uid, req, ct);
         if (created is null)
             return ApiResult<TaskResponse>.Fail(new Error("server_error", "could not create task"), 500);
+        if (req.AssignedToUserId is { } assignee)
+        {
+            try
+            {
+                await notifications.CreateAsync(new CreateNotificationRequest(
+                    "checkbox", "info", $"New task: {created.Title}", created.Detail, assignee), ct);
+            }
+            catch
+            {
+                /* the assignment is already saved; a push outage must not fail it */
+            }
+        }
         return ApiResult<TaskResponse>.Ok(created, 201);
     }
 

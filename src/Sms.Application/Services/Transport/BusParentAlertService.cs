@@ -70,8 +70,10 @@ public sealed class BusParentAlertService(
                     if (!await riders.TryInsertParentAlertAsync(tenantId, tripId, rider.StudentId, parentId, kind, ct))
                         continue;
                     var (title, body) = Copy(kind, rider);
-                    await comms.CreateNotificationAsync(tenantId,
+                    var notice = await comms.CreateNotificationAsync(tenantId,
                         new CreateNotificationRequest("bus", "bus", title, body, parentId), ct);
+                    if (notice is not null)
+                        await Sms.Application.Services.Comms.NotificationEvents.PublishAsync(live, tenantId, notice, parentId, ct);
                     // Best-effort device push alongside the in-app notice (never throws — a dead
                     // token or Expo outage must not break this fan-out or the trip flow).
                     var tokens = await devices.ListTokensForUserAsync(tenantId, parentId, ct);
@@ -83,7 +85,7 @@ public sealed class BusParentAlertService(
             }
 
             if (sent)
-                await live.PublishAsync(tenantId, LiveEventTypes.Notification, ct: ct);
+                await live.PublishAsync(tenantId, LiveEventTypes.Transport, ct: ct);
         }
         catch (Exception ex)
         {

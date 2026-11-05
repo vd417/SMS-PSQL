@@ -46,7 +46,7 @@ public sealed class BusTeacherAlertService(
                 await DeliverAsync(tenantId, tripId, t.TeacherUserId, kind, title, body, ct);
                 sent = true;
             }
-            if (sent) await live.PublishAsync(tenantId, LiveEventTypes.Notification, ct: ct);
+            if (sent) await live.PublishAsync(tenantId, LiveEventTypes.Transport, ct: ct);
         }
         catch (Exception ex)
         {
@@ -78,7 +78,7 @@ public sealed class BusTeacherAlertService(
                 await DeliverAsync(tenantId, tripId, t.TeacherUserId, BusParentAlertRules.ApproachingStop, title, body, ct);
                 sent = true;
             }
-            if (sent) await live.PublishAsync(tenantId, LiveEventTypes.Notification, ct: ct);
+            if (sent) await live.PublishAsync(tenantId, LiveEventTypes.Transport, ct: ct);
         }
         catch (Exception ex)
         {
@@ -89,8 +89,10 @@ public sealed class BusTeacherAlertService(
     private async Task DeliverAsync(
         Guid tenantId, Guid tripId, Guid teacherUserId, string kind, string title, string body, CancellationToken ct)
     {
-        await comms.CreateNotificationAsync(tenantId,
+        var notice = await comms.CreateNotificationAsync(tenantId,
             new CreateNotificationRequest("bus", "bus", title, body, teacherUserId), ct);
+        if (notice is not null)
+            await Sms.Application.Services.Comms.NotificationEvents.PublishAsync(live, tenantId, notice, teacherUserId, ct);
         var tokens = await devices.ListTokensForUserAsync(tenantId, teacherUserId, ct);
         if (tokens.Count > 0)
             await push.SendAsync(tokens, title, body,

@@ -23,8 +23,10 @@ public sealed class NotificationService(CommsRepository repo, ITenantContext ten
         if (tenant.TenantId is not { } tid)
             return ApiResult<NotificationResponse>.Fail(new Error("forbidden", "no tenant context"), 403);
         var created = await repo.CreateNotificationAsync(tid, req, ct);
-        await live.PublishAsync(tid, LiveEventTypes.Notification, ct: ct);
-        return ApiResult<NotificationResponse>.Ok(created!, 201);
+        if (created is null)
+            return ApiResult<NotificationResponse>.Fail(new Error("internal_error", "failed to save notification"), 500);
+        await NotificationEvents.PublishAsync(live, tid, created, req.UserId, ct);
+        return ApiResult<NotificationResponse>.Ok(created, 201);
     }
 
     public async Task<ApiResult> MarkReadAsync(CancellationToken ct = default)

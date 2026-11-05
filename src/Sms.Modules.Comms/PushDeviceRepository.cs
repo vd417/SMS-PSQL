@@ -33,4 +33,9 @@ public sealed class PushDeviceRepository(IDbConnectionFactory factory) : BaseRep
         ExecuteInlineAsync(
             """DELETE FROM "dbo"."PushDevices" WHERE "Token" = @token""",
             new { token }, ct);
+
+    public Task DeleteForUserAsync(string token, Guid userId, CancellationToken ct = default) =>
+        ExecuteInlineAsync(
+            """DELETE FROM "dbo"."PushDevices" WHERE "Token" = @token AND "UserId" = @userId""",
+            new { token, userId }, ct);
 }

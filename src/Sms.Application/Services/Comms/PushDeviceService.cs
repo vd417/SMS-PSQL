@@ -8,6 +8,7 @@ namespace Sms.Application.Services.Comms;
 public interface IPushDeviceService
 {
     Task<ApiResult> RegisterAsync(string? token, string? platform, string? app, CancellationToken ct = default);
+    Task<ApiResult> RemoveAsync(string? token, CancellationToken ct = default);
 }
 
 public sealed class PushDeviceService(PushDeviceRepository repo, ITenantContext tenant) : IPushDeviceService
@@ -30,6 +31,17 @@ public sealed class PushDeviceService(PushDeviceRepository repo, ITenantContext 
             return ApiResult.Fail(new Error("invalid_request", "token, platform and app are required"), 422);
 
         await repo.UpsertAsync(tid, uid, trimmed, plat, which, ct);
+        return ApiResult.NoContent();
+    }
+
+    public async Task<ApiResult> RemoveAsync(string? token, CancellationToken ct = default)
+    {
+        if (tenant.UserId is not { } uid)
+            return ApiResult.Fail(new Error("forbidden", "no tenant context"), 403);
+        var trimmed = (token ?? "").Trim();
+        if (trimmed.Length is < 20 or > 4096)
+            return ApiResult.Fail(new Error("invalid_request", "token is required"), 422);
+        await repo.DeleteForUserAsync(trimmed, uid, ct);
         return ApiResult.NoContent();
     }
 }
