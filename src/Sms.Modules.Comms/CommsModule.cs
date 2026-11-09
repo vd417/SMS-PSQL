@@ -86,7 +86,16 @@ public sealed record CreateThreadRequest(
     string? ContactKind = null, Guid? ContactId = null);
 // A person a staff member can start a chat with (school management accounts). Kind is always
 // "user" (a CRM login addressed by its Users id); Role is a friendly label for the UI.
-public sealed record ChatContactResponse(Guid Id, string Kind, string Name, string Role);
+public sealed record ChatContactResponse(Guid Id, string Kind, string Name, string Role)
+{
+    /// Profile photo for this person (Users.PhotoUrl). Null when they have not set one.
+    public string? PhotoUrl { get; init; }
+
+    // ListManagementContactsAsync shape (+ PhotoUrl = 5 columns). Dapper picks the constructor
+    // by column count, so the original 4-column shape stays on the primary constructor.
+    public ChatContactResponse(Guid Id, string Kind, string Name, string Role, string? PhotoUrl)
+        : this(Id, Kind, Name, Role) => this.PhotoUrl = PhotoUrl;
+}
 public sealed record ChatMessageResponse(
     Guid Id, Guid ThreadId, Guid? SenderId, string Text, DateTime SentAt, bool IsMine, string? ImageUrl)
 {
@@ -136,6 +145,9 @@ public sealed record UpdateComplaintRequest(string? Status, string? Assignee);
 public sealed record NotificationResponse(
     Guid Id, Guid TenantId, string? Icon, string? Tone, string Title, string? Body, string? Time, bool Unread);
 public sealed record CreateNotificationRequest(string? Icon, string? Tone, string Title, string? Body, Guid? UserId = null);
+
+/// One CRM login and whether that person is signed in right now (seen in the last 5 minutes).
+public sealed record CrmPresenceRow(Guid Id, string? Email, string? Phone, string Roles, bool Online);
 /// A banned word/phrase for the chat profanity filter. Kind: "single" (one token, matched
 /// exactly against message tokens) | "phrase" (multi-word, matched as a collapsed substring).
 public sealed record ChatBannedWord(string Kind, string Word);
@@ -185,6 +197,22 @@ public sealed class CommsRepository(IDbConnectionFactory factory, IPushNotificat
         QueryInlineAsync<NotificationResponse>(
             $"SELECT {NotificationCols} FROM \"dbo\".\"Notifications\" WHERE \"UserId\" IS NULL OR \"UserId\" = @userId ORDER BY \"Unread\" DESC, \"Time\" DESC",
             new { userId }, ct);
+
+    /// Active CRM logins in this school, and whether each one has been seen in the last 5 minutes.
+    /// Same window the messenger uses for "online". RLS scopes the rows to the current tenant.
+    public Task<IReadOnlyList<CrmPresenceRow>> ListCrmPresenceAsync(CancellationToken ct = default) =>
+        QueryInlineAsync<CrmPresenceRow>(
+            """
+            SELECT u."Id", u."Email", u."Phone",
+                   COALESCE(string_agg(ur."Role", ','), '') AS "Roles",
+                   (u."LastSeenAt" IS NOT NULL AND u."LastSeenAt" > (now() AT TIME ZONE 'UTC') - interval '5 minutes') AS "Online"
+            FROM "dbo"."Users" u
+            LEFT JOIN "dbo"."UserRoles" ur ON ur."UserId" = u."Id"
+            WHERE u."Status" = 'active'
+            GROUP BY u."Id", u."Email", u."Phone", u."LastSeenAt"
+            ORDER BY u."Email"
+            """,
+            new { }, ct);
 
     // Global (TenantId NULL) + this tenant's banned words. RLS on ChatBannedWords already scopes
     // the result to NULL-or-current-tenant rows via the stamped connection context.
@@ -251,7 +279,7 @@ ORDER BY th.""LastAt"" DESC", new { ownerUserId }, ct);
     public Task<IReadOnlyList<ChatContactResponse>> ListManagementContactsAsync(
         Guid tenantId, Guid callerId, CancellationToken ct = default) =>
         QueryInlineAsync<ChatContactResponse>(@"
-SELECT x.""Id"", x.""Kind"", x.""Name"", x.""Role"" FROM (
+SELECT x.""Id"", x.""Kind"", x.""Name"", x.""Role"", x.""PhotoUrl"" FROM (
   SELECT u.""Id"",
          'user' AS ""Kind"",
          COALESCE(NULLIF(btrim(u.""Name""), ''),
@@ -269,6 +297,7 @@ SELECT x.""Id"", x.""Kind"", x.""Name"", x.""Role"" FROM (
            WHEN EXISTS (SELECT 1 FROM ""dbo"".""UserRoles"" ur WHERE ur.""UserId"" = u.""Id"" AND ur.""Role"" = 'school.admin') THEN 'School Admin'
            ELSE ''
          END AS ""Role"",
+         NULLIF(btrim(u.""PhotoUrl""), '') AS ""PhotoUrl"",
          0 AS ""Sort""
   FROM ""dbo"".""Users"" u
   WHERE u.""TenantId"" = @tenantId
@@ -279,8 +308,11 @@ SELECT x.""Id"", x.""Kind"", x.""Name"", x.""Role"" FROM (
         AND (ur.""Role"" IN ('school.owner','school.principal','school.admin') OR ur.""Role"" LIKE '%vice%principal%')
     )
   UNION ALL
-  SELECT t.""Id"", 'teacher' AS ""Kind"", t.""Name"" AS ""Name"", 'Teacher' AS ""Role"", 1 AS ""Sort""
+  SELECT t.""Id"", 'teacher' AS ""Kind"", t.""Name"" AS ""Name"", 'Teacher' AS ""Role"",
+         NULLIF(btrim(u.""PhotoUrl""), '') AS ""PhotoUrl"",
+         1 AS ""Sort""
   FROM ""dbo"".""Teachers"" t
+  LEFT JOIN ""dbo"".""Users"" u ON u.""Id"" = t.""UserId""
   WHERE t.""TenantId"" = @tenantId
     AND t.""UserId"" IS NOT NULL
     AND t.""UserId"" <> @callerId

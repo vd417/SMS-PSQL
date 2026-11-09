@@ -28,6 +28,14 @@ public sealed class NotificationController(INotificationService notifications, I
     public async Task<IActionResult> RemovePushDevice([FromBody] RegisterPushDeviceRequest req, CancellationToken ct) =>
         FromResult(await pushDevices.RemoveAsync(req.Token, ct));
 
+    [HttpGet("crm-presence")]
+    public async Task<IActionResult> Presence(CancellationToken ct)
+    {
+        if (!RoleChecks.IsStaff(User))
+            return ForbiddenResult("staff only");
+        return FromResult(await notifications.ListPresenceAsync(ct));
+    }
+
     [HttpPost("notifications")]
     public async Task<IActionResult> Create([FromBody] CreateNotificationRequest req, CancellationToken ct)
     {

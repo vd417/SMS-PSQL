@@ -11,6 +11,7 @@ public interface INotificationService
     Task<ApiResult<IReadOnlyList<NotificationResponse>>> ListAsync(CancellationToken ct = default);
     Task<ApiResult<NotificationResponse>> CreateAsync(CreateNotificationRequest req, CancellationToken ct = default);
     Task<ApiResult> MarkReadAsync(CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<CrmPresenceRow>>> ListPresenceAsync(CancellationToken ct = default);
 }
 
 public sealed class NotificationService(CommsRepository repo, ITenantContext tenant, ILiveBroadcaster live) : INotificationService
@@ -33,5 +34,12 @@ public sealed class NotificationService(CommsRepository repo, ITenantContext ten
     {
         await repo.MarkNotificationsReadAsync(tenant.UserId, ct);
         return ApiResult.NoContent();
+    }
+
+    public async Task<ApiResult<IReadOnlyList<CrmPresenceRow>>> ListPresenceAsync(CancellationToken ct = default)
+    {
+        if (tenant.TenantId is null)
+            return ApiResult<IReadOnlyList<CrmPresenceRow>>.Fail(new Error("forbidden", "no tenant context"), 403);
+        return ApiResult<IReadOnlyList<CrmPresenceRow>>.Ok(await repo.ListCrmPresenceAsync(ct));
     }
 }
