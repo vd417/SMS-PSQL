@@ -28,6 +28,8 @@ public interface IAuthDao
     Task<RosterStudentRecord?> GetRosterByEmailAsync(string email, CancellationToken ct = default);
     /// <summary>SIS roster row by Students.GuardianEmail (trim + case-insensitive).</summary>
     Task<RosterStudentRecord?> GetRosterByGuardianEmailAsync(string email, CancellationToken ct = default);
+    /// <summary>Every active ward whose guardian email matches, across schools.</summary>
+    Task<IReadOnlyList<RosterStudentRecord>> ListRosterByGuardianEmailAsync(string email, CancellationToken ct = default);
     /// <summary>Fetch the student login for an admission ID, creating it from the SIS roster when missing.</summary>
     Task<UserRecord?> EnsureStudentLoginAsync(string admissionId, CancellationToken ct = default);
     /// <summary>Fetch or create the parent login for an admission ID from Students.GuardianEmail / GuardianPhone.</summary>

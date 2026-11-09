@@ -56,6 +56,11 @@ public static class ServiceCollectionExtensions
 {
     public static WebApplicationBuilder ConfigureSmsServices(this WebApplicationBuilder builder)
     {
+        // Machine-local secrets (Firebase service-account path). Gitignored. Optional.
+        builder.Configuration.AddJsonFile(
+            Path.Combine(builder.Environment.ContentRootPath, "appsettings.Local.json"),
+            optional: true,
+            reloadOnChange: true);
         // SensitiveQueryRedactionEnricher masks ?access_token= (SignalR's browser JWT transport) and
         // other credential query parameters in every event before any sink sees it. ReadFrom.Services
         // lets tests register an extra ILogEventSink; production registers none.

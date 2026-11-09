@@ -7,6 +7,7 @@ TestResults/
 
 # local secrets for docker-compose (e.g. GOOGLE_ROUTES_API_KEY) — never commit
 .env
+src/Sms.Api/appsettings.Local.json
 
 # worktrees
 .worktrees

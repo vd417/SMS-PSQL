@@ -18,7 +18,7 @@ public interface IAuthService
     Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest req, string? client = null, CancellationToken ct = default);
     Task<ApiResult<TokenResponse>> RefreshAsync(RefreshRequest req, string? client = null, CancellationToken ct = default);
     Task<ApiResult<object>> RequestOtpAsync(OtpRequest req, CancellationToken ct = default);
-    Task<ApiResult<TokenResponse>> VerifyOtpAsync(OtpVerifyRequest req, string? client = null, CancellationToken ct = default);
+    Task<ApiResult<object>> VerifyOtpAsync(OtpVerifyRequest req, string? client = null, CancellationToken ct = default);
     Task<ApiResult<object>> ForgotPasswordAsync(ForgotPasswordRequest req, CancellationToken ct = default);
     /// <summary>Onboard invite: welcome email/SMS with school name + password-setup OTP
     /// (or a magic login link, when method is "link").</summary>
@@ -147,24 +147,159 @@ public sealed class AuthService(
     public Task<ApiResult<object>> RequestOtpAsync(OtpRequest req, CancellationToken ct = default) =>
         SendOtpToRegisteredAsync(req.Identifier, null, ct);
 
-    public async Task<ApiResult<TokenResponse>> VerifyOtpAsync(OtpVerifyRequest req, string? client = null, CancellationToken ct = default)
+    public async Task<ApiResult<object>> VerifyOtpAsync(OtpVerifyRequest req, string? client = null, CancellationToken ct = default)
     {
         tenant.Set(null, null, isPlatform: true);
         var activeHash = await users.OtpActiveHashAsync(req.Identifier, ct);
-        if (activeHash is null || activeHash != Sha256(req.Code))
-            return ApiResult<TokenResponse>.Fail(new Error("invalid_code", "code invalid or expired"), 401);
+        if (activeHash is null || req.Code is null || activeHash != Sha256(req.Code))
+            return ApiResult<object>.Fail(new Error("invalid_code", "code invalid or expired"), 401);
+
+        // Parent app only. The same code is checked again with the chosen school. No second code, no extra token.
+        if (string.Equals(req.Role, "parent", StringComparison.OrdinalIgnoreCase))
+            return await CompleteParentOtpAsync(req, activeHash, client, ct);
 
         if (!await users.OtpConsumeAsync(req.Identifier, activeHash, ct))
-            return ApiResult<TokenResponse>.Fail(new Error("invalid_code", "code invalid or expired"), 401);
+            return ApiResult<object>.Fail(new Error("invalid_code", "code invalid or expired"), 401);
+
         var user = await FindUserByIdentifierAsync(req.Identifier, ct);
         if (user is null)
-            return ApiResult<TokenResponse>.Fail(new Error("invalid_code", "user not found"), 401);
+            return ApiResult<object>.Fail(new Error("invalid_code", "user not found"), 401);
         var otpUserRoles = user.Status == "inactive" ? await users.GetRolesAsync(user.Id, ct) : null;
         if (AccessBlockedError(user, otpUserRoles) is { } blocked)
-            return ApiResult<TokenResponse>.Fail(blocked, 403);
+            return ApiResult<object>.Fail(blocked, 403);
 
-        return await IssueTokensAsync(user, client, ct);
+        return AsObject(await IssueTokensAsync(user, client, ct));
     }
+
+    /// One active parent school signs in immediately. Two or more return the school names and leave the same code unused.
+    private async Task<ApiResult<object>> CompleteParentOtpAsync(
+        OtpVerifyRequest req, string activeHash, string? client, CancellationToken ct)
+    {
+        var match = await LoadParentSchoolsAsync(req.Identifier, ct);
+        var picked = req.OrganizationId is { } orgId && orgId != Guid.Empty;
+
+        if (match.Active.Count > 1 && !picked)
+        {
+            var orgs = match.Active
+                .Select(r => new ParentOrganizationChoice(r.User.TenantId!.Value, r.SchoolName))
+                .ToList();
+            return ApiResult<object>.Ok(new ParentOtpSelectionResponse(true, orgs));
+        }
+
+        UserRecord? user = null;
+        if (picked)
+        {
+            var chosen = match.Active.FirstOrDefault(r => r.User.TenantId == req.OrganizationId);
+            if (chosen is null)
+            {
+                var denied = match.Denied.FirstOrDefault(d => d.TenantId == req.OrganizationId);
+                if (denied is not null)
+                    return ApiResult<object>.Fail(denied.Error, denied.Status);
+                return ApiResult<object>.Fail(
+                    new Error("invalid_organization", "That school is not linked to this parent account."), 403);
+            }
+            user = chosen.User;
+        }
+        else if (match.Active.Count == 1)
+        {
+            user = match.Active[0].User;
+        }
+
+        if (user is not null)
+        {
+            if (!await users.OtpConsumeAsync(req.Identifier, activeHash, ct))
+                return ApiResult<object>.Fail(new Error("invalid_code", "code invalid or expired"), 401);
+            return AsObject(await IssueTokensAsync(user, client, ct));
+        }
+
+
+        if (match.Denied.Count > 0)
+        {
+            if (match.Denied.All(d => d.Error.Code == "organization_inactive"))
+                return ApiResult<object>.Fail(new Error("organization_inactive", "This school is not active."), 403);
+            var first = match.Denied[0];
+            return ApiResult<object>.Fail(first.Error, first.Status);
+        }
+
+        return ApiResult<object>.Fail(NotRegisteredError(req.Identifier), 404);
+    }
+
+    private sealed record ParentSchoolRow(UserRecord User, string SchoolName);
+    private sealed record DeniedParentSchool(Guid TenantId, Error Error, int Status);
+    private sealed record ParentSchoolMatch(List<ParentSchoolRow> Active, List<DeniedParentSchool> Denied);
+
+    private async Task<ParentSchoolMatch> LoadParentSchoolsAsync(string identifier, CancellationToken ct)
+    {
+        var id = ParentIdentifier(identifier);
+        var kind = IdentifierClassifier.Classify(id);
+        if (kind == IdentifierKind.Email)
+        {
+            var wards = await users.ListRosterByGuardianEmailAsync(id, ct);
+            foreach (var ward in wards)
+            {
+                if (!string.IsNullOrWhiteSpace(ward.AdmissionNo))
+                    await users.EnsureParentLoginAsync(ward.AdmissionNo, ct);
+            }
+        }
+
+        var candidates = kind == IdentifierKind.Phone
+            ? await users.ListByPhoneAsync(id, ct)
+            : await users.ListByEmailAsync(id, ct);
+
+        var parents = new List<UserRecord>();
+        var denied = new List<DeniedParentSchool>();
+        foreach (var candidate in candidates)
+        {
+            if (candidate.IsPlatform || candidate.TenantId is null) continue;
+            var roles = await users.GetRolesAsync(candidate.Id, ct);
+            if (!AppLoginRole.IsParent(roles)) continue;
+
+            if (AccessBlockedError(candidate, roles) is { } blocked)
+            {
+                denied.Add(new DeniedParentSchool(candidate.TenantId.Value, blocked, 403));
+                continue;
+            }
+            parents.Add(candidate);
+        }
+
+        var byTenant = parents
+            .GroupBy(p => p.TenantId!.Value)
+            .Select(g => g.OrderBy(u => u.CreatedAt).First())
+            .ToList();
+
+        var schools = byTenant.Count == 0
+            ? Array.Empty<Sms.Modules.Tenancy.Contracts.ClientRow>()
+            : await clients.GetManyAsync(byTenant.Select(u => u.TenantId!.Value).ToList(), ct);
+        var schoolById = schools.ToDictionary(s => s.Id);
+
+        var active = new List<ParentSchoolRow>();
+        foreach (var user in byTenant)
+        {
+            var tid = user.TenantId!.Value;
+            if (!schoolById.TryGetValue(tid, out var school) || !ParentTenantAccess.AllowsLogin(school.Status))
+            {
+                denied.Add(new DeniedParentSchool(
+                    tid, new Error("organization_inactive", "This school is not active."), 403));
+                continue;
+            }
+            var name = string.IsNullOrWhiteSpace(school.Name) ? "School" : school.Name.Trim();
+            active.Add(new ParentSchoolRow(user, name));
+        }
+
+        active.Sort((a, b) => string.Compare(a.SchoolName, b.SchoolName, StringComparison.OrdinalIgnoreCase));
+        return new ParentSchoolMatch(active, denied);
+    }
+
+    private static string ParentIdentifier(string identifier)
+    {
+        var trimmed = identifier.Trim();
+        return trimmed.Contains('@') ? trimmed.ToLowerInvariant() : trimmed;
+    }
+
+    private static ApiResult<object> AsObject(ApiResult<TokenResponse> issued) =>
+        issued.IsSuccess
+            ? ApiResult<object>.Ok(issued.Data!)
+            : ApiResult<object>.Fail(issued.Error!, issued.StatusCode);
 
     public async Task<ApiResult<object>> ForgotPasswordAsync(ForgotPasswordRequest req, CancellationToken ct = default)
     {

@@ -81,6 +81,18 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
         return rows.FirstOrDefault();
     }
 
+    public Task<IReadOnlyList<RosterStudentRecord>> ListRosterByGuardianEmailAsync(string email, CancellationToken ct = default) =>
+        QueryInlineAsync<RosterStudentRecord>(
+            """
+            SELECT s."Id", s."TenantId", s."AdmissionNo", s."Name", s."Email", s."GuardianPhone", s."Status", s."GuardianEmail"
+            FROM "dbo"."Students" s
+            WHERE s."GuardianEmail" IS NOT NULL
+            AND lower(trim(s."GuardianEmail")) = lower(trim(@Email))
+            AND lower(COALESCE(s."Status", 'active')) NOT IN ('removed', 'inactive', 'left', 'withdrawn')
+            ORDER BY s."CreatedAt"
+            """,
+            new { Email = email }, ct);
+
     public Task<UserRecord?> EnsureStudentLoginAsync(string admissionId, CancellationToken ct = default) =>
         QuerySingleProcAsync<UserRecord>(AuthQueries.EnsureStudentLogin, new { AdmissionId = admissionId }, ct);
 
