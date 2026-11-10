@@ -24,7 +24,11 @@ public sealed record SchoolReportFilters(
     string? PaymentStatus = null,
     string? AttendanceStatus = null,
     string? Route = null,
-    string? Vehicle = null);
+    string? Vehicle = null,
+    string? FromDate = null,
+    string? ToDate = null,
+    string? FromTime = null,
+    string? ToTime = null);
 
 public sealed record SchoolReportQuery(
     string ReportKey,

@@ -236,7 +236,6 @@ public sealed partial class SchoolReportService(
         if (tenant.TenantId is not { } tid) return (null, new Error("forbidden", "school only"), 403);
         var offset = TimeSpan.FromMinutes(row.UtcOffsetMinutes);
         var local = clock.UtcNow.Add(offset);
-        var window = SchoolReportMath.Window(row.Frequency, local);
         if (claim)
         {
             if (!TimeOnly.TryParseExact(row.SendTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var send))
@@ -248,11 +247,17 @@ public sealed partial class SchoolReportService(
         SchoolReportFilters? filters = null;
         try { filters = JsonSerializer.Deserialize<SchoolReportFilters>(row.FiltersJson, Json); }
         catch { filters = null; }
+        var window = SchoolReportMath.Window(row.Frequency, local);
+        if (DateOnly.TryParse(filters?.FromDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var savedFrom)
+            && DateOnly.TryParse(filters?.ToDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var savedTo))
+            window = (savedFrom, savedTo);
         var query = new SchoolReportQuery(
             row.ReportKey,
             window.From.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             window.To.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            null, null, row.UtcOffsetMinutes,
+            string.IsNullOrWhiteSpace(filters?.FromTime) ? null : filters.FromTime,
+            string.IsNullOrWhiteSpace(filters?.ToTime) ? null : filters.ToTime,
+            row.UtcOffsetMinutes,
             filters?.ClassName, filters?.Section, filters?.Student, filters?.Teacher, filters?.Employee,
             filters?.Department, filters?.Designation, filters?.Role, filters?.Gender, filters?.FeeHead,
             filters?.PaymentMode, filters?.PaymentStatus, filters?.AttendanceStatus, filters?.Route, filters?.Vehicle);

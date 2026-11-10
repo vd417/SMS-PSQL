@@ -668,11 +668,16 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
         """;
 
     private const string OptionsSql = """
-        SELECT DISTINCT COALESCE(NULLIF("ClassLabel", ''), NULLIF("Grade", '')) AS "Value"
-        FROM "dbo"."Students"
-        WHERE COALESCE(NULLIF("ClassLabel", ''), NULLIF("Grade", '')) IS NOT NULL
-        ORDER BY 1;
-        SELECT DISTINCT "Section" AS "Value" FROM "dbo"."Students" WHERE COALESCE("Section", '') <> '' ORDER BY 1;
+        SELECT DISTINCT "Value" FROM (
+          SELECT COALESCE(NULLIF("ClassLabel", ''), NULLIF("Grade", '')) AS "Value" FROM "dbo"."Students"
+          UNION
+          SELECT NULLIF(btrim("Name"), '') FROM "dbo"."Classes"
+        ) c WHERE COALESCE("Value", '') <> '' ORDER BY 1;
+        SELECT DISTINCT "Value" FROM (
+          SELECT "Section" AS "Value" FROM "dbo"."Students"
+          UNION
+          SELECT "Section" FROM "dbo"."Classes"
+        ) s WHERE COALESCE("Value", '') <> '' ORDER BY 1;
         SELECT DISTINCT "Department" AS "Value" FROM (
           SELECT "Department" FROM "dbo"."Teachers" UNION SELECT "Department" FROM "dbo"."Staff"
         ) d WHERE COALESCE("Department", '') <> '' ORDER BY 1;
