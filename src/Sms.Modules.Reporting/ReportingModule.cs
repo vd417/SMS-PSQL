@@ -8,6 +8,7 @@ public static class ReportingModule
     public static IServiceCollection AddReportingModule(this IServiceCollection services)
     {
         services.AddScoped<ReportingRepository>();
+        services.AddScoped<SchoolReportRepository>();
         return services;
     }
 }

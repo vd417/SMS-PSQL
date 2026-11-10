@@ -77,6 +77,7 @@ public static class DependencyInjection
         services.AddScoped<IVehicleCheckService, VehicleCheckService>();
         services.AddScoped<IUserSettingsService, UserSettingsService>();
         services.AddScoped<IReportingService, ReportingService>();
+        services.AddScoped<ISchoolReportService, SchoolReportService>();
         services.AddScoped<ILiveBroadcaster, NoOpLiveBroadcaster>();
         return services;
     }

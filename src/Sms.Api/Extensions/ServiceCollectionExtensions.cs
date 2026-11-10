@@ -143,6 +143,8 @@ public static class ServiceCollectionExtensions
         // the shared test database isn't swept out from under the billing tests; defaults on.
         if (builder.Configuration.GetValue("Billing:RecurringEnabled", true))
             builder.Services.AddHostedService<Sms.Api.Workers.RecurringBillingWorker>();
+        if (builder.Configuration.GetValue("ReportSchedules:Enabled", true))
+            builder.Services.AddHostedService<Sms.Api.Workers.ReportScheduleWorker>();
         builder.Services.AddSingleton<IPaymentGateway, StubPaymentGateway>();
         builder.Services.AddSingleton<IAuditLogger, AuditLogger>();
         // Keys MUST be persisted somewhere durable, or every school's encrypted Razorpay secrets
