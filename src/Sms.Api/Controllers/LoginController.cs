@@ -14,8 +14,8 @@ namespace Sms.Api.Controllers;
 [Route("v1/auth")]
 public sealed class LoginController(IAuthService auth) : ApiControllerBase
 {
-    // Which front-end made the call ("crm" / "sms-admin" web panels, or absent for the mobile
-    // app). Drives per-client session length in AuthService (web = short, 1h idle; app = long).
+    // Which front-end made the call. Only "crm" gets the 2-hour idle session.
+    // "sms-admin" and the mobile apps keep the long session and are not signed out for inactivity.
     private string? Client => Request.Headers["X-Client"].ToString() is { Length: > 0 } c ? c : null;
 
     [HttpPost("login")]

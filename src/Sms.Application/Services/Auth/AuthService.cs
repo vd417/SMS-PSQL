@@ -54,18 +54,20 @@ public sealed class AuthService(
     AuthDiagnosticsOptions diagnostics) : IAuthService
 {
     // --- Session policy per client (X-Client header, passed in by the controller) ----------
-    // The web admin panels (CRM = crm.catretech.me, sms-admin = admin.catretech.me) get a
-    // SHORT access token so refreshes happen often enough to track activity, plus a 1-hour
-    // *idle* refresh window that is reset on every refresh. Net effect: an actively-working
-    // user stays signed in, an idle one is signed out after ~1h. The mobile app sends no
-    // X-Client header and keeps the default long session (30-day refresh, config access TTL).
-    private const int WebAdminAccessMinutes = 15;
-    private static readonly TimeSpan WebAdminIdleWindow = TimeSpan.FromHours(1);
+    // Only the CRM panel (X-Client: crm) gets a short access token and a 2-hour idle
+    // refresh window. The window resets on every refresh, so an active CRM user stays
+    // signed in and an idle one is signed out after 2 hours.
+    // sms-admin and the mobile apps keep the long session (30-day refresh, config access TTL).
+    // They are not signed out for inactivity.
+    private const int CrmAccessMinutes = 15;
+    private static readonly TimeSpan CrmIdleWindow = TimeSpan.FromHours(2);
     private static readonly TimeSpan DefaultRefreshTtl = TimeSpan.FromDays(30);
 
-    private static bool IsWebAdminClient(string? client) =>
-        string.Equals(client, "crm", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(client, "sms-admin", StringComparison.OrdinalIgnoreCase);
+    private static bool IsCrmClient(string? client) =>
+        string.Equals(client, "crm", StringComparison.OrdinalIgnoreCase);
+
+    private static TimeSpan RefreshLifetime(string? client) =>
+        IsCrmClient(client) ? CrmIdleWindow : DefaultRefreshTtl;
 
     public async Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest req, string? client = null, CancellationToken ct = default)
     {
@@ -127,12 +129,12 @@ public sealed class AuthService(
         if (userId is null)
             return ApiResult<TokenResponse>.Fail(new Error("invalid_token", "refresh token invalid"), 401);
 
-        // Web admins get a rolling 1-hour idle window (reset here on every refresh); app keeps 30 days.
-        var web = IsWebAdminClient(client);
+        // CRM gets a rolling 2-hour idle window (reset here on every refresh). App users keep 30 days.
+        var crm = IsCrmClient(client);
         await tokens.RevokeAsync(hash, ct);
         var newRefresh = jwt.NewRefreshToken();
         await tokens.SaveAsync(userId.Value, Sha256(newRefresh),
-            DateTime.UtcNow.Add(web ? WebAdminIdleWindow : DefaultRefreshTtl), ct);
+            DateTime.UtcNow.Add(RefreshLifetime(client)), ct);
 
         tenant.Set(null, null, isPlatform: true);
         var user = await users.GetByIdAsync(userId.Value, ct);
@@ -140,7 +142,7 @@ public sealed class AuthService(
             return ApiResult<TokenResponse>.Fail(new Error("invalid_token", "user no longer exists"), 401);
 
         var roles = await users.GetRolesAsync(user.Id, ct);
-        var access = jwt.IssueAccess(user.Id, user.TenantId, roles, user.IsPlatform, web ? WebAdminAccessMinutes : null);
+        var access = jwt.IssueAccess(user.Id, user.TenantId, roles, user.IsPlatform, crm ? CrmAccessMinutes : null);
         return ApiResult<TokenResponse>.Ok(new TokenResponse(access, newRefresh));
     }
 
@@ -658,11 +660,11 @@ public sealed class AuthService(
         var roles = (await users.GetRolesAsync(user.Id, ct)).ToList();
         if (roles.Count == 0 && !string.IsNullOrWhiteSpace(user.StudentId))
             roles.Add("student");
-        var web = IsWebAdminClient(client);
-        var access = jwt.IssueAccess(user.Id, user.TenantId, roles, user.IsPlatform, web ? WebAdminAccessMinutes : null);
+        var crm = IsCrmClient(client);
+        var access = jwt.IssueAccess(user.Id, user.TenantId, roles, user.IsPlatform, crm ? CrmAccessMinutes : null);
         var refresh = jwt.NewRefreshToken();
         await tokens.SaveAsync(user.Id, Sha256(refresh),
-            DateTime.UtcNow.Add(web ? WebAdminIdleWindow : DefaultRefreshTtl), ct);
+            DateTime.UtcNow.Add(RefreshLifetime(client)), ct);
         return ApiResult<TokenResponse>.Ok(new TokenResponse(access, refresh));
     }
 
