@@ -22,8 +22,8 @@ public sealed class PtmCommsNotifier(
         IReadOnlyList<string>? teacherNames = null)
     {
         var student = await students.GetAsync(meeting.Child, ct);
-        var recipients = await students.ListParentUserIdsAsync(
-            meeting.Child, student?.AdmissionNo ?? "", ct);
+        var recipients = await students.ListFamilyNotifyUserIdsAsync(
+            meeting.Child, student?.AdmissionNo, student?.GuardianEmail, student?.Email, student?.GuardianPhone, ct);
         if (recipients.Count == 0) return;
 
         var name = string.IsNullOrWhiteSpace(meeting.StudentName) ? "your child" : meeting.StudentName.Trim();

@@ -134,6 +134,41 @@ SELECT DISTINCT "Id" FROM (
 ) p
 """, new { studentId, admissionNo }, ct);
 
+    /// Parent links, the student login, and any login that matches the guardian or student
+    /// email or the guardian phone. Used when a push must still reach the family if the
+    /// ParentStudentLinks row was never written.
+    public Task<IReadOnlyList<Guid>> ListFamilyNotifyUserIdsAsync(
+        Guid studentId, string? admissionNo, string? guardianEmail, string? studentEmail, string? guardianPhone,
+        CancellationToken ct = default)
+    {
+        var adm = (admissionNo ?? "").Trim();
+        var gEmail = (guardianEmail ?? "").Trim();
+        var sEmail = (studentEmail ?? "").Trim();
+        var phone = new string((guardianPhone ?? "").Where(char.IsDigit).ToArray());
+        if (phone.Length > 10) phone = phone[^10..];
+        if (phone.Length < 10) phone = "";
+        return QueryInlineAsync<Guid>("""
+SELECT DISTINCT "Id" FROM (
+    SELECT "ParentUserId" AS "Id" FROM "dbo"."ParentStudentLinks" WHERE "StudentId" = @studentId
+    UNION
+    SELECT u."Id" FROM "dbo"."Users" u
+    WHERE @adm <> '' AND u."StudentId" = @adm
+    UNION
+    SELECT u."Id" FROM "dbo"."Users" u
+    WHERE @gEmail <> '' AND u."Email" IS NOT NULL AND lower(trim(u."Email")) = lower(@gEmail)
+    UNION
+    SELECT u."Id" FROM "dbo"."Users" u
+    WHERE @sEmail <> '' AND u."Email" IS NOT NULL AND lower(trim(u."Email")) = lower(@sEmail)
+    UNION
+    SELECT u."Id" FROM "dbo"."Users" u
+    WHERE @phone <> ''
+      AND length(regexp_replace(coalesce(u."Phone", ''), '\D', '', 'g')) >= 10
+      AND right(regexp_replace(u."Phone", '\D', '', 'g'), 10) = @phone
+) p
+WHERE "Id" IS NOT NULL
+""", new { studentId, adm, gEmail, sEmail, phone }, ct);
+    }
+
     public async Task SetGuardianEmailAsync(Guid id, string email, CancellationToken ct = default) =>
         await ExecuteInlineAsync(
             """UPDATE "dbo"."Students" SET "GuardianEmail" = @email WHERE "Id" = @id""",

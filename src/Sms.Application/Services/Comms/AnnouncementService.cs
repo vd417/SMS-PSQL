@@ -89,6 +89,35 @@ public sealed class AnnouncementService(
         var smsed = 0;
         var app = 0;
 
+        if (channels.Contains("app"))
+        {
+            try
+            {
+                var noticeTitle = Truncate($"{kind}: {displayTitle}", 200);
+                var noticeBody = Truncate(
+                    string.IsNullOrWhiteSpace(dateLabel) ? details ?? body : $"{dateLabel} · {details ?? body}",
+                    1000);
+                var notice = await repo.CreateNotificationAsync(tid, new CreateNotificationRequest(
+                    Icon: "bell",
+                    Tone: "brand",
+                    Title: noticeTitle,
+                    Body: noticeBody,
+                    UserId: req.UserId), ct);
+                if (notice is not null)
+                {
+                    await NotificationEvents.PublishAsync(live, tid, notice, req.UserId, ct);
+                    app = 1;
+                    logger.LogInformation(
+                        "Announcement {Id} in-app notice {NoticeId} for user {UserId}",
+                        created.Id, notice.Id, req.UserId);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Announcement {Id} app push failed", created.Id);
+            }
+        }
+
         try
         {
             if (channels.Contains("email"))
@@ -200,24 +229,6 @@ public sealed class AnnouncementService(
                     smsed++;
                 }
                 logger.LogInformation("Announcement {Id} sms → {Count}", created.Id, smsed);
-            }
-
-            if (channels.Contains("app"))
-            {
-                var notice = await repo.CreateNotificationAsync(tid, new CreateNotificationRequest(
-                    Icon: "bell",
-                    Tone: "brand",
-                    Title: $"{kind}: {displayTitle}",
-                    Body: string.IsNullOrWhiteSpace(dateLabel) ? details ?? body : $"{dateLabel} · {details ?? body}",
-                    UserId: req.UserId), ct);
-                if (notice is not null)
-                {
-                    await NotificationEvents.PublishAsync(live, tid, notice, req.UserId, ct);
-                    app = 1;
-                    logger.LogInformation(
-                        "Announcement {Id} in-app notice {NoticeId} for user {UserId}",
-                        created.Id, notice.Id, req.UserId);
-                }
             }
         }
         catch (Exception ex)

@@ -227,8 +227,12 @@ public sealed class CommsRepository(IDbConnectionFactory factory, IPushNotificat
 
     public async Task<NotificationResponse?> CreateNotificationAsync(Guid tenantId, CreateNotificationRequest r, CancellationToken ct = default)
     {
+        // Notifications.Title is varchar(200) and Body varchar(1000). A longer calendar
+        // title ("Holiday: " + the event name) used to throw here, and the push never left.
+        var title = r.Title.Length <= 200 ? r.Title : r.Title[..200];
+        var body = r.Body is { Length: > 1000 } ? r.Body[..1000] : r.Body;
         var created = await QuerySingleProcAsync<NotificationResponse>("dbo.Notification_Create",
-            new { TenantId = tenantId, r.Icon, r.Tone, r.Title, r.Body, r.UserId }, ct);
+            new { TenantId = tenantId, r.Icon, r.Tone, Title = title, Body = body, r.UserId }, ct);
         if (created is null) return null;
         try { push.Enqueue(tenantId, r.UserId, created.Title, created.Body); }
         catch { /* the notice row is already saved */ }

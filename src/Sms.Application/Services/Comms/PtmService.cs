@@ -149,11 +149,8 @@ public sealed class PtmService(
         var first = createdMeetings[0];
         await notifier.NotifyMeetingScheduledAsync(
             tid, first, ct, createdMeetings.Select(m => m.Teacher).ToList());
-        if (req.NotifyTeacher)
-        {
-            var teacherUsers = await repo.ListTeacherUserIdsAsync(tid, teacherIds.ToArray(), ct);
-            await notifier.NotifyTeachersAsync(tid, first, teacherUsers, ct);
-        }
+        var teacherUsers = await repo.ListTeacherUserIdsAsync(tid, teacherIds.ToArray(), ct);
+        await notifier.NotifyTeachersAsync(tid, first, teacherUsers, ct);
         return ApiResult<PtmMeetingResponse>.Ok(first, 201);
     }
 
