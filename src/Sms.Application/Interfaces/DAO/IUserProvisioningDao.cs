@@ -21,6 +21,8 @@ public interface IUserProvisioningDao
     Task<IReadOnlyList<PermissionOverrideDto>> GetPermissionsAsync(Guid userId, CancellationToken ct = default);
     Task SetPermissionsAsync(Guid userId, IReadOnlyList<PermissionOverrideDto> overrides, CancellationToken ct = default);
     Task SetStatusAsync(Guid userId, string status, CancellationToken ct = default);
+    /// Student-role logins whose Users.StudentId is this admission number.
+    Task<IReadOnlyList<Guid>> ListStudentLoginIdsAsync(string admissionNo, CancellationToken ct = default);
 }
 
 public sealed record SchoolUserListRow(

@@ -2,6 +2,7 @@ using Sms.Application.Common;
 using Sms.Application.Interfaces.DAO;
 using Sms.Modules.Sis.Contracts;
 using Sms.Modules.Sis.Data;
+using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Data;
 using Sms.Shared.Kernel.Http;
 using Sms.Shared.Kernel.Results;
@@ -42,7 +43,8 @@ public sealed class SisService(
     StudentRepository repo,
     IUserProvisioningDao users,
     IAuthDao auth,
-    ITenantContext tenant) : ISisService
+    ITenantContext tenant,
+    IRefreshTokenStore tokens) : ISisService
 {
     public async Task<ApiResult<CursorPage<StudentResponse>>> ListStudentsAsync(
         string? q, string? grade, string? status, string? fee,
@@ -182,6 +184,7 @@ public sealed class SisService(
         }
         await TrySyncStudentLoginEmailAsync(updated.AdmissionNo, updated.Email, ct);
         await TrySyncParentLoginAsync(updated, ct);
+        await TrySyncStudentLoginAccessAsync(updated, ct);
         return ApiResult<StudentResponse>.Ok(updated);
     }
 
@@ -237,6 +240,26 @@ public sealed class SisService(
         if (string.IsNullOrWhiteSpace(student.GuardianEmail) && string.IsNullOrWhiteSpace(student.GuardianPhone))
             return Task.CompletedTask;
         return auth.EnsureParentLoginAsync(student.AdmissionNo, ct);
+    }
+
+    private async Task TrySyncStudentLoginAccessAsync(StudentResponse student, CancellationToken ct)
+    {
+        if (student.Status is not ("active" or "inactive")) return;
+        if (string.IsNullOrWhiteSpace(student.AdmissionNo)) return;
+        try
+        {
+            var ids = await users.ListStudentLoginIdsAsync(student.AdmissionNo, ct);
+            foreach (var id in ids)
+            {
+                await users.SetStatusAsync(id, student.Status, ct);
+                if (student.Status == "inactive")
+                    await tokens.RevokeAllForUserAsync(id, ct);
+            }
+        }
+        catch (Exception)
+        {
+            /* Login pause is best-effort. The roster status is already saved. */
+        }
     }
 
     private async Task TrySyncStudentLoginEmailAsync(string admissionNo, string? email, CancellationToken ct)

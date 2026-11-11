@@ -63,7 +63,7 @@ public class SuspensionLoginTests(PostgresFixture fx)
 
         status.Should().Be(HttpStatusCode.Forbidden);
         code.Should().Be("access_suspended");
-        message.Should().Be("Your account has been suspended by your school. Please contact your school administrator.");
+        message.Should().Be(AccountSuspension.Message);
     }
 
     [Fact]
@@ -78,14 +78,14 @@ public class SuspensionLoginTests(PostgresFixture fx)
     }
 
     [Fact]
-    public async Task Inactive_admin_keeps_the_original_deactivated_message()
+    public async Task Inactive_admin_sees_the_suspension_message()
     {
         var email = await SeedInactiveUserAsync(Policies.SchoolAdmin);
         await using var app = App();
         var (status, code, message) = await LoginAsync(app.CreateClient(), email);
 
         status.Should().Be(HttpStatusCode.Forbidden);
-        code.Should().Be("access_inactive");
-        message.Should().Be("Your access to this school has been deactivated by the admin.");
+        code.Should().Be("access_suspended");
+        message.Should().Be(AccountSuspension.Message);
     }
 }

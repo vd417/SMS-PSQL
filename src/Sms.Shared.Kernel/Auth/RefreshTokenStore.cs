@@ -16,4 +16,13 @@ public sealed class RefreshTokenStore(IDbConnectionFactory factory) : BaseReposi
 
     public Task RevokeAsync(string tokenHash, CancellationToken ct = default) =>
         ExecuteProcAsync("dbo.RefreshToken_Revoke", new { TokenHash = tokenHash }, ct);
+
+    public Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default) =>
+        ExecuteInlineAsync(
+            """
+            UPDATE "dbo"."RefreshTokens"
+            SET "RevokedAt" = now()
+            WHERE "UserId" = @userId AND "RevokedAt" IS NULL
+            """,
+            new { userId }, ct);
 }

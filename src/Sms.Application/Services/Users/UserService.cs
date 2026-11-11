@@ -39,7 +39,8 @@ public sealed class UserService(
     IInvitationDao invitations,
     IRoleTemplateDao roleTemplates,
     AuditRepository audit,
-    IContactValidator contacts) : IUserService
+    IContactValidator contacts,
+    IRefreshTokenStore tokens) : IUserService
 {
     private static readonly HashSet<string> AssignableRoleTemplateRoles = new(
         ["admin", "principal", "vice_principal", "teacher", "staff"], StringComparer.OrdinalIgnoreCase);
@@ -202,6 +203,7 @@ public sealed class UserService(
             return ApiResult.Fail(new Error("conflict", "An owner's access can't be removed here."), 409);
 
         await dao.SetStatusAsync(userId, "removed", ct);
+        await tokens.RevokeAllForUserAsync(userId, ct);
         await audit.InsertAsync(tenant.UserId, null, null, "user.access_removed", userId.ToString(), "identity", tid, ct);
         return ApiResult.NoContent();
     }
@@ -250,6 +252,8 @@ public sealed class UserService(
 
         var status = active ? "active" : "inactive";
         await dao.SetStatusAsync(userId, status, ct);
+        if (!active)
+            await tokens.RevokeAllForUserAsync(userId, ct);
         await audit.InsertAsync(tenant.UserId, null, null, "user.status_changed", $"{userId}: {status}", "identity", tid, ct);
         var updated = (await dao.ListByTenantAsync(tid, ct)).FirstOrDefault(u => u.Id == userId);
         return updated is null

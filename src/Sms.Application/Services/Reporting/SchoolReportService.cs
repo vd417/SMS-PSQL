@@ -101,7 +101,8 @@ public sealed partial class SchoolReportService(
         var frequency = (req.Frequency ?? "").Trim().ToLowerInvariant();
         if (frequency is not ("daily" or "weekly" or "15days" or "monthly"))
             return ApiResult<SchoolReportSchedule>.Fail(new Error("validation_failed", "frequency must be daily, weekly, 15 days, or monthly"), 422);
-        if (!TimeRegex().IsMatch(req.SendTime ?? ""))
+        var sendTime = NormalizeSendTime(req.SendTime);
+        if (sendTime is null)
             return ApiResult<SchoolReportSchedule>.Fail(new Error("validation_failed", "send time must be HH:mm"), 422);
         var format = NormalizeFormat(req.Format);
         if (format is null)
@@ -110,7 +111,7 @@ public sealed partial class SchoolReportService(
         if (emails.Error is { } error)
             return ApiResult<SchoolReportSchedule>.Fail(error, 422);
         var offset = SchoolReportMath.ClampOffset(req.OffsetMinutes);
-        var send = TimeOnly.ParseExact(req.SendTime!, "HH:mm", CultureInfo.InvariantCulture);
+        var send = TimeOnly.ParseExact(sendTime, "HH:mm", CultureInfo.InvariantCulture);
         var next = SchoolReportMath.NextRunUtc(frequency, send, offset, req.DayOfWeek, req.DayOfMonth, clock.UtcNow);
         var filters = (req.Filters ?? new SchoolReportFilters()) with
         {
@@ -123,7 +124,7 @@ public sealed partial class SchoolReportService(
         var recipients = string.Join(", ", emails.Emails!);
         var subject = TrimOrNull(req.Subject, 200);
         var message = TrimOrNull(req.Message, 2000);
-        var saved = req with { Frequency = frequency, Format = format, OffsetMinutes = offset, Subject = subject, Message = message };
+        var saved = req with { Frequency = frequency, SendTime = sendTime, Format = format, OffsetMinutes = offset, Subject = subject, Message = message };
         Guid id;
         if (req.Id is { } existing)
         {
@@ -319,12 +320,18 @@ public sealed partial class SchoolReportService(
             filters?.Department, filters?.Designation, filters?.Role, filters?.Gender, filters?.FeeHead,
             filters?.PaymentMode, filters?.PaymentStatus, filters?.AttendanceStatus, filters?.Route, filters?.Vehicle,
             Subject: filters?.Subject, Period: filters?.Period, Session: filters?.Session);
-        var built = await BuildAsync(query, ct);
         IReadOnlyList<SchoolReportEmailResult> results;
-        if (built.Error is { } error)
-            results = [new("*", "failed", error.Message)];
-        else
-            results = await SendAsync(built.Result!, built.Query!, SplitStored(row.Recipients), row.Subject, row.Message, row.Format, ct);
+        try
+        {
+            var built = await BuildAsync(query, ct);
+            results = built.Error is { } error
+                ? [new("*", "failed", error.Message)]
+                : await SendAsync(built.Result!, built.Query!, SplitStored(row.Recipients), row.Subject, row.Message, row.Format, ct);
+        }
+        catch (Exception ex)
+        {
+            results = [new("*", "failed", ex.Message)];
+        }
         var ok = results.Count > 0 && results.All(r => r.Status == "sent");
         var detail = string.Join("; ", results.Select(r => $"{r.Email}: {r.Status}" + (r.Detail is null ? "" : $" ({r.Detail})")));
         await repo.InsertRunAsync(tid, id, ok ? "sent" : "failed", detail, window.From, window.To, ct);
@@ -342,7 +349,9 @@ public sealed partial class SchoolReportService(
         var body = string.IsNullOrWhiteSpace(message)
             ? $"{report.Title} for {report.FromDate} to {report.ToDate}. Filters: {report.Filters}."
             : message.Trim();
-        var from = await schoolMail.ForTenantAsync(tenant.TenantId, ct);
+        SchoolMailRoute? from = null;
+        try { from = await schoolMail.ForTenantAsync(tenant.TenantId, ct); }
+        catch { from = null; }
         var results = new List<SchoolReportEmailResult>();
         foreach (var address in emails)
         {
@@ -454,6 +463,14 @@ public sealed partial class SchoolReportService(
             "o" or "other" => "O",
             _ => v.ToUpperInvariant(),
         };
+    }
+
+    private static string? NormalizeSendTime(string? value)
+    {
+        var text = (value ?? "").Trim();
+        return TimeOnly.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)
+            ? time.ToString("HH:mm", CultureInfo.InvariantCulture)
+            : null;
     }
 
     private static string? NormalizeFormat(string? format)

@@ -95,35 +95,19 @@ public sealed class AuthService(
                 return ApiResult<TokenResponse>.Fail(NotRegisteredError(identifier), 404);
             return ApiResult<TokenResponse>.Fail(new Error("invalid_credentials", "bad email or password"), 401);
         }
-        var userRoles = user.Status == "inactive" ? await users.GetRolesAsync(user.Id, ct) : null;
-        if (AccessBlockedError(user, userRoles) is { } blocked)
+        if (AccessBlockedError(user) is { } blocked)
             return ApiResult<TokenResponse>.Fail(blocked, 403);
 
         return await IssueTokensAsync(user, client, ct);
     }
 
-    /// Null when the row is free to sign in; an Error when it's "removed" or "inactive"
-    /// (paused/removed by the school admin) — same wording either path (password/OTP).
-    /// "inactive" for a teacher/staff account uses the suspension wording; every other
-    /// role keeps the original "deactivated" wording unchanged. `roles` is omitted by
-    /// the two candidate-ordering call sites, which only need the null/non-null result.
-    private static Error? AccessBlockedError(UserRecord user, IReadOnlyList<string>? roles = null) => user.Status switch
+    /// Null when the row is free to sign in. Suspended CRM and app logins share one message.
+    private static Error? AccessBlockedError(UserRecord user) => user.Status switch
     {
         "removed" => new Error("access_removed", "Your access to this school has been removed by the admin."),
-        "inactive" when roles is not null && IsTeacherOrStaffRole(roles) && !IsElevatedRole(roles) =>
-            new Error("access_suspended", "Your account has been suspended by your school. Please contact your school administrator."),
-        "inactive" => new Error("access_inactive", "Your access to this school has been deactivated by the admin."),
+        "inactive" => new Error(AccountSuspension.Code, AccountSuspension.Message),
         _ => null,
     };
-
-    private static bool IsTeacherOrStaffRole(IReadOnlyList<string> roles) =>
-        roles.Any(r => string.Equals(r, Policies.Teacher, StringComparison.OrdinalIgnoreCase)
-                     || string.Equals(r, Policies.Staff, StringComparison.OrdinalIgnoreCase));
-
-    private static bool IsElevatedRole(IReadOnlyList<string> roles) =>
-        roles.Any(r => string.Equals(r, Policies.SchoolOwner, StringComparison.OrdinalIgnoreCase)
-                     || string.Equals(r, Policies.SchoolAdmin, StringComparison.OrdinalIgnoreCase)
-                     || string.Equals(r, Policies.Principal, StringComparison.OrdinalIgnoreCase));
 
     public async Task<ApiResult<TokenResponse>> RefreshAsync(RefreshRequest req, string? client = null, CancellationToken ct = default)
     {
@@ -132,17 +116,22 @@ public sealed class AuthService(
         if (userId is null)
             return ApiResult<TokenResponse>.Fail(new Error("invalid_token", "refresh token invalid"), 401);
 
+        tenant.Set(null, null, isPlatform: true);
+        var user = await users.GetByIdAsync(userId.Value, ct);
+        if (user is null)
+            return ApiResult<TokenResponse>.Fail(new Error("invalid_token", "user no longer exists"), 401);
+        if (AccessBlockedError(user) is { } blocked)
+        {
+            await tokens.RevokeAllForUserAsync(user.Id, ct);
+            return ApiResult<TokenResponse>.Fail(blocked, 403);
+        }
+
         // CRM gets a rolling 2-hour idle window (reset here on every refresh). App users keep 30 days.
         var crm = IsCrmClient(client);
         await tokens.RevokeAsync(hash, ct);
         var newRefresh = jwt.NewRefreshToken();
         await tokens.SaveAsync(userId.Value, Sha256(newRefresh),
             DateTime.UtcNow.Add(RefreshLifetime(client)), ct);
-
-        tenant.Set(null, null, isPlatform: true);
-        var user = await users.GetByIdAsync(userId.Value, ct);
-        if (user is null)
-            return ApiResult<TokenResponse>.Fail(new Error("invalid_token", "user no longer exists"), 401);
 
         var roles = await users.GetRolesAsync(user.Id, ct);
         var access = jwt.IssueAccess(user.Id, user.TenantId, roles, user.IsPlatform, crm ? CrmAccessMinutes : null);
@@ -169,8 +158,7 @@ public sealed class AuthService(
         var user = await FindUserByIdentifierAsync(req.Identifier, ct);
         if (user is null)
             return ApiResult<object>.Fail(new Error("invalid_code", "user not found"), 401);
-        var otpUserRoles = user.Status == "inactive" ? await users.GetRolesAsync(user.Id, ct) : null;
-        if (AccessBlockedError(user, otpUserRoles) is { } blocked)
+        if (AccessBlockedError(user) is { } blocked)
             return ApiResult<object>.Fail(blocked, 403);
 
         return AsObject(await IssueTokensAsync(user, client, ct));
@@ -259,7 +247,7 @@ public sealed class AuthService(
             var roles = await users.GetRolesAsync(candidate.Id, ct);
             if (!AppLoginRole.IsParent(roles)) continue;
 
-            if (AccessBlockedError(candidate, roles) is { } blocked)
+            if (AccessBlockedError(candidate) is { } blocked)
             {
                 denied.Add(new DeniedParentSchool(candidate.TenantId.Value, blocked, 403));
                 continue;

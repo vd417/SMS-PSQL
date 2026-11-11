@@ -72,5 +72,17 @@ public sealed class UserProvisioningDao(IDbConnectionFactory factory) : BaseRepo
     public Task SetStatusAsync(Guid userId, string status, CancellationToken ct = default) =>
         ExecuteProcAsync("dbo.User_SetStatus", new { UserId = userId, Status = status }, ct);
 
+    public Task<IReadOnlyList<Guid>> ListStudentLoginIdsAsync(string admissionNo, CancellationToken ct = default) =>
+        QueryInlineAsync<Guid>(
+            """
+            SELECT u."Id"
+            FROM "dbo"."Users" u
+            WHERE btrim(u."StudentId") = btrim(@admission)
+              AND EXISTS (
+                SELECT 1 FROM "dbo"."UserRoles" ur
+                WHERE ur."UserId" = u."Id" AND lower(ur."Role") = 'student')
+            """,
+            new { admission = admissionNo }, ct);
+
     private sealed record PermissionRow(string Module, string Cap, string Effect);
 }
