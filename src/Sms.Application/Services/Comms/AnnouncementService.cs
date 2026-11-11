@@ -1,4 +1,5 @@
 using Sms.Application.Common;
+using Sms.Application.Services.Tenancy;
 using Sms.Application.Interfaces.DAO;
 using Sms.Application.Services.Realtime;
 using Sms.Modules.Comms;
@@ -31,7 +32,9 @@ public sealed class AnnouncementService(
     StudentRepository students,
     IUserProvisioningDao users,
     ILiveBroadcaster live,
-    ILogger<AnnouncementService> logger) : IAnnouncementService
+    ILogger<AnnouncementService> logger,
+    ISchoolMailIdentity schoolMail,
+    ISchoolSmsIdentity schoolSms) : IAnnouncementService
 {
     public async Task<ApiResult<IReadOnlyList<AnnouncementResponse>>> ListAsync(string? audience, CancellationToken ct = default) =>
         ApiResult<IReadOnlyList<AnnouncementResponse>>.Ok(await repo.ListAnnouncementsAsync(audience, ct));
@@ -202,6 +205,7 @@ public sealed class AnnouncementService(
                     extras = null;
                 }
 
+                var from = await schoolMail.ForTenantAsync(tenant.TenantId, ct);
                 emailed = AnnouncementEmailDispatch.Enqueue(
                     emailQueue,
                     emails,
@@ -211,7 +215,8 @@ public sealed class AnnouncementService(
                     primaryBytes,
                     primaryName,
                     primaryCt,
-                    extras);
+                    extras,
+                    from);
                 logger.LogInformation(
                     "Announcement {Id} email → {Count} (primary={Primary}, extraPdf={HasExtra})",
                     created.Id, emailed, primaryName, extras is { Count: > 0 });
@@ -219,6 +224,7 @@ public sealed class AnnouncementService(
 
             if (channels.Contains("sms"))
             {
+                using var schoolSmsFrom = OutboundSms.Use(await schoolSms.SenderForAsync(tid, ct));
                 var phones = await ResolveRecipientPhonesAsync(tid, audience, req.Phones, ct);
                 var smsBody = Truncate($"{schoolName}: {kind} — {displayTitle}" +
                     (dateLabel is null ? "" : $" · {dateLabel}") +

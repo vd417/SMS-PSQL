@@ -251,8 +251,8 @@ public static class SchoolReportMath
                 var absent = g.Sum(r => Num(Cell(r, 8)));
                 var leave = g.Sum(r => Num(Cell(r, 9)));
                 var late = g.Sum(r => Num(Cell(r, 10)));
-                var denom = g.Sum(r => Num(Cell(r, 6)));
-                var pct = denom == 0 ? 0 : (present + late) / denom * 100m;
+                var marked = present + absent + leave + late;
+                var pct = marked == 0 ? 0 : (present + late) / marked * 100m;
                 return (IReadOnlyList<string>)new List<string>
                 {
                     g.Key.Class,
@@ -267,6 +267,8 @@ public static class SchoolReportMath
                 };
             })
             .ToList();
+
+    public static decimal Amount(IReadOnlyList<string> row, int index) => Num(Cell(row, index));
 
     public static IReadOnlyList<IReadOnlyList<string>> Below75(IReadOnlyList<IReadOnlyList<string>> rows) =>
         rows.Where(r => Num(Cell(r, 6)) > 0 && Num(Cell(r, 11)) < 75m).ToList();

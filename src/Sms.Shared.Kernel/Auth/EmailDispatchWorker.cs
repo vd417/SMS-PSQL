@@ -25,12 +25,12 @@ public sealed class EmailDispatchWorker(
             {
                 try
                 {
-                    await sender.SendAsync(message, stoppingToken);
+                    await sender.SendAsync(message with { Attempt = attempt }, stoppingToken);
                     break;
                 }
                 catch (Exception ex)
                 {
-                    if (attempt == maxAttempts)
+                    if (attempt == maxAttempts || SmtpFailure.IsPermanent(ex))
                     {
                         logger.LogError(ex,
                             "Failed to send email to {To} after {Attempts} attempts; dropping.",

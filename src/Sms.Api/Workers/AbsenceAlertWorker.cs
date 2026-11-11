@@ -135,8 +135,10 @@ public sealed class AbsenceAlertWorker(
                     today.ToString("dd MMM yyyy"),
                     $"Our records show {cfg.EmailDays}+ school days of consecutive absence. " +
                     "Please contact the school office if this is unexpected or if your ward is unwell."));
+                var from = await sp.GetRequiredService<Sms.Application.Services.Tenancy.ISchoolMailIdentity>()
+                    .ForTenantAsync(cfg.TenantId, ct);
                 emailed = AnnouncementEmailDispatch.Enqueue(
-                    sp.GetRequiredService<IEmailQueue>(), emails, notice.Subject, notice.Plain, notice.Html);
+                    sp.GetRequiredService<IEmailQueue>(), emails, notice.Subject, notice.Plain, notice.Html, sender: from);
             }
         }
 

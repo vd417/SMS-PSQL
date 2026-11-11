@@ -74,6 +74,16 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
             "student_attendance" => StudentAttendanceSql,
             "student_attendance_summary" => StudentAttendanceSummarySql,
             "student_attendance_streak" => StudentAttendanceStreakSql,
+            "student_attendance_daily" => StudentAttendanceDailySql,
+            "student_attendance_by_subject" => StudentSubjectSql,
+            "student_attendance_subject" => SubjectSummarySql,
+            "student_attendance_period" => PeriodSummarySql,
+            "student_attendance_marking" => TeacherMarkingSql,
+            "student_attendance_corrections" => AttendanceCorrectionSql,
+            "student_attendance_trend" => AttendanceTrendSql,
+            "student_attendance_compare" => AttendanceCompareSql,
+            "student_attendance_shift" => AttendanceShiftSql,
+            "student_attendance_absence" => AbsenceAnalysisSql,
             "staff_attendance" => StaffAttendanceSql,
             "parent" => ParentSql,
             "transport" => TransportSql,
@@ -90,8 +100,18 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
             "fee_collection" => 16,
             "fee_defaulters" => 15,
             "student_attendance" => 14,
-            "student_attendance_summary" => 12,
+            "student_attendance_summary" => 13,
             "student_attendance_streak" => 9,
+            "student_attendance_daily" => 8,
+            "student_attendance_by_subject" => 11,
+            "student_attendance_subject" => 10,
+            "student_attendance_period" => 10,
+            "student_attendance_marking" => 9,
+            "student_attendance_corrections" => 11,
+            "student_attendance_trend" => 6,
+            "student_attendance_compare" => 5,
+            "student_attendance_shift" => 7,
+            "student_attendance_absence" => 3,
             "staff_attendance" => 12,
             "parent" => 13,
             "transport" => 14,
@@ -768,9 +788,29 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
           COUNT(sc.day) FILTER (WHERE ds.st = 'absent')::text AS "c8",
           COUNT(sc.day) FILTER (WHERE ds.st = 'leave')::text AS "c9",
           COUNT(sc.day) FILTER (WHERE ds.st = 'late')::text AS "c10",
-          CASE WHEN COUNT(sc.day) = 0 THEN '0.0'
-            ELSE to_char((100.0 * COUNT(sc.day) FILTER (WHERE ds.st IN ('present', 'late'))) / COUNT(sc.day), 'FM990.0')
-          END AS "c11"
+          CASE WHEN COUNT(sc.day) FILTER (WHERE ds.st IN ('present', 'absent', 'leave', 'late')) = 0 THEN '0.0'
+            ELSE to_char(
+              (100.0 * COUNT(sc.day) FILTER (WHERE ds.st IN ('present', 'late')))
+              / COUNT(sc.day) FILTER (WHERE ds.st IN ('present', 'absent', 'leave', 'late')),
+              'FM990.0')
+          END AS "c11",
+          COALESCE((
+            SELECT MAX(g.cnt)::text
+            FROM (
+              SELECT COUNT(*) AS cnt
+              FROM (
+                SELECT wrn - ROW_NUMBER() OVER (ORDER BY wrn) AS grp
+                FROM (
+                  SELECT ROW_NUMBER() OVER (ORDER BY sc2.day) AS wrn, COALESCE(ds2.st, '') AS st
+                  FROM scope sc2
+                  LEFT JOIN day_status ds2 ON ds2.id = sc2.id AND ds2.day = sc2.day
+                  WHERE sc2.id = r.id
+                ) numbered
+                WHERE numbered.st = 'absent'
+              ) islands
+              GROUP BY islands.grp
+            ) g
+          ), '0') AS "c12"
         FROM roster r
         JOIN scope sc ON sc.id = r.id
         LEFT JOIN day_status ds ON ds.id = sc.id AND ds.day = sc.day
@@ -826,6 +866,329 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
         JOIN roster r ON r.id = b.id
         ORDER BY b.n DESC, r.class_name, r.name
         LIMIT 5000
+        """;
+
+    private static readonly string StudentAttendanceDailySql = "WITH " + StudentDayCtes + """
+        SELECT
+          to_char(ds.day, 'YYYY-MM-DD') AS "c0",
+          r.adm AS "c1",
+          r.name AS "c2",
+          r.guardian AS "c3",
+          r.class_name AS "c4",
+          r.section AS "c5",
+          r.roll AS "c6",
+          CASE ds.st
+            WHEN 'present' THEN 'P' WHEN 'absent' THEN 'A' WHEN 'late' THEN 'L'
+            WHEN 'leave' THEN 'LV' ELSE 'N' END AS "c7"
+        FROM day_status ds
+        JOIN roster r ON r.id = ds.id
+        WHERE (@AttendanceStatus IS NULL OR ds.st = LOWER(@AttendanceStatus)
+          OR (LOWER(@AttendanceStatus) = 'half_day' AND ds.st = 'present')
+          OR (LOWER(@AttendanceStatus) = 'leave' AND ds.st = 'leave'))
+        ORDER BY ds.day DESC, r.class_name, r.name
+        LIMIT 5000
+        """;
+
+    private const string PeriodMarkCtes = """
+        days AS (
+          SELECT g.day::date AS day
+          FROM generate_series(@FromDate::date, @ToDate::date, interval '1 day') AS g(day)
+          WHERE EXTRACT(DOW FROM g.day) <> 0
+            AND NOT EXISTS (
+              SELECT 1 FROM "dbo"."CalendarEvents" ev
+              WHERE ev."Date" = g.day::date AND LOWER(COALESCE(ev."Type", '')) = 'holiday')
+        ),
+        roster AS (
+          SELECT s."Id" AS id,
+                 s."AdmissionNo" AS adm,
+                 s."Name" AS name,
+                 COALESCE(NULLIF(s."ClassLabel", ''), NULLIF(s."Grade", ''), '') AS class_name,
+                 COALESCE(s."Section", '') AS section
+          FROM "dbo"."Students" s
+          WHERE LOWER(COALESCE(s."Status", 'active')) NOT IN ('inactive', 'removed', 'left', 'withdrawn')
+            AND (@ClassName IS NULL OR LOWER(COALESCE(NULLIF(s."ClassLabel", ''), s."Grade", '')) = LOWER(@ClassName))
+            AND (@Section IS NULL OR LOWER(COALESCE(s."Section", '')) = LOWER(@Section))
+            AND (@Student IS NULL OR s."Name" ILIKE @Student ESCAPE '\' OR s."AdmissionNo" ILIKE @Student ESCAPE '\')
+        ),
+        marks AS (
+          SELECT p."StudentId" AS id, p."Date" AS day, p."Period" AS period,
+                 COALESCE(p."Subject", '') AS subject, LOWER(COALESCE(p."Status", '')) AS st,
+                 p."ClassId" AS class_id, p."UpdatedAt" AS marked_at, p."MarkedBy" AS marked_by
+          FROM "dbo"."PeriodAttendanceRecords" p
+          JOIN days d ON d.day = p."Date"
+          WHERE (@Subject IS NULL OR p."Subject" ILIKE @Subject ESCAPE '\')
+            AND (@Period IS NULL OR p."Period"::text = @Period)
+        )
+        """;
+
+    private static readonly string StudentSubjectSql = "WITH " + PeriodMarkCtes + """
+        SELECT
+          r.adm AS "c0",
+          r.name AS "c1",
+          r.class_name AS "c2",
+          r.section AS "c3",
+          m.subject AS "c4",
+          COALESCE(MAX((
+            SELECT t."Name" FROM "dbo"."TimetableSlots" ts
+            JOIN "dbo"."Teachers" t ON t."Id" = ts."TeacherId"
+            WHERE ts."ClassId" = m.class_id AND ts."Period" = m.period
+              AND lower(COALESCE(ts."Subject", '')) = lower(m.subject)
+            LIMIT 1
+          )), '') AS "c5",
+          COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day'))::text AS "c6",
+          COUNT(*) FILTER (WHERE m.st = 'absent')::text AS "c7",
+          COUNT(*) FILTER (WHERE m.st IN ('leave', 'on_leave'))::text AS "c8",
+          COUNT(*) FILTER (WHERE m.st = 'late')::text AS "c9",
+          CASE WHEN COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day', 'absent', 'leave', 'on_leave', 'late')) = 0 THEN '0.0'
+            ELSE to_char(
+              100.0 * COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day', 'late'))
+              / COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day', 'absent', 'leave', 'on_leave', 'late')),
+              'FM990.0') END AS "c10"
+        FROM marks m
+        JOIN roster r ON r.id = m.id
+        WHERE @Teacher IS NULL OR EXISTS (
+          SELECT 1 FROM "dbo"."TimetableSlots" ts
+          JOIN "dbo"."Teachers" t ON t."Id" = ts."TeacherId"
+          WHERE ts."ClassId" = m.class_id AND ts."Period" = m.period
+            AND lower(COALESCE(ts."Subject", '')) = lower(m.subject)
+            AND t."Name" ILIKE @Teacher ESCAPE '\'
+        )
+        GROUP BY r.id, r.adm, r.name, r.class_name, r.section, m.subject
+        ORDER BY r.class_name, r.section, r.name, m.subject
+        LIMIT 5000
+        """;
+
+    private static readonly string SubjectSummarySql = "WITH " + PeriodMarkCtes + """
+        SELECT
+          m.subject AS "c0",
+          r.class_name AS "c1",
+          r.section AS "c2",
+          COALESCE(MAX((
+            SELECT t."Name" FROM "dbo"."TimetableSlots" ts
+            JOIN "dbo"."Teachers" t ON t."Id" = ts."TeacherId"
+            WHERE ts."ClassId" = m.class_id AND ts."Period" = m.period
+              AND lower(COALESCE(ts."Subject", '')) = lower(m.subject)
+            LIMIT 1
+          )), '') AS "c3",
+          COUNT(DISTINCT r.id)::text AS "c4",
+          COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day'))::text AS "c5",
+          COUNT(*) FILTER (WHERE m.st = 'absent')::text AS "c6",
+          COUNT(*) FILTER (WHERE m.st IN ('leave', 'on_leave'))::text AS "c7",
+          COUNT(*) FILTER (WHERE m.st = 'late')::text AS "c8",
+          CASE WHEN COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day', 'absent', 'leave', 'on_leave', 'late')) = 0 THEN '0.0'
+            ELSE to_char(
+              100.0 * COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day', 'late'))
+              / COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day', 'absent', 'leave', 'on_leave', 'late')),
+              'FM990.0') END AS "c9"
+        FROM marks m
+        JOIN roster r ON r.id = m.id
+        WHERE @Teacher IS NULL OR EXISTS (
+          SELECT 1 FROM "dbo"."TimetableSlots" ts
+          JOIN "dbo"."Teachers" t ON t."Id" = ts."TeacherId"
+          WHERE ts."ClassId" = m.class_id AND ts."Period" = m.period
+            AND lower(COALESCE(ts."Subject", '')) = lower(m.subject)
+            AND t."Name" ILIKE @Teacher ESCAPE '\'
+        )
+        GROUP BY m.subject, r.class_name, r.section
+        ORDER BY r.class_name, r.section, m.subject
+        LIMIT 5000
+        """;
+
+    private static readonly string PeriodSummarySql = "WITH " + PeriodMarkCtes + """
+        SELECT
+          m.period::text AS "c0",
+          m.subject AS "c1",
+          r.class_name AS "c2",
+          r.section AS "c3",
+          COUNT(DISTINCT r.id)::text AS "c4",
+          COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day'))::text AS "c5",
+          COUNT(*) FILTER (WHERE m.st = 'absent')::text AS "c6",
+          COUNT(*) FILTER (WHERE m.st IN ('leave', 'on_leave'))::text AS "c7",
+          COUNT(*) FILTER (WHERE m.st = 'late')::text AS "c8",
+          CASE WHEN COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day', 'absent', 'leave', 'on_leave', 'late')) = 0 THEN '0.0'
+            ELSE to_char(
+              100.0 * COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day', 'late'))
+              / COUNT(*) FILTER (WHERE m.st IN ('present', 'half_day', 'absent', 'leave', 'on_leave', 'late')),
+              'FM990.0') END AS "c9"
+        FROM marks m
+        JOIN roster r ON r.id = m.id
+        WHERE @Teacher IS NULL OR EXISTS (
+          SELECT 1 FROM "dbo"."TimetableSlots" ts
+          JOIN "dbo"."Teachers" t ON t."Id" = ts."TeacherId"
+          WHERE ts."ClassId" = m.class_id AND ts."Period" = m.period
+            AND lower(COALESCE(ts."Subject", '')) = lower(m.subject)
+            AND t."Name" ILIKE @Teacher ESCAPE '\'
+        )
+        GROUP BY m.period, m.subject, r.class_name, r.section
+        ORDER BY r.class_name, r.section, m.period, m.subject
+        LIMIT 5000
+        """;
+
+    private static readonly string TeacherMarkingSql = """
+        WITH days AS (
+          SELECT g.day::date AS day
+          FROM generate_series(@FromDate::date, @ToDate::date, interval '1 day') AS g(day)
+          WHERE EXTRACT(DOW FROM g.day) <> 0
+            AND NOT EXISTS (
+              SELECT 1 FROM "dbo"."CalendarEvents" ev
+              WHERE ev."Date" = g.day::date AND LOWER(COALESCE(ev."Type", '')) = 'holiday')
+        ),
+        slot AS (
+          SELECT COALESCE(t."Name", 'Unassigned') AS teacher,
+                 COALESCE(NULLIF(cls."Name", ''), NULLIF(ts."ClassName", ''), '') AS class_name,
+                 COALESCE(cls."Section", '') AS section,
+                 COALESCE(ts."Subject", '') AS subject,
+                 ts."Period" AS period,
+                 ts."ClassId" AS class_id,
+                 upper(left(COALESCE(ts."Day", ''), 3)) AS dow
+          FROM "dbo"."TimetableSlots" ts
+          LEFT JOIN "dbo"."Classes" cls ON cls."Id" = ts."ClassId"
+          LEFT JOIN "dbo"."Teachers" t ON t."Id" = ts."TeacherId"
+        ),
+        scheduled AS (
+          SELECT sl.teacher, sl.class_name, sl.section, sl.subject, sl.period, sl.class_id, d.day
+          FROM slot sl
+          JOIN days d
+            ON sl.dow = upper((ARRAY['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])[EXTRACT(DOW FROM d.day)::int + 1])
+          WHERE (@ClassName IS NULL OR LOWER(sl.class_name) = LOWER(@ClassName))
+            AND (@Section IS NULL OR LOWER(sl.section) = LOWER(@Section))
+            AND (@Subject IS NULL OR sl.subject ILIKE @Subject ESCAPE '\')
+            AND (@Period IS NULL OR sl.period::text = @Period)
+            AND (@Teacher IS NULL OR sl.teacher ILIKE @Teacher ESCAPE '\')
+        )
+        SELECT
+          s.teacher AS "c0",
+          s.class_name AS "c1",
+          s.section AS "c2",
+          s.subject AS "c3",
+          COUNT(*)::text AS "c4",
+          COUNT(*) FILTER (WHERE COALESCE(m.n, 0) > 0)::text AS "c5",
+          COUNT(*) FILTER (WHERE COALESCE(m.n, 0) = 0)::text AS "c6",
+          CASE WHEN COUNT(*) = 0 THEN '0.0'
+            ELSE to_char(100.0 * COUNT(*) FILTER (WHERE COALESCE(m.n, 0) > 0) / COUNT(*), 'FM990.0') END AS "c7",
+          COALESCE(to_char(MAX(m.last_at) + make_interval(mins => @OffsetMinutes), 'YYYY-MM-DD HH24:MI'), '') AS "c8"
+        FROM scheduled s
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) AS n, MAX(p."UpdatedAt") AS last_at
+          FROM "dbo"."PeriodAttendanceRecords" p
+          WHERE p."Date" = s.day AND p."Period" = s.period
+            AND (s.class_id IS NULL OR p."ClassId" = s.class_id)
+            AND lower(p."Subject") = lower(s.subject)
+        ) m ON true
+        GROUP BY s.teacher, s.class_name, s.section, s.subject
+        ORDER BY s.teacher, s.class_name, s.subject
+        LIMIT 5000
+        """;
+
+    private static readonly string AttendanceCorrectionSql = """
+        SELECT
+          to_char(a."Date", 'YYYY-MM-DD') AS "c0",
+          s."AdmissionNo" AS "c1",
+          s."Name" AS "c2",
+          COALESCE(NULLIF(s."ClassLabel", ''), NULLIF(s."Grade", ''), '') AS "c3",
+          COALESCE(s."Section", '') AS "c4",
+          COALESCE(a."Subject", '') AS "c5",
+          a."Period"::text AS "c6",
+          COALESCE(a."FromStatus", '') AS "c7",
+          COALESCE(a."ToStatus", '') AS "c8",
+          COALESCE(a."ActorName", '') AS "c9",
+          COALESCE(to_char(a."At" + make_interval(mins => @OffsetMinutes), 'YYYY-MM-DD HH24:MI'), '') AS "c10"
+        FROM "dbo"."PeriodAttendanceAudit" a
+        JOIN "dbo"."Students" s ON s."Id" = a."StudentId"
+        WHERE a."Date" >= @FromDate::date AND a."Date" <= @ToDate::date
+          AND (@ClassName IS NULL OR LOWER(COALESCE(NULLIF(s."ClassLabel", ''), s."Grade", '')) = LOWER(@ClassName))
+          AND (@Section IS NULL OR LOWER(COALESCE(s."Section", '')) = LOWER(@Section))
+          AND (@Student IS NULL OR s."Name" ILIKE @Student ESCAPE '\' OR s."AdmissionNo" ILIKE @Student ESCAPE '\')
+          AND (@Subject IS NULL OR a."Subject" ILIKE @Subject ESCAPE '\')
+          AND (@Period IS NULL OR a."Period"::text = @Period)
+          AND (@Teacher IS NULL OR a."ActorName" ILIKE @Teacher ESCAPE '\')
+        ORDER BY a."At" DESC
+        LIMIT 5000
+        """;
+
+    private static readonly string AttendanceTrendSql = "WITH " + StudentDayCtes + """
+        SELECT
+          to_char(date_trunc('week', ds.day)::date, 'YYYY-MM-DD') AS "c0",
+          COUNT(*) FILTER (WHERE ds.st = 'present')::text AS "c1",
+          COUNT(*) FILTER (WHERE ds.st = 'absent')::text AS "c2",
+          COUNT(*) FILTER (WHERE ds.st = 'leave')::text AS "c3",
+          COUNT(*) FILTER (WHERE ds.st = 'late')::text AS "c4",
+          CASE WHEN COUNT(*) FILTER (WHERE ds.st IN ('present', 'absent', 'leave', 'late')) = 0 THEN '0.0'
+            ELSE to_char(
+              100.0 * COUNT(*) FILTER (WHERE ds.st IN ('present', 'late'))
+              / COUNT(*) FILTER (WHERE ds.st IN ('present', 'absent', 'leave', 'late')),
+              'FM990.0') END AS "c5"
+        FROM day_status ds
+        JOIN roster r ON r.id = ds.id
+        GROUP BY date_trunc('week', ds.day)
+        ORDER BY date_trunc('week', ds.day)
+        """;
+
+    private static readonly string AttendanceCompareSql = "WITH " + StudentDayCtes + """
+        , bounds AS (
+          SELECT @FromDate::date + ((@ToDate::date - @FromDate::date) / 2) AS mid
+        )
+        SELECT
+          r.class_name AS "c0",
+          r.section AS "c1",
+          CASE WHEN COUNT(*) FILTER (WHERE ds.day <= b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')) = 0 THEN '0.0'
+            ELSE to_char(100.0 * COUNT(*) FILTER (WHERE ds.day <= b.mid AND ds.st IN ('present', 'late'))
+              / COUNT(*) FILTER (WHERE ds.day <= b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')), 'FM990.0') END AS "c2",
+          CASE WHEN COUNT(*) FILTER (WHERE ds.day > b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')) = 0 THEN '0.0'
+            ELSE to_char(100.0 * COUNT(*) FILTER (WHERE ds.day > b.mid AND ds.st IN ('present', 'late'))
+              / COUNT(*) FILTER (WHERE ds.day > b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')), 'FM990.0') END AS "c3",
+          to_char(
+            COALESCE(100.0 * COUNT(*) FILTER (WHERE ds.day > b.mid AND ds.st IN ('present', 'late'))
+              / NULLIF(COUNT(*) FILTER (WHERE ds.day > b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')), 0), 0)
+            - COALESCE(100.0 * COUNT(*) FILTER (WHERE ds.day <= b.mid AND ds.st IN ('present', 'late'))
+              / NULLIF(COUNT(*) FILTER (WHERE ds.day <= b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')), 0), 0)
+          , 'FM990.0') AS "c4"
+        FROM day_status ds
+        JOIN roster r ON r.id = ds.id
+        CROSS JOIN bounds b
+        GROUP BY r.class_name, r.section
+        ORDER BY r.class_name, r.section
+        LIMIT 5000
+        """;
+
+    private static readonly string AttendanceShiftSql = "WITH " + StudentDayCtes + """
+        , bounds AS (
+          SELECT @FromDate::date + ((@ToDate::date - @FromDate::date) / 2) AS mid
+        )
+        SELECT
+          r.adm AS "c0",
+          r.name AS "c1",
+          r.class_name AS "c2",
+          r.section AS "c3",
+          CASE WHEN COUNT(*) FILTER (WHERE ds.day <= b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')) = 0 THEN '0.0'
+            ELSE to_char(100.0 * COUNT(*) FILTER (WHERE ds.day <= b.mid AND ds.st IN ('present', 'late'))
+              / COUNT(*) FILTER (WHERE ds.day <= b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')), 'FM990.0') END AS "c4",
+          CASE WHEN COUNT(*) FILTER (WHERE ds.day > b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')) = 0 THEN '0.0'
+            ELSE to_char(100.0 * COUNT(*) FILTER (WHERE ds.day > b.mid AND ds.st IN ('present', 'late'))
+              / COUNT(*) FILTER (WHERE ds.day > b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')), 'FM990.0') END AS "c5",
+          to_char(
+            COALESCE(100.0 * COUNT(*) FILTER (WHERE ds.day > b.mid AND ds.st IN ('present', 'late'))
+              / NULLIF(COUNT(*) FILTER (WHERE ds.day > b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')), 0), 0)
+            - COALESCE(100.0 * COUNT(*) FILTER (WHERE ds.day <= b.mid AND ds.st IN ('present', 'late'))
+              / NULLIF(COUNT(*) FILTER (WHERE ds.day <= b.mid AND ds.st IN ('present', 'absent', 'leave', 'late')), 0), 0)
+          , 'FM990.0') AS "c6"
+        FROM day_status ds
+        JOIN roster r ON r.id = ds.id
+        CROSS JOIN bounds b
+        GROUP BY r.id, r.adm, r.name, r.class_name, r.section
+        ORDER BY r.class_name, r.name
+        LIMIT 5000
+        """;
+
+    private static readonly string AbsenceAnalysisSql = "WITH " + StudentDayCtes + """
+        SELECT
+          trim(to_char(ds.day, 'Day')) AS "c0",
+          COUNT(*)::text AS "c1",
+          COUNT(DISTINCT ds.id)::text AS "c2"
+        FROM day_status ds
+        WHERE ds.st = 'absent'
+        GROUP BY trim(to_char(ds.day, 'Day')), EXTRACT(DOW FROM ds.day)
+        ORDER BY EXTRACT(DOW FROM ds.day)
         """;
 
     private static readonly string StaffAttendanceSql = """

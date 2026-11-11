@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Sms.Application.DTOs.Auth;
 using Sms.Application.Common;
 using Sms.Application.Interfaces.DAO;
+using Sms.Application.Services.Tenancy;
 using Sms.Modules.Tenancy.Data;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Authz;
@@ -51,7 +52,9 @@ public sealed class AuthService(
     IInvitationDao invitations,
     IProfileDao profiles,
     ILogger<AuthService> logger,
-    AuthDiagnosticsOptions diagnostics) : IAuthService
+    AuthDiagnosticsOptions diagnostics,
+    ISchoolMailIdentity schoolMail,
+    ISchoolSmsIdentity schoolSms) : IAuthService
 {
     // --- Session policy per client (X-Client header, passed in by the controller) ----------
     // Only the CRM panel (X-Client: crm) gets a short access token and a 2-hour idle
@@ -147,7 +150,7 @@ public sealed class AuthService(
     }
 
     public Task<ApiResult<object>> RequestOtpAsync(OtpRequest req, CancellationToken ct = default) =>
-        SendOtpToRegisteredAsync(req.Identifier, null, ct);
+        SendOtpToRegisteredAsync(req.Identifier, null, "login_otp", ct);
 
     public async Task<ApiResult<object>> VerifyOtpAsync(OtpVerifyRequest req, string? client = null, CancellationToken ct = default)
     {
@@ -322,7 +325,7 @@ public sealed class AuthService(
             }
             return await SendInviteSetupAsync(req.Identifier, schoolName, roleLabel, TimeSpan.FromHours(24), ct: ct, requestedRole: req.Role);
         }
-        return await SendOtpToRegisteredAsync(req.Identifier, req.Role, ct);
+        return await SendOtpToRegisteredAsync(req.Identifier, req.Role, "forgot_otp", ct);
     }
 
     public async Task<ApiResult<object>> SendInviteSetupAsync(
@@ -364,15 +367,16 @@ public sealed class AuthService(
 
         if (channel == "email")
         {
-            emailQueue.Enqueue(InviteWelcomeEmail.Build(target, schoolName, code, roleLabel, link, customMessage));
-            // Dev fallback: the welcome email is dispatched out-of-band by EmailDispatchWorker, whose
-            // SMTP failures are logged and dropped. Without this line a new admin whose SMTP is down
-            // has no way to obtain the setup code. Mirrors EmailOtpSender's [DEV OTP/email] logging.
+            var from = await schoolMail.ForTenantAsync(user.TenantId, ct);
+            emailQueue.Enqueue(InviteWelcomeEmail.Build(target, schoolName, code, roleLabel, link, customMessage).WithRoute(from));
             if (diagnostics.LogOtpCodes)
-                logger.LogWarning("[DEV OTP/email] {Identifier} -> {Code} (development only, invite/setup)", target, code);
+                logger.LogInformation("Queued invite email to {Identifier}", target);
         }
         else
+        {
+            using var schoolSmsFrom = OutboundSms.Use(await schoolSms.SenderForAsync(user.TenantId, ct));
             await sms.SendAsync(target, InviteWelcomeEmail.SmsBody(schoolName, code, roleLabel, link, customMessage), ct);
+        }
 
         return ApiResult<object>.Ok(new
         {
@@ -394,9 +398,19 @@ public sealed class AuthService(
         var loginUrl = frontend.BaseUrl.TrimEnd('/') + "/";
 
         if (isEmail)
-            emailQueue.Enqueue(WelcomeOnboardEmail.Build(target, schoolName, loginUrl, roleLabel));
+        {
+            tenant.Set(null, null, isPlatform: true);
+            var user = await FindUserByIdentifierAsync(target, ct);
+            var from = await schoolMail.ForTenantAsync(user?.TenantId, ct);
+            emailQueue.Enqueue(WelcomeOnboardEmail.Build(target, schoolName, loginUrl, roleLabel).WithRoute(from));
+        }
         else
+        {
+            tenant.Set(null, null, isPlatform: true);
+            var user = await FindUserByIdentifierAsync(target, ct);
+            using var schoolSmsFrom = OutboundSms.Use(await schoolSms.SenderForAsync(user?.TenantId, ct));
             await sms.SendAsync(target, WelcomeOnboardEmail.SmsBody(schoolName, loginUrl, roleLabel), ct);
+        }
 
         return ApiResult<object>.Ok(new { sent = true, channel = isEmail ? "email" : "sms" });
     }
@@ -668,13 +682,16 @@ public sealed class AuthService(
         return ApiResult<TokenResponse>.Ok(new TokenResponse(access, refresh));
     }
 
-    private async Task<ApiResult<object>> SendOtpToRegisteredAsync(string identifier, string? role, CancellationToken ct)
+    private async Task<ApiResult<object>> SendOtpToRegisteredAsync(string identifier, string? role, string emailType, CancellationToken ct)
     {
         tenant.Set(null, null, isPlatform: true);
         var user = await FindUserByIdentifierAsync(identifier, ct);
 
         if (user is null)
             return ApiResult<object>.Fail(NotRegisteredError(identifier), 404);
+
+        using var schoolFrom = OutboundMail.Use(await schoolMail.RouteAsync(user.TenantId, emailType, ct));
+        using var schoolSmsFrom = OutboundSms.Use(await schoolSms.SenderForAsync(user.TenantId, ct));
 
         // Student email first (up to 2 delivery attempts). Missing/invalid email or
         // repeated send failure → linked parent/caregiver contact. role="parent" targets

@@ -120,9 +120,12 @@ public static class ServiceCollectionExtensions
         builder.Services.AddSingleton(builder.Configuration.GetSection("Smtp").Get<SmtpOptions>() ?? new SmtpOptions());
         builder.Services.AddSingleton(builder.Configuration.GetSection("Frontend").Get<FrontendOptions>() ?? new FrontendOptions());
         builder.Services.AddSingleton<IEmailQueue, EmailQueue>();
-        builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        builder.Services.AddSingleton<SmtpEmailSender>();
+        builder.Services.AddSingleton<IEmailSender, Sms.Application.Services.Tenancy.SchoolEmailAuditSender>();
+        builder.Services.AddSingleton(builder.Configuration.GetSection(SmsOptions.SectionName).Get<SmsOptions>() ?? new SmsOptions());
         builder.Services.AddSingleton<ISmsSender>(sp => new LoggingSmsSender(
-            sp.GetRequiredService<ILogger<LoggingSmsSender>>(), builder.Environment.IsDevelopment()));
+            sp.GetRequiredService<ILogger<LoggingSmsSender>>(),
+            sp.GetRequiredService<SmsOptions>()));
         builder.Services.AddSingleton(sp => new EmailOtpSender(
             sp.GetRequiredService<IEmailQueue>(),
             sp.GetRequiredService<ILogger<EmailOtpSender>>(),
@@ -157,6 +160,11 @@ public static class ServiceCollectionExtensions
         var dataProtectionKeyPath = builder.Configuration["DataProtection:KeyPath"] ?? "keys";
         builder.Services.AddDataProtection()
             .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyPath));
+        builder.Services.AddScoped<Sms.Modules.Tenancy.Data.TenantEmailSettingsRepository>();
+        builder.Services.AddScoped<Sms.Modules.Tenancy.Data.EmailDeliveryLogRepository>();
+        builder.Services.AddScoped<Sms.Application.Services.Tenancy.ISchoolMailIdentity, Sms.Application.Services.Tenancy.SchoolMailIdentity>();
+        builder.Services.AddScoped<Sms.Modules.Tenancy.Data.TenantSmsSettingsRepository>();
+        builder.Services.AddScoped<Sms.Application.Services.Tenancy.ISchoolSmsIdentity, Sms.Application.Services.Tenancy.SchoolSmsIdentity>();
         builder.Services.AddScoped<Sms.Modules.Finance.TenantPaymentCredentialRepository>();
         builder.Services.AddScoped<ITenantPaymentCredentialService, TenantPaymentCredentialService>();
         builder.Services.Configure<RazorpayOptions>(builder.Configuration.GetSection(RazorpayOptions.SectionName));
@@ -338,6 +346,13 @@ public static class ServiceCollectionExtensions
                     _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = authPermit, Window = TimeSpan.FromMinutes(1), QueueLimit = 0
+                    }));
+            o.AddPolicy("email-test", http =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    http.User.FindFirst("sub")?.Value ?? http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5, Window = TimeSpan.FromMinutes(1), QueueLimit = 0
                     }));
             o.AddPolicy("ai-search", http =>
                 RateLimitPartition.GetFixedWindowLimiter(

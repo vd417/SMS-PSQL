@@ -10,6 +10,7 @@ public interface IRazorpayClient
 {
     Task<RazorpayOrderCreated> CreateOrderAsync(
         string keyId, string keySecret, long amountPaise, string currency, string receipt, CancellationToken ct = default);
+    Task<(bool Ok, string? Error)> ProbeAsync(string keyId, string keySecret, CancellationToken ct = default);
     bool VerifyPaymentSignature(string keySecret, string orderId, string paymentId, string signature);
     bool VerifyWebhookSignature(string webhookSecret, string body, string signatureHeader);
 }
@@ -49,6 +50,22 @@ public sealed class RazorpayClient(IHttpClientFactory httpClientFactory, ILogger
         var amount = doc.RootElement.GetProperty("amount").GetInt64();
         var curr = doc.RootElement.GetProperty("currency").GetString() ?? currency;
         return new RazorpayOrderCreated(id, amount, curr);
+    }
+
+    public async Task<(bool Ok, string? Error)> ProbeAsync(string keyId, string keySecret, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(keyId) || string.IsNullOrWhiteSpace(keySecret))
+            return (false, "Save the Razorpay key ID and secret first.");
+        var client = httpClientFactory.CreateClient("razorpay");
+        var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{keyId}:{keySecret}"));
+        using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.razorpay.com/v1/orders?count=1");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Basic", auth);
+        using var res = await client.SendAsync(req, ct);
+        if (res.IsSuccessStatusCode) return (true, null);
+        log.LogWarning("Razorpay credential check failed: {Status}", (int)res.StatusCode);
+        return (false, res.StatusCode == System.Net.HttpStatusCode.Unauthorized
+            ? "Razorpay rejected this key ID and secret."
+            : "Could not reach Razorpay with this school's keys.");
     }
 
     bool IRazorpayClient.VerifyPaymentSignature(string keySecret, string orderId, string paymentId, string signature) =>

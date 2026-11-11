@@ -26,6 +26,8 @@ public class RazorpayOrderCreationTests(PostgresFixture fx)
         public Task<RazorpayOrderCreated> CreateOrderAsync(
             string keyId, string keySecret, long amountPaise, string currency, string receipt, CancellationToken ct = default) =>
             Task.FromResult(new RazorpayOrderCreated($"order_fake_{amountPaise}", amountPaise, currency));
+        public Task<(bool Ok, string? Error)> ProbeAsync(string keyId, string keySecret, CancellationToken ct = default) =>
+            Task.FromResult((true, (string?)null));
         public bool VerifyPaymentSignature(string keySecret, string orderId, string paymentId, string signature) => true;
         public bool VerifyWebhookSignature(string webhookSecret, string body, string signatureHeader) => true;
     }

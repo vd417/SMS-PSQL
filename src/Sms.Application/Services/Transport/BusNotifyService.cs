@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Sms.Application.Common;
 using Sms.Application.Services.Realtime;
+using Sms.Application.Services.Tenancy;
 using Sms.Modules.Comms;
 using Sms.Modules.Sis.Data;
 using Sms.Modules.Transport;
@@ -33,7 +34,8 @@ public sealed class BusNotifyService(
     ILiveBroadcaster live,
     ITenantContext tenant,
     ITenantFeatureSet features,
-    ILogger<BusNotifyService> logger) : IBusNotifyService
+    ILogger<BusNotifyService> logger,
+    ISchoolSmsIdentity schoolSms) : IBusNotifyService
 {
     private static readonly HashSet<string> EventTypes = ["departed", "approaching", "arrived"];
     private static readonly HashSet<string> ChannelNames = ["push", "sms"];
@@ -64,6 +66,7 @@ public sealed class BusNotifyService(
 
         var pushed = new HashSet<Guid>();
         var texted = new HashSet<string>();
+        using var schoolSmsFrom = OutboundSms.Use(channels.Contains("sms") ? await schoolSms.SenderForAsync(tid, ct) : null);
         foreach (var rider in roster)
         {
             var (title, body) = Copy(eventType, rider);

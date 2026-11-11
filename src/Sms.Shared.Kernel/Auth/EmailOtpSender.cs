@@ -13,9 +13,9 @@ public sealed class EmailOtpSender(IEmailQueue queue, ILogger<EmailOtpSender>? l
         var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
         var body = $"Your verification code is {code}. It expires in 10 minutes. " +
                    "If you didn't request this, you can ignore this email.";
-        queue.Enqueue(new EmailMessage(identifier, "Your verification code", body));
+        queue.Enqueue(new EmailMessage(identifier, "Your verification code", body).WithRoute(OutboundMail.Current));
         if (logCode)
-            log?.LogWarning("[DEV OTP/email] {Identifier} -> {Code} (development only)", identifier, code);
+            log?.LogInformation("Queued verification email to {Identifier}", identifier);
         return Task.FromResult(code);
     }
 }

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Sms.Application.Common;
+using Sms.Application.Services.Tenancy;
 using Sms.Modules.Reporting.Contracts;
 using Sms.Modules.Reporting.Data;
 using Sms.Shared.Kernel.Auth;
@@ -33,7 +34,8 @@ public sealed partial class SchoolReportService(
     SchoolReportRepository repo,
     ITenantContext tenant,
     IEmailSender email,
-    IClock clock) : ISchoolReportService
+    IClock clock,
+    ISchoolMailIdentity schoolMail) : ISchoolReportService
 {
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -245,10 +247,25 @@ public sealed partial class SchoolReportService(
         var skip = to < from
             || (output.Key == "student_attendance_history" && string.IsNullOrWhiteSpace(query.Student));
         IReadOnlyList<IReadOnlyList<string>> rows = skip ? [] : await repo.RunAsync(sqlKey, args, ct);
-        if (output.Key == "student_attendance_class")
+        if (output.Key is "student_attendance_class" or "student_attendance_lowest")
+        {
             rows = SchoolReportMath.ClassAttendance(rows);
+            if (output.Key == "student_attendance_lowest")
+                rows = rows.OrderBy(r => SchoolReportMath.Amount(r, r.Count - 1)).ToList();
+        }
         else if (output.Key == "student_attendance_low")
             rows = SchoolReportMath.Below75(rows);
+        else if (output.Key is "student_attendance_streak5" or "student_attendance_streak7")
+        {
+            var min = output.Key.EndsWith('7') ? 7 : 5;
+            rows = rows.Where(r => SchoolReportMath.Amount(r, 6) >= min).ToList();
+        }
+        else if (output.Key == "student_attendance_pending")
+            rows = rows.Where(r => SchoolReportMath.Amount(r, 6) > 0).ToList();
+        else if (output.Key == "student_attendance_decline")
+            rows = rows.Where(r => SchoolReportMath.Amount(r, 6) <= -10).ToList();
+        else if (output.Key == "student_attendance_improve")
+            rows = rows.Where(r => SchoolReportMath.Amount(r, 6) >= 10).ToList();
         IReadOnlyList<string> columns = output.Columns;
         if (output.Key is "student_attendance" or "student_attendance_history")
             (columns, rows) = SchoolReportMath.OmitIfBlank(columns, rows, "Subject", "Period");
@@ -325,13 +342,14 @@ public sealed partial class SchoolReportService(
         var body = string.IsNullOrWhiteSpace(message)
             ? $"{report.Title} for {report.FromDate} to {report.ToDate}. Filters: {report.Filters}."
             : message.Trim();
+        var from = await schoolMail.ForTenantAsync(tenant.TenantId, ct);
         var results = new List<SchoolReportEmailResult>();
         foreach (var address in emails)
         {
             try
             {
                 await email.SendAsync(new EmailMessage(
-                    address, titleSubject, body, file.Bytes, file.FileName, file.ContentType), ct);
+                    address, titleSubject, body, file.Bytes, file.FileName, file.ContentType).WithRoute(from), ct);
                 results.Add(new(address, "sent", null));
             }
             catch (Exception ex)
@@ -402,7 +420,10 @@ public sealed partial class SchoolReportService(
     private static string StudentSqlKey(string key) => key switch
     {
         "student_attendance_history" => "student_attendance",
-        "student_attendance_low" or "student_attendance_class" => "student_attendance_summary",
+        "student_attendance_low" or "student_attendance_class" or "student_attendance_lowest" => "student_attendance_summary",
+        "student_attendance_streak5" or "student_attendance_streak7" => "student_attendance_streak",
+        "student_attendance_pending" => "student_attendance_marking",
+        "student_attendance_decline" or "student_attendance_improve" => "student_attendance_shift",
         _ => key,
     };
 

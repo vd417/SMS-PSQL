@@ -9,15 +9,20 @@ public interface ISmsSender
 }
 
 /// Stub — no real SMS gateway is wired up yet, so this is the only delivery path in every
-/// environment today. Always "sends" (completes normally) so existing flows keep working, but
-/// only logs the body (which can contain OTPs, invite links, or other PII) when isDevelopment —
-/// logging it outside Development would leak secrets into production logs.
-public sealed class LoggingSmsSender(ILogger<LoggingSmsSender> logger, bool isDevelopment) : ISmsSender
+/// environment today. Always "sends" so existing flows keep working. The message body is never
+/// logged: invite and OTP texts can contain one-time codes.
+public sealed class LoggingSmsSender(ILogger<LoggingSmsSender> logger, SmsOptions platform) : ISmsSender
 {
     public Task SendAsync(string toPhone, string body, CancellationToken ct = default)
     {
-        if (isDevelopment)
-            logger.LogWarning("[DEV SMS] To={Phone} Body={Body}", toPhone, body);
+        var sender = OutboundSms.SenderId ?? PlatformSender();
+        logger.LogInformation("SMS queued to {Phone} from {Sender}", toPhone, sender);
         return Task.CompletedTask;
+    }
+
+    private string PlatformSender()
+    {
+        var id = (platform.SenderId ?? "").Trim().ToUpperInvariant();
+        return id.Length == 0 ? "CATRE" : id;
     }
 }

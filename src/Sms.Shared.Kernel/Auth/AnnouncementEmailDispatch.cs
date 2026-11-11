@@ -12,7 +12,8 @@ public static class AnnouncementEmailDispatch
         byte[]? attachmentBytes = null,
         string? attachmentFileName = null,
         string? attachmentContentType = null,
-        IReadOnlyList<EmailAttachment>? extraAttachments = null)
+        IReadOnlyList<EmailAttachment>? extraAttachments = null,
+        SchoolMailRoute? sender = null)
     {
         var n = 0;
         var subj = string.IsNullOrWhiteSpace(subject) ? "[SchoolMate] Notice" : subject.Trim();
@@ -28,7 +29,7 @@ public static class AnnouncementEmailDispatch
                 attachmentFileName,
                 attachmentContentType ?? (attachmentBytes is { Length: > 0 } ? "application/pdf" : null),
                 htmlBody,
-                extraAttachments));
+                extraAttachments).WithRoute(sender));
             n++;
         }
         return n;

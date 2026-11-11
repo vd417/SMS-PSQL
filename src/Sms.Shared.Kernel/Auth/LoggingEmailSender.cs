@@ -30,7 +30,8 @@ public sealed class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEm
         }
 
         logger.LogWarning(
-            "[DEV EMAIL] To={To} Subject={Subject} Primary={File} Extra={ExtraCount} BodyLen={BodyLen}",
+            "[DEV EMAIL] From={From} To={To} Subject={Subject} Primary={File} Extra={ExtraCount} BodyLen={BodyLen}",
+            string.IsNullOrWhiteSpace(message.FromAddress) ? "(platform)" : message.FromAddress,
             message.To,
             message.Subject,
             message.AttachmentFileName ?? "(none)",
