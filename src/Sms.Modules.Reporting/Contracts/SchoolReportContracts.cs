@@ -28,7 +28,10 @@ public sealed record SchoolReportFilters(
     string? FromDate = null,
     string? ToDate = null,
     string? FromTime = null,
-    string? ToTime = null);
+    string? ToTime = null,
+    string? Subject = null,
+    string? Period = null,
+    string? Session = null);
 
 public sealed record SchoolReportQuery(
     string ReportKey,
@@ -54,7 +57,10 @@ public sealed record SchoolReportQuery(
     string? Vehicle,
     bool Summary = false,
     IReadOnlyList<string>? Columns = null,
-    string? Format = null);
+    string? Format = null,
+    string? Subject = null,
+    string? Period = null,
+    string? Session = null);
 
 public sealed record SchoolReportCard(string Label, string Value);
 

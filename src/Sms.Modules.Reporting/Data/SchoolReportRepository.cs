@@ -27,6 +27,14 @@ public sealed class SchoolReportArgs
     public string? AttendanceStatus { get; init; }
     public string? Route { get; init; }
     public string? Vehicle { get; init; }
+    public string? Subject { get; init; }
+    public string? Period { get; init; }
+}
+
+public sealed class SessionBounds
+{
+    public DateTime? StartsOn { get; set; }
+    public DateTime? EndsOn { get; set; }
 }
 
 public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseRepository(factory)
@@ -37,6 +45,20 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
             """SELECT "Name" FROM "dbo"."Tenants" WHERE "Id" = @tenantId""",
             new { tenantId }, ct);
         return rows.FirstOrDefault() ?? "School";
+    }
+
+    public async Task<SessionBounds?> SessionBoundsAsync(string name, CancellationToken ct)
+    {
+        var rows = await QueryInlineAsync<SessionBounds>(
+            """
+            SELECT "StartsOn", "EndsOn"
+            FROM "dbo"."AcademicSessions"
+            WHERE LOWER("Name") = LOWER(@name)
+            ORDER BY "IsCurrent" DESC, "StartsOn" DESC NULLS LAST
+            LIMIT 1
+            """,
+            new { name }, ct);
+        return rows.FirstOrDefault();
     }
 
     public async Task<IReadOnlyList<string[]>> RunAsync(string key, SchoolReportArgs a, CancellationToken ct)
@@ -50,6 +72,8 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
             "fee_collection" => FeeCollectionSql,
             "fee_defaulters" => FeeDefaultersSql,
             "student_attendance" => StudentAttendanceSql,
+            "student_attendance_summary" => StudentAttendanceSummarySql,
+            "student_attendance_streak" => StudentAttendanceStreakSql,
             "staff_attendance" => StaffAttendanceSql,
             "parent" => ParentSql,
             "transport" => TransportSql,
@@ -60,12 +84,14 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
         var cols = key switch
         {
             "student" => 20,
-            "staff" => 15,
+            "staff" => 12,
             "teacher" => 13,
             "admin" => 12,
             "fee_collection" => 16,
             "fee_defaulters" => 15,
-            "student_attendance" => 11,
+            "student_attendance" => 14,
+            "student_attendance_summary" => 12,
+            "student_attendance_streak" => 9,
             "staff_attendance" => 12,
             "parent" => 13,
             "transport" => 14,
@@ -325,51 +351,92 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
         """;
 
     private static readonly string StaffSql = """
-        SELECT * FROM (
-          SELECT
-            COALESCE(t."EmployeeCode", '') AS "c0",
-            t."Name" AS "c1",
-            COALESCE(t."Designation", '') AS "c2",
-            'Teacher' AS "c3",
-            COALESCE(t."Department", '') AS "c4",
-            CASE UPPER(COALESCE(t."Gender", '')) WHEN 'M' THEN 'Male' WHEN 'F' THEN 'Female' ELSE '' END AS "c5",
-            COALESCE(t."Phone", '') AS "c6",
-            COALESCE(t."Email", '') AS "c7",
-            to_char((t."CreatedAt" + make_interval(mins => @OffsetMinutes))::date, 'YYYY-MM-DD') AS "c8",
-            '' AS "c9",
-            '' AS "c10",
-            COALESCE(t."ClassTeacher", '') AS "c11",
-            '' AS "c12",
-            to_char(t."AttendancePct", 'FM990.00') AS "c13",
-            COALESCE(t."Status", '') AS "c14",
-            t."Gender" AS g
+        WITH people AS (
+          SELECT t."Id" AS person_id, 'teacher'::text AS kind, t."UserId" AS user_id,
+                 COALESCE(t."EmployeeCode", '') AS code, t."Name" AS name, 'Teacher' AS role,
+                 COALESCE(t."Designation", '') AS designation, COALESCE(t."Department", '') AS dept,
+                 t."Gender" AS gender
           FROM "dbo"."Teachers" t
           UNION ALL
-          SELECT
-            COALESCE(st."EmployeeCode", ''),
-            st."Name",
-            COALESCE(st."Role", ''),
-            COALESCE(NULLIF(st."Role", ''), 'Staff'),
-            COALESCE(st."Department", ''),
-            CASE UPPER(COALESCE(st."Gender", '')) WHEN 'M' THEN 'Male' WHEN 'F' THEN 'Female' ELSE '' END,
-            COALESCE(st."Phone", ''),
-            COALESCE(st."Email", ''),
-            to_char((st."CreatedAt" + make_interval(mins => @OffsetMinutes))::date, 'YYYY-MM-DD'),
-            '',
-            '',
-            '',
-            '',
-            to_char(st."AttendancePct", 'FM990.00'),
-            COALESCE(st."Status", ''),
-            st."Gender"
+          SELECT st."Id", 'staff', st."UserId", COALESCE(st."EmployeeCode", ''), st."Name",
+                 COALESCE(NULLIF(st."Role", ''), 'Staff'), COALESCE(st."Role", ''),
+                 COALESCE(st."Department", ''), st."Gender"
           FROM "dbo"."Staff" st
-        ) q
-        WHERE (@Employee IS NULL OR q."c0" ILIKE @Employee ESCAPE '\' OR q."c1" ILIKE @Employee ESCAPE '\')
-          AND (@Department IS NULL OR LOWER(q."c4") = LOWER(@Department))
-          AND (@Designation IS NULL OR LOWER(q."c2") = LOWER(@Designation))
-          AND (@Role IS NULL OR LOWER(q."c3") = LOWER(@Role))
-          AND (@Gender IS NULL OR ((@Gender = 'O' AND UPPER(COALESCE(q.g, '')) NOT IN ('M', 'F')) OR UPPER(COALESCE(q.g, '')) = @Gender))
-        ORDER BY q."c1"
+        ),
+        activity AS (
+          SELECT p.person_id, p.kind, a."Date" AS day, a."Status" AS mark
+          FROM people p
+          JOIN "dbo"."StaffAttendanceRecords" a
+            ON a."PersonId" = p.person_id AND a."PersonType" = p.kind
+           AND a."Date" BETWEEN @FromDate::date AND @ToDate::date
+          UNION
+          SELECT p.person_id, p.kind, (c."At" + make_interval(mins => @OffsetMinutes))::date, NULL::varchar
+          FROM people p
+          JOIN "dbo"."CheckIns" c ON c."UserId" = p.user_id
+          WHERE p.user_id IS NOT NULL
+            AND (c."At" + make_interval(mins => @OffsetMinutes))::date BETWEEN @FromDate::date AND @ToDate::date
+        ),
+        spine AS (
+          SELECT person_id, kind, day, MAX(mark) AS mark
+          FROM activity
+          GROUP BY person_id, kind, day
+          UNION ALL
+          SELECT p.person_id, p.kind, NULL::date, NULL::varchar
+          FROM people p
+          WHERE NOT EXISTS (SELECT 1 FROM activity a WHERE a.person_id = p.person_id AND a.kind = p.kind)
+        )
+        SELECT
+          p.code AS "c0",
+          p.name AS "c1",
+          p.role AS "c2",
+          p.dept AS "c3",
+          COALESCE(to_char(s.day, 'YYYY-MM-DD'), '') AS "c4",
+          COALESCE(to_char(ci.in_at + make_interval(mins => @OffsetMinutes), 'HH24:MI'), '') AS "c5",
+          COALESCE(to_char(ci.out_at + make_interval(mins => @OffsetMinutes), 'HH24:MI'), '') AS "c6",
+          CASE WHEN ci.in_at IS NOT NULL AND ci.out_at IS NOT NULL AND ci.out_at > ci.in_at
+            THEN to_char(EXTRACT(EPOCH FROM (ci.out_at - ci.in_at)) / 3600, 'FM990.00') ELSE '' END AS "c7",
+          COALESCE(slots.periods, '') AS "c8",
+          COALESCE(slots.subjects, '') AS "c9",
+          COALESCE(lv.kind, CASE WHEN s.mark ILIKE '%leave%' THEN s.mark ELSE '' END, '') AS "c10",
+          CASE LOWER(COALESCE(s.mark, ''))
+            WHEN 'present' THEN 'P' WHEN 'absent' THEN 'A' WHEN 'late' THEN 'L'
+            WHEN 'half_day' THEN 'H' WHEN 'pending' THEN 'N' WHEN 'leave' THEN 'LV'
+            WHEN '' THEN '' ELSE s.mark END AS "c11"
+        FROM spine s
+        JOIN people p ON p.person_id = s.person_id AND p.kind = s.kind
+        LEFT JOIN LATERAL (
+          SELECT MIN(c."At") FILTER (WHERE c."Kind" = 'in') AS in_at,
+                 MAX(c."At") FILTER (WHERE c."Kind" = 'out') AS out_at
+          FROM "dbo"."CheckIns" c
+          WHERE p.user_id IS NOT NULL AND c."UserId" = p.user_id AND s.day IS NOT NULL
+            AND (c."At" + make_interval(mins => @OffsetMinutes))::date = s.day
+        ) ci ON true
+        LEFT JOIN LATERAL (
+          SELECT string_agg(x.period, ', ' ORDER BY x.period::int) AS periods,
+                 string_agg(x.subject, ', ' ORDER BY x.period::int) AS subjects
+          FROM (
+            SELECT DISTINCT ts."Period"::text AS period, NULLIF(ts."Subject", '') AS subject
+            FROM "dbo"."TimetableSlots" ts
+            WHERE p.kind = 'teacher' AND ts."TeacherId" = p.person_id AND s.day IS NOT NULL
+              AND upper(left(COALESCE(ts."Day", ''), 3)) =
+                  upper((ARRAY['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])[EXTRACT(DOW FROM s.day)::int + 1])
+          ) x
+        ) slots ON true
+        LEFT JOIN LATERAL (
+          SELECT lr."Type" AS kind
+          FROM "dbo"."LeaveRequests" lr
+          WHERE p.user_id IS NOT NULL AND lr."RequesterId" = p.user_id AND s.day IS NOT NULL
+            AND lr."Status" ILIKE 'approv%'
+            AND s.day BETWEEN lr."FromDate" AND COALESCE(lr."ToDate", lr."FromDate")
+          ORDER BY lr."FromDate" DESC
+          LIMIT 1
+        ) lv ON true
+        WHERE (@Employee IS NULL OR p.code ILIKE @Employee ESCAPE '\' OR p.name ILIKE @Employee ESCAPE '\')
+          AND (@Department IS NULL OR LOWER(p.dept) = LOWER(@Department))
+          AND (@Designation IS NULL OR LOWER(p.designation) = LOWER(@Designation))
+          AND (@Role IS NULL OR LOWER(p.role) = LOWER(@Role))
+          AND (@Gender IS NULL OR ((@Gender = 'O' AND UPPER(COALESCE(p.gender, '')) NOT IN ('M', 'F')) OR UPPER(COALESCE(p.gender, '')) = @Gender))
+        ORDER BY p.name, s.day DESC NULLS LAST
         LIMIT 5000
         """;
 
@@ -379,30 +446,33 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
           COALESCE(t."EmployeeCode", '') AS "c1",
           t."Name" AS "c2",
           COALESCE(t."Department", '') AS "c3",
-          COALESCE(t."SubjectsCsv", '') AS "c4",
-          COALESCE(cls.names, '') AS "c5",
-          COALESCE(cls.sections, '') AS "c6",
-          COALESCE(t."ClassTeacher", '') AS "c7",
-          COALESCE(stu.n, 0)::text AS "c8",
-          t."Load"::text AS "c9",
-          to_char((t."CreatedAt" + make_interval(mins => @OffsetMinutes))::date, 'YYYY-MM-DD') AS "c10",
-          to_char(t."AttendancePct", 'FM990.00') AS "c11",
+          COALESCE(NULLIF(ts."Subject", ''), NULLIF(t."SubjectsCsv", ''), sub.names, '') AS "c4",
+          COALESCE(NULLIF(cls."Name", ''), NULLIF(ts."ClassName", ''), '') AS "c5",
+          COALESCE(cls."Section", '') AS "c6",
+          COALESCE(ts."Period"::text, '') AS "c7",
+          CASE WHEN COALESCE(ts."StartTime", '') <> '' OR COALESCE(ts."EndTime", '') <> ''
+            THEN trim(both FROM concat_ws('–', NULLIF(ts."StartTime", ''), NULLIF(ts."EndTime", '')))
+            ELSE '' END AS "c8",
+          COALESCE(t."ClassTeacher", '') AS "c9",
+          COALESCE(stu.n, 0)::text AS "c10",
+          to_char((t."CreatedAt" + make_interval(mins => @OffsetMinutes))::date, 'YYYY-MM-DD') AS "c11",
           COALESCE(t."Status", '') AS "c12"
         FROM "dbo"."Teachers" t
+        LEFT JOIN "dbo"."TimetableSlots" ts ON ts."TeacherId" = t."Id"
+        LEFT JOIN "dbo"."Classes" cls ON cls."Id" = ts."ClassId"
         LEFT JOIN LATERAL (
-          SELECT string_agg(DISTINCT COALESCE(NULLIF(c."Name", ''), c."Grade"), ', ') AS names,
-                 string_agg(DISTINCT NULLIF(c."Section", ''), ', ') AS sections
-          FROM "dbo"."Classes" c WHERE c."ClassTeacherId" = t."Id"
-        ) cls ON true
+          SELECT string_agg(DISTINCT s."Name", ', ') AS names
+          FROM "dbo"."Subjects" s WHERE s."TeacherId" = t."Id"
+        ) sub ON true
         LEFT JOIN LATERAL (
           SELECT COUNT(*)::int AS n FROM "dbo"."Students" s
-          WHERE COALESCE(t."ClassTeacher", '') <> ''
-            AND LOWER(COALESCE(NULLIF(s."ClassLabel", ''), s."Grade", '')) = LOWER(t."ClassTeacher")
+          WHERE LOWER(COALESCE(NULLIF(s."ClassLabel", ''), NULLIF(s."Grade", ''), '')) =
+                LOWER(COALESCE(NULLIF(cls."Name", ''), NULLIF(ts."ClassName", ''), NULLIF(t."ClassTeacher", ''), ''))
         ) stu ON true
         WHERE (@Teacher IS NULL OR t."Name" ILIKE @Teacher ESCAPE '\' OR COALESCE(t."EmployeeCode", '') ILIKE @Teacher ESCAPE '\')
           AND (@Department IS NULL OR LOWER(COALESCE(t."Department", '')) = LOWER(@Department))
         """ + G("t") + """
-        ORDER BY t."Name"
+        ORDER BY t."Name", ts."Period"
         LIMIT 5000
         """;
 
@@ -513,63 +583,331 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
         """;
 
     private static readonly string StudentAttendanceSql = """
+        SELECT * FROM (
+          SELECT
+            to_char(p."Date", 'YYYY-MM-DD') AS "c0",
+            s."AdmissionNo" AS "c1",
+            s."Name" AS "c2",
+            COALESCE(s."GuardianName", '') AS "c3",
+            COALESCE(NULLIF(s."ClassLabel", ''), NULLIF(s."Grade", ''), '') AS "c4",
+            COALESCE(s."Section", '') AS "c5",
+            CASE WHEN s."Roll" = 0 THEN '' ELSE s."Roll"::text END AS "c6",
+            COALESCE(p."Subject", '') AS "c7",
+            p."Period"::text AS "c8",
+            CASE WHEN COALESCE(ts."StartTime", '') <> '' OR COALESCE(ts."EndTime", '') <> ''
+              THEN trim(both FROM concat_ws('–', NULLIF(ts."StartTime", ''), NULLIF(ts."EndTime", '')))
+              ELSE '' END AS "c9",
+            CASE LOWER(COALESCE(p."Status", ''))
+              WHEN 'present' THEN 'P' WHEN 'absent' THEN 'A' WHEN 'late' THEN 'L'
+              WHEN 'half_day' THEN 'H' WHEN 'pending' THEN 'N'
+              WHEN 'leave' THEN 'LV' WHEN 'on_leave' THEN 'LV'
+              ELSE COALESCE(p."Status", '') END AS "c10",
+            '' AS "c11",
+            COALESCE(u."Name", '') AS "c12",
+            COALESCE(to_char(p."UpdatedAt" + make_interval(mins => @OffsetMinutes), 'YYYY-MM-DD HH24:MI'), '') AS "c13"
+          FROM "dbo"."PeriodAttendanceRecords" p
+          JOIN "dbo"."Students" s ON s."Id" = p."StudentId"
+          LEFT JOIN LATERAL (
+            SELECT slot."StartTime", slot."EndTime"
+            FROM "dbo"."TimetableSlots" slot
+            WHERE slot."ClassId" = p."ClassId" AND slot."Period" = p."Period"
+              AND upper(left(COALESCE(slot."Day", ''), 3)) =
+                  upper((ARRAY['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])[EXTRACT(DOW FROM p."Date")::int + 1])
+              AND (COALESCE(slot."Subject", '') = '' OR lower(slot."Subject") = lower(p."Subject"))
+            ORDER BY CASE WHEN lower(COALESCE(slot."Subject", '')) = lower(p."Subject") THEN 0 ELSE 1 END
+            LIMIT 1
+          ) ts ON true
+          LEFT JOIN "dbo"."Users" u ON u."Id" = p."MarkedBy"
+          WHERE p."Date" >= @FromDate::date AND p."Date" <= @ToDate::date
+            AND EXTRACT(DOW FROM p."Date") <> 0
+            AND NOT EXISTS (
+              SELECT 1 FROM "dbo"."CalendarEvents" ev
+              WHERE ev."Date" = p."Date" AND LOWER(COALESCE(ev."Type", '')) = 'holiday')
+            AND LOWER(COALESCE(s."Status", 'active')) NOT IN ('inactive', 'removed', 'left', 'withdrawn')
+            AND (@ClassName IS NULL OR LOWER(COALESCE(NULLIF(s."ClassLabel", ''), s."Grade", '')) = LOWER(@ClassName))
+            AND (@Section IS NULL OR LOWER(COALESCE(s."Section", '')) = LOWER(@Section))
+            AND (@Student IS NULL OR s."Name" ILIKE @Student ESCAPE '\' OR s."AdmissionNo" ILIKE @Student ESCAPE '\')
+            AND (@Subject IS NULL OR p."Subject" ILIKE @Subject ESCAPE '\')
+            AND (@Period IS NULL OR p."Period"::text = @Period)
+            AND (@AttendanceStatus IS NULL OR LOWER(p."Status") = LOWER(@AttendanceStatus)
+              OR (LOWER(@AttendanceStatus) = 'leave' AND LOWER(p."Status") IN ('leave', 'on_leave')))
+          UNION ALL
+          SELECT
+            to_char(a."Date", 'YYYY-MM-DD'),
+            s."AdmissionNo",
+            s."Name",
+            COALESCE(s."GuardianName", ''),
+            COALESCE(NULLIF(s."ClassLabel", ''), NULLIF(s."Grade", ''), ''),
+            COALESCE(s."Section", ''),
+            CASE WHEN s."Roll" = 0 THEN '' ELSE s."Roll"::text END,
+            '',
+            '',
+            '',
+            CASE LOWER(COALESCE(a."Status", ''))
+              WHEN 'present' THEN 'P' WHEN 'absent' THEN 'A' WHEN 'late' THEN 'L'
+              WHEN 'half_day' THEN 'H' WHEN 'pending' THEN 'N'
+              WHEN 'leave' THEN 'LV' WHEN 'on_leave' THEN 'LV'
+              ELSE COALESCE(a."Status", '') END,
+            '',
+            COALESCE(u."Name", ''),
+            ''
+          FROM "dbo"."AttendanceRecords" a
+          JOIN "dbo"."Students" s ON s."Id" = a."StudentId"
+          LEFT JOIN "dbo"."Users" u ON u."Id" = a."MarkedBy"
+          WHERE a."Date" >= @FromDate::date AND a."Date" <= @ToDate::date
+            AND EXTRACT(DOW FROM a."Date") <> 0
+            AND NOT EXISTS (
+              SELECT 1 FROM "dbo"."CalendarEvents" ev
+              WHERE ev."Date" = a."Date" AND LOWER(COALESCE(ev."Type", '')) = 'holiday')
+            AND NOT EXISTS (
+              SELECT 1 FROM "dbo"."PeriodAttendanceRecords" p
+              WHERE p."StudentId" = a."StudentId" AND p."Date" = a."Date")
+            AND @Subject IS NULL AND @Period IS NULL
+            AND LOWER(COALESCE(s."Status", 'active')) NOT IN ('inactive', 'removed', 'left', 'withdrawn')
+            AND (@ClassName IS NULL OR LOWER(COALESCE(NULLIF(s."ClassLabel", ''), s."Grade", '')) = LOWER(@ClassName))
+            AND (@Section IS NULL OR LOWER(COALESCE(s."Section", '')) = LOWER(@Section))
+            AND (@Student IS NULL OR s."Name" ILIKE @Student ESCAPE '\' OR s."AdmissionNo" ILIKE @Student ESCAPE '\')
+            AND (@AttendanceStatus IS NULL OR LOWER(a."Status") = LOWER(@AttendanceStatus)
+              OR (LOWER(@AttendanceStatus) = 'leave' AND LOWER(a."Status") IN ('leave', 'on_leave')))
+        ) q
+        ORDER BY q."c0" DESC, q."c2", q."c8"
+        LIMIT 5000
+        """;
+
+    private const string StudentDayCtes = """
+        days AS (
+          SELECT g.day::date AS day
+          FROM generate_series(@FromDate::date, @ToDate::date, interval '1 day') AS g(day)
+          WHERE EXTRACT(DOW FROM g.day) <> 0
+            AND NOT EXISTS (
+              SELECT 1 FROM "dbo"."CalendarEvents" ev
+              WHERE ev."Date" = g.day::date AND LOWER(COALESCE(ev."Type", '')) = 'holiday')
+        ),
+        roster AS (
+          SELECT s."Id" AS id,
+                 s."AdmissionNo" AS adm,
+                 s."Name" AS name,
+                 COALESCE(s."GuardianName", '') AS guardian,
+                 COALESCE(NULLIF(s."ClassLabel", ''), NULLIF(s."Grade", ''), '') AS class_name,
+                 COALESCE(s."Section", '') AS section,
+                 CASE WHEN s."Roll" = 0 THEN '' ELSE s."Roll"::text END AS roll
+          FROM "dbo"."Students" s
+          WHERE LOWER(COALESCE(s."Status", 'active')) NOT IN ('inactive', 'removed', 'left', 'withdrawn')
+            AND (@ClassName IS NULL OR LOWER(COALESCE(NULLIF(s."ClassLabel", ''), s."Grade", '')) = LOWER(@ClassName))
+            AND (@Section IS NULL OR LOWER(COALESCE(s."Section", '')) = LOWER(@Section))
+            AND (@Student IS NULL OR s."Name" ILIKE @Student ESCAPE '\' OR s."AdmissionNo" ILIKE @Student ESCAPE '\')
+        ),
+        slots AS (
+          SELECT lower(COALESCE(NULLIF(cls."Name", ''), NULLIF(ts."ClassName", ''), '')) AS class_name,
+                 lower(COALESCE(cls."Section", '')) AS section,
+                 upper(left(COALESCE(ts."Day", ''), 3)) AS dow,
+                 ts."Period"::text AS period,
+                 COALESCE(ts."Subject", '') AS subject
+          FROM "dbo"."TimetableSlots" ts
+          LEFT JOIN "dbo"."Classes" cls ON cls."Id" = ts."ClassId"
+        ),
+        scope AS (
+          SELECT r.id, d.day
+          FROM roster r
+          JOIN days d ON true
+          WHERE (@Subject IS NULL AND @Period IS NULL)
+             OR EXISTS (
+               SELECT 1 FROM slots sl
+               WHERE sl.class_name = lower(r.class_name)
+                 AND (sl.section = '' OR r.section = '' OR sl.section = lower(r.section))
+                 AND sl.dow = upper((ARRAY['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])[EXTRACT(DOW FROM d.day)::int + 1])
+                 AND (@Subject IS NULL OR sl.subject ILIKE @Subject ESCAPE '\')
+                 AND (@Period IS NULL OR sl.period = @Period)
+             )
+             OR EXISTS (
+               SELECT 1 FROM "dbo"."PeriodAttendanceRecords" p
+               WHERE p."StudentId" = r.id AND p."Date" = d.day
+                 AND (@Subject IS NULL OR p."Subject" ILIKE @Subject ESCAPE '\')
+                 AND (@Period IS NULL OR p."Period"::text = @Period)
+             )
+        ),
+        raw_marks AS (
+          SELECT p."StudentId" AS id, p."Date" AS day, LOWER(p."Status") AS st
+          FROM "dbo"."PeriodAttendanceRecords" p
+          WHERE p."Date" BETWEEN @FromDate::date AND @ToDate::date
+            AND (@Subject IS NULL OR p."Subject" ILIKE @Subject ESCAPE '\')
+            AND (@Period IS NULL OR p."Period"::text = @Period)
+          UNION ALL
+          SELECT a."StudentId", a."Date", LOWER(a."Status")
+          FROM "dbo"."AttendanceRecords" a
+          WHERE @Subject IS NULL AND @Period IS NULL
+            AND a."Date" BETWEEN @FromDate::date AND @ToDate::date
+            AND NOT EXISTS (
+              SELECT 1 FROM "dbo"."PeriodAttendanceRecords" p
+              WHERE p."StudentId" = a."StudentId" AND p."Date" = a."Date")
+        ),
+        day_status AS (
+          SELECT id, day,
+            CASE
+              WHEN bool_or(st IN ('leave', 'on_leave')) THEN 'leave'
+              WHEN bool_or(st = 'absent') AND NOT bool_or(st IN ('present', 'half_day', 'late')) THEN 'absent'
+              WHEN bool_or(st = 'late') AND NOT bool_or(st IN ('present', 'half_day')) THEN 'late'
+              WHEN bool_or(st IN ('present', 'half_day')) THEN 'present'
+              ELSE 'pending'
+            END AS st
+          FROM raw_marks
+          GROUP BY id, day
+        )
+        """;
+
+    private static readonly string StudentAttendanceSummarySql = "WITH " + StudentDayCtes + """
         SELECT
-          to_char(a."Date", 'YYYY-MM-DD') AS "c0",
-          s."AdmissionNo" AS "c1",
-          s."Name" AS "c2",
-          COALESCE(NULLIF(s."ClassLabel", ''), NULLIF(s."Grade", ''), '') AS "c3",
-          COALESCE(s."Section", '') AS "c4",
-          CASE WHEN s."Roll" = 0 THEN '' ELSE s."Roll"::text END AS "c5",
-          COALESCE(a."Status", '') AS "c6",
-          '' AS "c7",
-          '' AS "c8",
-          COALESCE(u."Name", '') AS "c9",
-          '' AS "c10"
-        FROM "dbo"."AttendanceRecords" a
-        JOIN "dbo"."Students" s ON s."Id" = a."StudentId"
-        LEFT JOIN "dbo"."Users" u ON u."Id" = a."MarkedBy"
-        WHERE a."Date" >= @FromDate::date AND a."Date" <= @ToDate::date
-          AND (@ClassName IS NULL OR LOWER(COALESCE(NULLIF(s."ClassLabel", ''), s."Grade", '')) = LOWER(@ClassName))
-          AND (@Section IS NULL OR LOWER(COALESCE(s."Section", '')) = LOWER(@Section))
-          AND (@Student IS NULL OR s."Name" ILIKE @Student ESCAPE '\' OR s."AdmissionNo" ILIKE @Student ESCAPE '\')
-          AND (@AttendanceStatus IS NULL OR LOWER(a."Status") = LOWER(@AttendanceStatus))
-        ORDER BY a."Date" DESC, s."Name"
+          r.adm AS "c0",
+          r.name AS "c1",
+          r.guardian AS "c2",
+          r.class_name AS "c3",
+          r.section AS "c4",
+          r.roll AS "c5",
+          COUNT(sc.day)::text AS "c6",
+          COUNT(sc.day) FILTER (WHERE ds.st = 'present')::text AS "c7",
+          COUNT(sc.day) FILTER (WHERE ds.st = 'absent')::text AS "c8",
+          COUNT(sc.day) FILTER (WHERE ds.st = 'leave')::text AS "c9",
+          COUNT(sc.day) FILTER (WHERE ds.st = 'late')::text AS "c10",
+          CASE WHEN COUNT(sc.day) = 0 THEN '0.0'
+            ELSE to_char((100.0 * COUNT(sc.day) FILTER (WHERE ds.st IN ('present', 'late'))) / COUNT(sc.day), 'FM990.0')
+          END AS "c11"
+        FROM roster r
+        JOIN scope sc ON sc.id = r.id
+        LEFT JOIN day_status ds ON ds.id = sc.id AND ds.day = sc.day
+        WHERE @AttendanceStatus IS NULL
+           OR EXISTS (
+             SELECT 1 FROM raw_marks m
+             WHERE m.id = r.id
+               AND (m.st = LOWER(@AttendanceStatus)
+                 OR (LOWER(@AttendanceStatus) = 'leave' AND m.st IN ('leave', 'on_leave')))
+           )
+        GROUP BY r.id, r.adm, r.name, r.guardian, r.class_name, r.section, r.roll
+        ORDER BY r.class_name, r.section, r.name
+        LIMIT 5000
+        """;
+
+    private static readonly string StudentAttendanceStreakSql = "WITH " + StudentDayCtes + """
+        , numbered AS (
+          SELECT sc.id, sc.day,
+                 ROW_NUMBER() OVER (PARTITION BY sc.id ORDER BY sc.day) AS wrn,
+                 COALESCE(ds.st, '') AS st
+          FROM scope sc
+          LEFT JOIN day_status ds ON ds.id = sc.id AND ds.day = sc.day
+        ),
+        absent AS (
+          SELECT id, day, wrn FROM numbered WHERE st = 'absent'
+        ),
+        islands AS (
+          SELECT id, day, wrn - ROW_NUMBER() OVER (PARTITION BY id ORDER BY wrn) AS grp
+          FROM absent
+        ),
+        streaks AS (
+          SELECT id, COUNT(*) AS n, MIN(day) AS from_day, MAX(day) AS to_day
+          FROM islands
+          GROUP BY id, grp
+          HAVING COUNT(*) >= 3
+        ),
+        best AS (
+          SELECT DISTINCT ON (id) id, n, from_day, to_day
+          FROM streaks
+          ORDER BY id, n DESC, to_day DESC
+        )
+        SELECT
+          r.adm AS "c0",
+          r.name AS "c1",
+          r.guardian AS "c2",
+          r.class_name AS "c3",
+          r.section AS "c4",
+          r.roll AS "c5",
+          b.n::text AS "c6",
+          to_char(b.from_day, 'YYYY-MM-DD') AS "c7",
+          to_char(b.to_day, 'YYYY-MM-DD') AS "c8"
+        FROM best b
+        JOIN roster r ON r.id = b.id
+        ORDER BY b.n DESC, r.class_name, r.name
         LIMIT 5000
         """;
 
     private static readonly string StaffAttendanceSql = """
+        WITH people AS (
+          SELECT t."Id" AS person_id, 'teacher'::text AS kind, t."UserId" AS user_id,
+                 COALESCE(t."EmployeeCode", '') AS code, t."Name" AS name,
+                 COALESCE(t."Department", '') AS dept, COALESCE(t."Designation", '') AS designation
+          FROM "dbo"."Teachers" t
+          UNION ALL
+          SELECT st."Id", 'staff', st."UserId", COALESCE(st."EmployeeCode", ''), st."Name",
+                 COALESCE(st."Department", ''), COALESCE(st."Role", '')
+          FROM "dbo"."Staff" st
+        ),
+        activity AS (
+          SELECT p.person_id, p.kind, a."Date" AS day, a."Status" AS mark
+          FROM people p
+          JOIN "dbo"."StaffAttendanceRecords" a
+            ON a."PersonId" = p.person_id AND a."PersonType" = p.kind
+           AND a."Date" BETWEEN @FromDate::date AND @ToDate::date
+          UNION
+          SELECT p.person_id, p.kind, (c."At" + make_interval(mins => @OffsetMinutes))::date, NULL::varchar
+          FROM people p
+          JOIN "dbo"."CheckIns" c ON c."UserId" = p.user_id
+          WHERE p.user_id IS NOT NULL
+            AND (c."At" + make_interval(mins => @OffsetMinutes))::date BETWEEN @FromDate::date AND @ToDate::date
+        ),
+        spine AS (
+          SELECT person_id, kind, day, MAX(mark) AS mark FROM activity GROUP BY person_id, kind, day
+        )
         SELECT
-          COALESCE(t."EmployeeCode", st."EmployeeCode", '') AS "c0",
-          COALESCE(t."Name", st."Name", '') AS "c1",
-          COALESCE(t."Department", st."Department", '') AS "c2",
-          COALESCE(t."Designation", st."Role", '') AS "c3",
-          to_char(a."Date", 'YYYY-MM-DD') AS "c4",
+          p.code AS "c0",
+          p.name AS "c1",
+          p.dept AS "c2",
+          p.designation AS "c3",
+          to_char(s.day, 'YYYY-MM-DD') AS "c4",
           COALESCE(to_char(ci.in_at + make_interval(mins => @OffsetMinutes), 'HH24:MI'), '') AS "c5",
           COALESCE(to_char(ci.out_at + make_interval(mins => @OffsetMinutes), 'HH24:MI'), '') AS "c6",
           CASE WHEN ci.in_at IS NOT NULL AND ci.out_at IS NOT NULL AND ci.out_at > ci.in_at
             THEN to_char(EXTRACT(EPOCH FROM (ci.out_at - ci.in_at)) / 3600, 'FM990.00') ELSE '' END AS "c7",
-          '' AS "c8",
-          CASE WHEN a."Status" ILIKE '%leave%' THEN a."Status" ELSE '' END AS "c9",
-          COALESCE(a."Status", '') AS "c10",
-          '' AS "c11"
-        FROM "dbo"."StaffAttendanceRecords" a
-        LEFT JOIN "dbo"."Teachers" t ON a."PersonType" = 'teacher' AND t."Id" = a."PersonId"
-        LEFT JOIN "dbo"."Staff" st ON a."PersonType" = 'staff' AND st."Id" = a."PersonId"
+          COALESCE(slots.periods, '') AS "c8",
+          COALESCE(slots.subjects, '') AS "c9",
+          COALESCE(lv.kind, CASE WHEN s.mark ILIKE '%leave%' THEN s.mark ELSE '' END, '') AS "c10",
+          CASE LOWER(COALESCE(s.mark, ''))
+            WHEN 'present' THEN 'P' WHEN 'absent' THEN 'A' WHEN 'late' THEN 'L'
+            WHEN 'half_day' THEN 'H' WHEN 'pending' THEN 'N' WHEN 'leave' THEN 'LV'
+            WHEN '' THEN '' ELSE s.mark END AS "c11"
+        FROM spine s
+        JOIN people p ON p.person_id = s.person_id AND p.kind = s.kind
         LEFT JOIN LATERAL (
-          SELECT MIN("At") FILTER (WHERE "Kind" = 'in') AS in_at,
-                 MAX("At") FILTER (WHERE "Kind" = 'out') AS out_at
+          SELECT MIN(c."At") FILTER (WHERE c."Kind" = 'in') AS in_at,
+                 MAX(c."At") FILTER (WHERE c."Kind" = 'out') AS out_at
           FROM "dbo"."CheckIns" c
-          WHERE c."UserId" = COALESCE(t."UserId", st."UserId")
-            AND (c."At" + make_interval(mins => @OffsetMinutes))::date = a."Date"
+          WHERE p.user_id IS NOT NULL AND c."UserId" = p.user_id
+            AND (c."At" + make_interval(mins => @OffsetMinutes))::date = s.day
         ) ci ON true
-        WHERE a."Date" >= @FromDate::date AND a."Date" <= @ToDate::date
-          AND (@FromTime IS NULL OR ci.in_at IS NULL OR (ci.in_at + make_interval(mins => @OffsetMinutes))::time >= @FromTime::time)
+        LEFT JOIN LATERAL (
+          SELECT string_agg(x.period, ', ' ORDER BY x.period::int) AS periods,
+                 string_agg(x.subject, ', ' ORDER BY x.period::int) AS subjects
+          FROM (
+            SELECT DISTINCT ts."Period"::text AS period, NULLIF(ts."Subject", '') AS subject
+            FROM "dbo"."TimetableSlots" ts
+            WHERE p.kind = 'teacher' AND ts."TeacherId" = p.person_id
+              AND upper(left(COALESCE(ts."Day", ''), 3)) =
+                  upper((ARRAY['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])[EXTRACT(DOW FROM s.day)::int + 1])
+          ) x
+        ) slots ON true
+        LEFT JOIN LATERAL (
+          SELECT lr."Type" AS kind
+          FROM "dbo"."LeaveRequests" lr
+          WHERE p.user_id IS NOT NULL AND lr."RequesterId" = p.user_id
+            AND lr."Status" ILIKE 'approv%'
+            AND s.day BETWEEN lr."FromDate" AND COALESCE(lr."ToDate", lr."FromDate")
+          ORDER BY lr."FromDate" DESC
+          LIMIT 1
+        ) lv ON true
+        WHERE (@FromTime IS NULL OR ci.in_at IS NULL OR (ci.in_at + make_interval(mins => @OffsetMinutes))::time >= @FromTime::time)
           AND (@ToTime IS NULL OR ci.in_at IS NULL OR (ci.in_at + make_interval(mins => @OffsetMinutes))::time <= @ToTime::time)
-          AND (@Employee IS NULL OR COALESCE(t."Name", st."Name", '') ILIKE @Employee ESCAPE '\' OR COALESCE(t."EmployeeCode", st."EmployeeCode", '') ILIKE @Employee ESCAPE '\')
-          AND (@Department IS NULL OR LOWER(COALESCE(t."Department", st."Department", '')) = LOWER(@Department))
-          AND (@Designation IS NULL OR LOWER(COALESCE(t."Designation", st."Role", '')) = LOWER(@Designation))
-          AND (@AttendanceStatus IS NULL OR LOWER(a."Status") = LOWER(@AttendanceStatus))
-        ORDER BY a."Date" DESC, 2
+          AND (@Employee IS NULL OR p.name ILIKE @Employee ESCAPE '\' OR p.code ILIKE @Employee ESCAPE '\')
+          AND (@Department IS NULL OR LOWER(p.dept) = LOWER(@Department))
+          AND (@Designation IS NULL OR LOWER(p.designation) = LOWER(@Designation))
+          AND (@AttendanceStatus IS NULL OR LOWER(COALESCE(s.mark, '')) = LOWER(@AttendanceStatus))
+        ORDER BY s.day DESC, p.name
         LIMIT 5000
         """;
 
@@ -691,7 +1029,7 @@ public sealed class SchoolReportRepository(IDbConnectionFactory factory) : BaseR
         SELECT DISTINCT "Method" AS "Value" FROM "dbo"."FeePayments" WHERE COALESCE("Method", '') <> '' ORDER BY 1;
         SELECT DISTINCT "Status" AS "Value" FROM "dbo"."FeeInvoices" WHERE COALESCE("Status", '') <> '' ORDER BY 1;
         SELECT DISTINCT "Status" AS "Value" FROM (
-          SELECT "Status" FROM "dbo"."AttendanceRecords" UNION SELECT "Status" FROM "dbo"."StaffAttendanceRecords"
+          SELECT "Status" FROM "dbo"."AttendanceRecords" UNION SELECT "Status" FROM "dbo"."StaffAttendanceRecords" UNION SELECT 'pending'
         ) a WHERE COALESCE("Status", '') <> '' ORDER BY 1;
         SELECT DISTINCT "RouteName" AS "Value" FROM "dbo"."Buses" WHERE COALESCE("RouteName", '') <> '' ORDER BY 1;
         SELECT DISTINCT "BusNo" AS "Value" FROM "dbo"."Buses" WHERE COALESCE("BusNo", '') <> '' ORDER BY 1;

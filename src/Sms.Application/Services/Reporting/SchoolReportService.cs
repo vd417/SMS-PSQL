@@ -97,8 +97,8 @@ public sealed partial class SchoolReportService(
         if (def is null)
             return ApiResult<SchoolReportSchedule>.Fail(new Error("validation_failed", "unknown report"), 422);
         var frequency = (req.Frequency ?? "").Trim().ToLowerInvariant();
-        if (frequency is not ("daily" or "weekly" or "monthly"))
-            return ApiResult<SchoolReportSchedule>.Fail(new Error("validation_failed", "frequency must be daily, weekly, or monthly"), 422);
+        if (frequency is not ("daily" or "weekly" or "15days" or "monthly"))
+            return ApiResult<SchoolReportSchedule>.Fail(new Error("validation_failed", "frequency must be daily, weekly, 15 days, or monthly"), 422);
         if (!TimeRegex().IsMatch(req.SendTime ?? ""))
             return ApiResult<SchoolReportSchedule>.Fail(new Error("validation_failed", "send time must be HH:mm"), 422);
         var format = NormalizeFormat(req.Format);
@@ -110,7 +110,14 @@ public sealed partial class SchoolReportService(
         var offset = SchoolReportMath.ClampOffset(req.OffsetMinutes);
         var send = TimeOnly.ParseExact(req.SendTime!, "HH:mm", CultureInfo.InvariantCulture);
         var next = SchoolReportMath.NextRunUtc(frequency, send, offset, req.DayOfWeek, req.DayOfMonth, clock.UtcNow);
-        var filtersJson = JsonSerializer.Serialize(req.Filters ?? new SchoolReportFilters(), Json);
+        var filters = (req.Filters ?? new SchoolReportFilters()) with
+        {
+            FromDate = null,
+            ToDate = null,
+            FromTime = null,
+            ToTime = null,
+        };
+        var filtersJson = JsonSerializer.Serialize(filters, Json);
         var recipients = string.Join(", ", emails.Emails!);
         var subject = TrimOrNull(req.Subject, 200);
         var message = TrimOrNull(req.Message, 2000);
@@ -187,6 +194,27 @@ public sealed partial class SchoolReportService(
             return (null, null, new Error("validation_failed", "to time must be HH:mm"), 422);
         var offset = SchoolReportMath.ClampOffset(query.OffsetMinutes);
         var filters = FiltersOf(query);
+        if (IsStudentAttendance(def.Key) && !string.IsNullOrWhiteSpace(query.Session))
+        {
+            var bounds = await repo.SessionBoundsAsync(query.Session.Trim(), ct);
+            if (bounds is null)
+                return (null, null, new Error("validation_failed", "academic session not found"), 422);
+            if (bounds.StartsOn is { } start)
+            {
+                var startDate = DateOnly.FromDateTime(start);
+                if (startDate > from) from = startDate;
+            }
+            if (bounds.EndsOn is { } end)
+            {
+                var endDate = DateOnly.FromDateTime(end);
+                if (endDate < to) to = endDate;
+            }
+        }
+        var outputKey = query.Summary && query.ReportKey is "student_attendance" or "student_attendance_history"
+            ? "student_attendance_summary"
+            : query.ReportKey;
+        var output = SchoolReportCatalog.Find(outputKey) ?? def;
+        var sqlKey = StudentSqlKey(output.Key);
         var args = new SchoolReportArgs
         {
             FromDate = from.ToDateTime(TimeOnly.MinValue),
@@ -206,21 +234,36 @@ public sealed partial class SchoolReportService(
             FeeHead = SchoolReportMath.Exact(filters.FeeHead),
             PaymentMode = SchoolReportMath.Exact(filters.PaymentMode),
             PaymentStatus = SchoolReportMath.Exact(filters.PaymentStatus),
-            AttendanceStatus = SchoolReportMath.Exact(filters.AttendanceStatus),
+            AttendanceStatus = IsStudentAttendance(def.Key)
+                ? NormalizeStudentAttendance(filters.AttendanceStatus)
+                : SchoolReportMath.Exact(filters.AttendanceStatus),
             Route = SchoolReportMath.Exact(filters.Route),
             Vehicle = SchoolReportMath.Exact(filters.Vehicle),
+            Subject = SchoolReportMath.Like(query.Subject),
+            Period = SchoolReportMath.Exact(query.Period),
         };
-        var detail = await repo.RunAsync(def.Key, args, ct);
-        IReadOnlyList<string> columns = def.Columns;
-        IReadOnlyList<IReadOnlyList<string>> rows = detail;
-        var cards = SchoolReportMath.Cards(def.Key, columns, rows);
-        var charts = SchoolReportMath.Charts(def.Key, columns, rows);
-        if (query.Summary)
+        var skip = to < from
+            || (output.Key == "student_attendance_history" && string.IsNullOrWhiteSpace(query.Student));
+        IReadOnlyList<IReadOnlyList<string>> rows = skip ? [] : await repo.RunAsync(sqlKey, args, ct);
+        if (output.Key == "student_attendance_class")
+            rows = SchoolReportMath.ClassAttendance(rows);
+        else if (output.Key == "student_attendance_low")
+            rows = SchoolReportMath.Below75(rows);
+        IReadOnlyList<string> columns = output.Columns;
+        if (output.Key is "student_attendance" or "student_attendance_history")
+            (columns, rows) = SchoolReportMath.OmitIfBlank(columns, rows, "Subject", "Period");
+        var cards = SchoolReportMath.Cards(output.Key, columns, rows);
+        var charts = SchoolReportMath.Charts(output.Key, columns, rows);
+        if (query.Summary && !IsStudentAttendance(def.Key))
             (columns, rows) = SchoolReportMath.Summarize(def.Key, columns, rows);
-        (columns, rows) = SchoolReportMath.KeepColumns(columns, rows, query.Columns);
+        var keep = query.Columns;
+        if (IsStudentAttendance(output.Key) && keep is { Count: > 0 }
+            && keep.Any(k => !columns.Any(c => string.Equals(c, k, StringComparison.OrdinalIgnoreCase))))
+            keep = null;
+        (columns, rows) = SchoolReportMath.KeepColumns(columns, rows, keep);
         var school = await repo.SchoolNameAsync(tid, ct);
         var result = new SchoolReportResult(
-            def.Key, def.Title, def.Dated, def.Note, school,
+            output.Key, output.Title, output.Dated, output.Note, school,
             from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             SchoolReportMath.FilterLabel(filters),
@@ -248,19 +291,17 @@ public sealed partial class SchoolReportService(
         try { filters = JsonSerializer.Deserialize<SchoolReportFilters>(row.FiltersJson, Json); }
         catch { filters = null; }
         var window = SchoolReportMath.Window(row.Frequency, local);
-        if (DateOnly.TryParse(filters?.FromDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var savedFrom)
-            && DateOnly.TryParse(filters?.ToDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var savedTo))
-            window = (savedFrom, savedTo);
         var query = new SchoolReportQuery(
             row.ReportKey,
             window.From.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             window.To.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            string.IsNullOrWhiteSpace(filters?.FromTime) ? null : filters.FromTime,
-            string.IsNullOrWhiteSpace(filters?.ToTime) ? null : filters.ToTime,
+            null,
+            null,
             row.UtcOffsetMinutes,
             filters?.ClassName, filters?.Section, filters?.Student, filters?.Teacher, filters?.Employee,
             filters?.Department, filters?.Designation, filters?.Role, filters?.Gender, filters?.FeeHead,
-            filters?.PaymentMode, filters?.PaymentStatus, filters?.AttendanceStatus, filters?.Route, filters?.Vehicle);
+            filters?.PaymentMode, filters?.PaymentStatus, filters?.AttendanceStatus, filters?.Route, filters?.Vehicle,
+            Subject: filters?.Subject, Period: filters?.Period, Session: filters?.Session);
         var built = await BuildAsync(query, ct);
         IReadOnlyList<SchoolReportEmailResult> results;
         if (built.Error is { } error)
@@ -352,7 +393,34 @@ public sealed partial class SchoolReportService(
 
     private static SchoolReportFilters FiltersOf(SchoolReportQuery q) => new(
         q.ClassName, q.Section, q.Student, q.Teacher, q.Employee, q.Department, q.Designation, q.Role,
-        q.Gender, q.FeeHead, q.PaymentMode, q.PaymentStatus, q.AttendanceStatus, q.Route, q.Vehicle);
+        q.Gender, q.FeeHead, q.PaymentMode, q.PaymentStatus, q.AttendanceStatus, q.Route, q.Vehicle,
+        Subject: q.Subject, Period: q.Period, Session: q.Session);
+
+    private static bool IsStudentAttendance(string key) =>
+        key.StartsWith("student_attendance", StringComparison.OrdinalIgnoreCase);
+
+    private static string StudentSqlKey(string key) => key switch
+    {
+        "student_attendance_history" => "student_attendance",
+        "student_attendance_low" or "student_attendance_class" => "student_attendance_summary",
+        _ => key,
+    };
+
+    private static string? NormalizeStudentAttendance(string? value)
+    {
+        var v = value?.Trim().ToLowerInvariant();
+        return v switch
+        {
+            null or "" => null,
+            "p" or "present" => "present",
+            "a" or "absent" => "absent",
+            "l" or "late" => "late",
+            "h" or "half day" or "half_day" or "halfday" => "half_day",
+            "n" or "pending" => "pending",
+            "lv" or "leave" or "on_leave" or "on leave" => "leave",
+            _ => v,
+        };
+    }
 
     private static string? NormalizeGender(string? value)
     {

@@ -13,6 +13,7 @@ public static class SchoolReportMath
         return frequency switch
         {
             "weekly" => (today.AddDays(-7), today.AddDays(-1)),
+            "15days" => (today.AddDays(-15), today.AddDays(-1)),
             "monthly" => (new DateOnly(today.Year, today.Month, 1).AddMonths(-1),
                 new DateOnly(today.Year, today.Month, 1).AddDays(-1)),
             _ => (today.AddDays(-1), today.AddDays(-1)),
@@ -34,6 +35,11 @@ public static class SchoolReportMath
             while ((int)date.DayOfWeek != want && guard++ < 8) date = date.AddDays(1);
             candidate = date.Add(sendTime.ToTimeSpan());
             if (candidate <= local) candidate = candidate.AddDays(7);
+        }
+        else if (frequency == "15days")
+        {
+            candidate = local.Date.Add(sendTime.ToTimeSpan());
+            if (candidate <= local) candidate = candidate.AddDays(15);
         }
         else if (frequency == "monthly")
         {
@@ -90,6 +96,9 @@ public static class SchoolReportMath
         Add("Attendance", f.AttendanceStatus);
         Add("Route", f.Route);
         Add("Vehicle", f.Vehicle);
+        Add("Subject", f.Subject);
+        Add("Period", f.Period);
+        Add("Session", f.Session);
         return parts.Count == 0 ? "None" : string.Join(" · ", parts);
     }
 
@@ -136,12 +145,25 @@ public static class SchoolReportMath
                 Sum("Outstanding Amount", "Outstanding");
                 break;
             case "student_attendance":
+            case "student_attendance_history":
             case "staff_attendance":
                 var status = Index(columns, "Attendance Status");
                 if (status >= 0)
                 {
-                    var present = rows.Count(r => Cell(r, status).Contains("present", StringComparison.OrdinalIgnoreCase));
+                    var present = rows.Count(r => IsMark(Cell(r, status), "P", "present"));
+                    var pending = rows.Count(r => IsMark(Cell(r, status), "N", "pending"));
                     cards.Add(new("Present", present.ToString(CultureInfo.InvariantCulture)));
+                    cards.Add(new("Pending", pending.ToString(CultureInfo.InvariantCulture)));
+                }
+                break;
+            case "student_attendance_summary":
+            case "student_attendance_low":
+            case "student_attendance_class":
+                var attendance = Index(columns, "Attendance Percentage");
+                if (attendance >= 0 && rows.Count > 0)
+                {
+                    var avg = rows.Average(r => (double)Num(Cell(r, attendance)));
+                    cards.Add(new("Average %", avg.ToString("0.0", CultureInfo.InvariantCulture)));
                 }
                 break;
             case "academic":
@@ -195,7 +217,14 @@ public static class SchoolReportMath
                 ]));
                 break;
             case "student_attendance":
+            case "student_attendance_history":
                 AddCount("Student Attendance", "Attendance Status");
+                break;
+            case "student_attendance_summary":
+            case "student_attendance_low":
+            case "student_attendance_streak":
+            case "student_attendance_class":
+                AddCount("Students by Class", "Class");
                 break;
             case "staff_attendance":
                 AddCount("Staff Attendance", "Attendance Status");
@@ -208,6 +237,56 @@ public static class SchoolReportMath
                 break;
         }
         return charts;
+    }
+
+    /// <summary>One row per class and section from the monthly summary shape.</summary>
+    public static IReadOnlyList<IReadOnlyList<string>> ClassAttendance(IReadOnlyList<IReadOnlyList<string>> rows) =>
+        rows
+            .GroupBy(r => (Class: Cell(r, 3).Trim(), Section: Cell(r, 4).Trim()))
+            .OrderBy(g => g.Key.Class, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(g => g.Key.Section, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var present = g.Sum(r => Num(Cell(r, 7)));
+                var absent = g.Sum(r => Num(Cell(r, 8)));
+                var leave = g.Sum(r => Num(Cell(r, 9)));
+                var late = g.Sum(r => Num(Cell(r, 10)));
+                var denom = g.Sum(r => Num(Cell(r, 6)));
+                var pct = denom == 0 ? 0 : (present + late) / denom * 100m;
+                return (IReadOnlyList<string>)new List<string>
+                {
+                    g.Key.Class,
+                    g.Key.Section,
+                    g.Count().ToString(CultureInfo.InvariantCulture),
+                    g.Max(r => Num(Cell(r, 6))).ToString("0.##", CultureInfo.InvariantCulture),
+                    present.ToString("0.##", CultureInfo.InvariantCulture),
+                    absent.ToString("0.##", CultureInfo.InvariantCulture),
+                    leave.ToString("0.##", CultureInfo.InvariantCulture),
+                    late.ToString("0.##", CultureInfo.InvariantCulture),
+                    pct.ToString("0.0", CultureInfo.InvariantCulture),
+                };
+            })
+            .ToList();
+
+    public static IReadOnlyList<IReadOnlyList<string>> Below75(IReadOnlyList<IReadOnlyList<string>> rows) =>
+        rows.Where(r => Num(Cell(r, 6)) > 0 && Num(Cell(r, 11)) < 75m).ToList();
+
+    /// <summary>Drops a column when every row is blank, so subject and period stay off daily-only marks.</summary>
+    public static (IReadOnlyList<string> Columns, IReadOnlyList<IReadOnlyList<string>> Rows) OmitIfBlank(
+        IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<string>> rows, params string[] headers)
+    {
+        if (rows.Count == 0 || headers.Length == 0) return (columns, rows);
+        var drop = new HashSet<int>();
+        foreach (var header in headers)
+        {
+            var i = Index(columns, header);
+            if (i >= 0 && rows.All(r => string.IsNullOrWhiteSpace(Cell(r, i)))) drop.Add(i);
+        }
+        if (drop.Count == 0) return (columns, rows);
+        var keep = Enumerable.Range(0, columns.Count).Where(i => !drop.Contains(i)).ToList();
+        return (
+            keep.Select(i => columns[i]).ToList(),
+            rows.Select(r => (IReadOnlyList<string>)keep.Select(i => Cell(r, i)).ToList()).ToList());
     }
 
     public static (IReadOnlyList<string> Columns, IReadOnlyList<IReadOnlyList<string>> Rows) KeepColumns(
@@ -321,6 +400,10 @@ public static class SchoolReportMath
             if (string.Equals(columns[i], header, StringComparison.OrdinalIgnoreCase)) return i;
         return -1;
     }
+
+    private static bool IsMark(string cell, string letter, string word) =>
+        string.Equals(cell, letter, StringComparison.OrdinalIgnoreCase)
+        || cell.Contains(word, StringComparison.OrdinalIgnoreCase);
 
     private static string Cell(IReadOnlyList<string> row, int index) =>
         index >= 0 && index < row.Count ? row[index] ?? "" : "";

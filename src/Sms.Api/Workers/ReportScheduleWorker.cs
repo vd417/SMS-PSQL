@@ -5,7 +5,8 @@ using Sms.Shared.Kernel.Time;
 namespace Sms.Api.Workers;
 
 /// Mails saved school reports. Daily sends yesterday, weekly the previous 7 days,
-/// monthly the previous calendar month. Uses the same mail sender as the rest of the API.
+/// 15 days the previous 15 days, and monthly the previous calendar month.
+/// Uses the same mail sender as the rest of the API.
 public sealed class ReportScheduleWorker(
     IServiceScopeFactory scopeFactory,
     IConfiguration config,
