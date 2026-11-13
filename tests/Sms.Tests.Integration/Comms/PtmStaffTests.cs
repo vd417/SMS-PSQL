@@ -15,6 +15,9 @@ namespace Sms.Tests.Integration.Comms;
 public class PtmStaffTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
+    private static readonly string Day = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(14).ToString("yyyy-MM-dd");
+    private static readonly string Next = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(15).ToString("yyyy-MM-dd");
+    private static readonly string Later = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(16).ToString("yyyy-MM-dd");
 
     private WebApplicationFactory<Program> App() =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
@@ -33,7 +36,7 @@ public class PtmStaffTests(PostgresFixture fx)
 
         var res = await client.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student1Id, subject = "Maths", date = "2026-10-10", time = "10:30", mode = "Video call",
+            student_id = seed.Student1Id, subject = "Maths", date = Day, time = "10:30", mode = "Video call",
         });
 
         res.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -54,7 +57,7 @@ public class PtmStaffTests(PostgresFixture fx)
         var res = await client.PostAsJsonAsync("/v1/ptm", new
         {
             student_id = seed.Student1Id, teacher_id = seed.Teacher2Id, subject = "Maths",
-            date = "2026-10-10", time = "10:30", mode = "Video call",
+            date = Day, time = "10:30", mode = "Video call",
         });
 
         res.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -71,7 +74,7 @@ public class PtmStaffTests(PostgresFixture fx)
 
         var noTeacher = await client.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student1Id, subject = "Maths", date = "2026-10-10", time = "10:30", mode = "Video call",
+            student_id = seed.Student1Id, subject = "Maths", date = Day, time = "10:30", mode = "Video call",
         });
         noTeacher.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
         (await ErrorCodeAsync(noTeacher)).Should().Be("validation_failed");
@@ -79,7 +82,7 @@ public class PtmStaffTests(PostgresFixture fx)
         var withTeacher = await client.PostAsJsonAsync("/v1/ptm", new
         {
             student_id = seed.Student1Id, teacher_id = seed.Teacher2Id, subject = "Maths",
-            date = "2026-10-10", time = "10:30", mode = "Video call",
+            date = Day, time = "10:30", mode = "Video call",
         });
         withTeacher.StatusCode.Should().Be(HttpStatusCode.Created);
     }
@@ -100,7 +103,7 @@ public class PtmStaffTests(PostgresFixture fx)
 
         var unknownStudent = await client.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = Guid.NewGuid(), subject = "Maths", date = "2026-10-10", time = "10:30", mode = "Video call",
+            student_id = Guid.NewGuid(), subject = "Maths", date = Day, time = "10:30", mode = "Video call",
         });
         unknownStudent.StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await ErrorCodeAsync(unknownStudent)).Should().Be("not_found");
@@ -116,11 +119,11 @@ public class PtmStaffTests(PostgresFixture fx)
 
         await client1.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student1Id, subject = "Maths", date = "2026-10-10", time = "10:30", mode = "Video call",
+            student_id = seed.Student1Id, subject = "Maths", date = Day, time = "10:30", mode = "Video call",
         });
         await client2.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student2Id, subject = "Science", date = "2026-10-11", time = "11:30", mode = "Video call",
+            student_id = seed.Student2Id, subject = "Science", date = Next, time = "11:30", mode = "Video call",
         });
 
         var res = await client1.GetAsync("/v1/ptm");
@@ -142,11 +145,11 @@ public class PtmStaffTests(PostgresFixture fx)
 
         await client1.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student1Id, subject = "Maths", date = "2026-10-10", time = "10:30", mode = "Video call",
+            student_id = seed.Student1Id, subject = "Maths", date = Day, time = "10:30", mode = "Video call",
         });
         await client2.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student2Id, subject = "Science", date = "2026-10-11", time = "11:30", mode = "Video call",
+            student_id = seed.Student2Id, subject = "Science", date = Next, time = "11:30", mode = "Video call",
         });
 
         var all = await admin.GetAsync("/v1/ptm");
@@ -172,7 +175,7 @@ public class PtmStaffTests(PostgresFixture fx)
 
         var create = await teacher1.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student1Id, subject = "Maths", date = "2026-10-10", time = "10:30", mode = "Video call",
+            student_id = seed.Student1Id, subject = "Maths", date = Day, time = "10:30", mode = "Video call",
         });
         using var createDoc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
         var id = createDoc.RootElement.GetProperty("data").GetProperty("id").GetGuid();
@@ -196,7 +199,7 @@ public class PtmStaffTests(PostgresFixture fx)
 
         var create = await teacher1.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student1Id, subject = "Maths", date = "2026-10-10", time = "10:30", mode = "Video call",
+            student_id = seed.Student1Id, subject = "Maths", date = Day, time = "10:30", mode = "Video call",
         });
         using var createDoc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
         var id = createDoc.RootElement.GetProperty("data").GetProperty("id").GetGuid();
@@ -218,7 +221,7 @@ public class PtmStaffTests(PostgresFixture fx)
 
         var create = await teacher1.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student1Id, subject = "Maths", date = "2026-10-10", time = "10:30", mode = "Video call",
+            student_id = seed.Student1Id, subject = "Maths", date = Day, time = "10:30", mode = "Video call",
         });
         using var createDoc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
         var id = createDoc.RootElement.GetProperty("data").GetProperty("id").GetGuid();
@@ -242,14 +245,14 @@ public class PtmStaffTests(PostgresFixture fx)
 
         var create = await teacher1.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student1Id, subject = "Maths", date = "2026-10-10", time = "10:30", mode = "Video call",
+            student_id = seed.Student1Id, subject = "Maths", date = Day, time = "10:30", mode = "Video call",
         });
         using var createDoc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
         var id = createDoc.RootElement.GetProperty("data").GetProperty("id").GetGuid();
 
         var post = await parent.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student1Id, subject = "Maths", date = "2026-10-12", time = "10:30", mode = "Video call",
+            student_id = seed.Student1Id, subject = "Maths", date = Later, time = "10:30", mode = "Video call",
         });
         post.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
@@ -267,7 +270,7 @@ public class PtmStaffTests(PostgresFixture fx)
 
         await teacher1.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student1Id, subject = "Maths", date = "2026-10-10", time = "10:30", mode = "Video call",
+            student_id = seed.Student1Id, subject = "Maths", date = Day, time = "10:30", mode = "Video call",
         });
 
         var res = await parent.GetAsync("/v1/ptm");
@@ -291,7 +294,7 @@ public class PtmStaffTests(PostgresFixture fx)
         // Meeting is run by a DIFFERENT teacher (Teacher2), for the dual user's own child (Student2).
         var create = await teacher2.PostAsJsonAsync("/v1/ptm", new
         {
-            student_id = seed.Student2Id, subject = "Science", date = "2026-10-11", time = "11:30", mode = "Video call",
+            student_id = seed.Student2Id, subject = "Science", date = Next, time = "11:30", mode = "Video call",
         });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
         using var createDoc = JsonDocument.Parse(await create.Content.ReadAsStringAsync());

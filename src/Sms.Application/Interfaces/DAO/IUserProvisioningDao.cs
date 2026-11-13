@@ -10,6 +10,10 @@ public interface IUserProvisioningDao
     Task<ImportResult> BulkCreateAsync(Guid tenantId, IReadOnlyList<ImportRow> rows, CancellationToken ct = default);
 
     Task<IReadOnlyList<SchoolUserListRow>> ListByTenantAsync(Guid tenantId, CancellationToken ct = default);
+    /// Any non-removed user in this school, including parent app logins that the CRM list hides.
+    Task<SchoolUserListRow?> GetInTenantAsync(Guid userId, Guid tenantId, CancellationToken ct = default);
+    /// App logins for one role (for example student.parent). Not the CRM team list.
+    Task<IReadOnlyList<SchoolUserListRow>> ListByRoleAsync(Guid tenantId, string role, CancellationToken ct = default);
     Task<bool> UserInTenantAsync(Guid userId, Guid tenantId, CancellationToken ct = default);
 
     /// Hard-removes a just-created user row and its role rows in one atomic statement. Used only to

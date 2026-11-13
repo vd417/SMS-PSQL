@@ -9,7 +9,34 @@ public sealed class TeacherRepository(IDbConnectionFactory factory) : BaseReposi
         "t.\"Id\", t.\"TenantId\", t.\"Name\", t.\"Gender\", t.\"Department\", t.\"Designation\", t.\"SubjectsCsv\", t.\"ClassTeacher\", ";
 
     private const string ColsAfterPhone =
-        "t.\"Email\", t.\"Exp\", t.\"Rating\", t.\"AttendancePct\", t.\"Result\", t.\"Load\", t.\"Status\", t.\"AvatarHue\", t.\"Top\", t.\"EmployeeCode\"";
+        "t.\"Email\", t.\"Exp\", t.\"Rating\", " + AttendanceExpr + ", t.\"Result\", t.\"Load\", t.\"Status\", t.\"AvatarHue\", t.\"Top\", t.\"EmployeeCode\"";
+
+    /// Same rule as the student list: (present + late + half day) / recorded days.
+    /// A roll-call mark wins for that day. An app check-in with no mark counts as present.
+    /// NULL when there is neither.
+    private const string AttendanceExpr =
+        """
+        (
+            SELECT CASE WHEN COUNT(*) > 0
+                THEN ROUND(100.0 * COUNT(*) FILTER (
+                    WHERE COALESCE(x.mark, 'present') IN ('present', 'late', 'half_day')) / COUNT(*), 2)
+                ELSE NULL END
+            FROM (
+                SELECT d.day, MAX(d.mark) AS mark
+                FROM (
+                    SELECT a."Date"::date AS day, lower(a."Status") AS mark
+                    FROM "dbo"."StaffAttendanceRecords" a
+                    WHERE a."PersonId" = t."Id" AND a."TenantId" = t."TenantId"
+                      AND lower(a."PersonType") = 'teacher'
+                    UNION ALL
+                    SELECT (c."At" AT TIME ZONE 'Asia/Kolkata')::date, NULL::text
+                    FROM "dbo"."CheckIns" c
+                    WHERE t."UserId" IS NOT NULL AND c."UserId" = t."UserId"
+                ) d
+                GROUP BY d.day
+            ) x
+        ) AS "AttendancePct"
+        """;
 
     private const string PhoneExpr =
         "COALESCE(NULLIF(trim(t.\"Phone\"), ''), NULLIF(trim(u.\"Phone\"), ''), NULLIF(trim(peer.\"Phone\"), '')) AS \"Phone\"";
@@ -146,7 +173,42 @@ public sealed class StaffRepository(IDbConnectionFactory factory) : BaseReposito
         "s.\"Id\", s.\"TenantId\", s.\"Name\", s.\"Gender\", s.\"Role\", s.\"Category\", s.\"Department\", ";
 
     private const string ColsAfterPhone =
-        "s.\"Shift\", s.\"Route\", s.\"AttendancePct\", s.\"Status\", s.\"AvatarHue\", s.\"EmployeeCode\", s.\"Email\"";
+        "s.\"Shift\", " + RouteExpr + ", " + AttendanceExpr + ", s.\"Status\", s.\"AvatarHue\", s.\"EmployeeCode\", s.\"Email\"";
+
+    /// Own route when filled in; otherwise the bus they drive or conduct.
+    private const string RouteExpr =
+        """
+        COALESCE(NULLIF(trim(s."Route"), ''), (
+            SELECT b."RouteName" FROM "dbo"."Buses" b
+            WHERE b."TenantId" = s."TenantId" AND (b."DriverStaffId" = s."Id" OR b."ConductorStaffId" = s."Id")
+            ORDER BY CASE WHEN b."DriverStaffId" = s."Id" THEN 0 ELSE 1 END
+            LIMIT 1
+        )) AS "Route"
+        """;
+
+    private const string AttendanceExpr =
+        """
+        (
+            SELECT CASE WHEN COUNT(*) > 0
+                THEN ROUND(100.0 * COUNT(*) FILTER (
+                    WHERE COALESCE(x.mark, 'present') IN ('present', 'late', 'half_day')) / COUNT(*), 2)
+                ELSE NULL END
+            FROM (
+                SELECT d.day, MAX(d.mark) AS mark
+                FROM (
+                    SELECT a."Date"::date AS day, lower(a."Status") AS mark
+                    FROM "dbo"."StaffAttendanceRecords" a
+                    WHERE a."PersonId" = s."Id" AND a."TenantId" = s."TenantId"
+                      AND lower(a."PersonType") = 'staff'
+                    UNION ALL
+                    SELECT (c."At" AT TIME ZONE 'Asia/Kolkata')::date, NULL::text
+                    FROM "dbo"."CheckIns" c
+                    WHERE s."UserId" IS NOT NULL AND c."UserId" = s."UserId"
+                ) d
+                GROUP BY d.day
+            ) x
+        ) AS "AttendancePct"
+        """;
 
     private const string PhoneExpr =
         "COALESCE(NULLIF(trim(s.\"Phone\"), ''), NULLIF(trim(u.\"Phone\"), ''), NULLIF(trim(peer.\"Phone\"), '')) AS \"Phone\"";

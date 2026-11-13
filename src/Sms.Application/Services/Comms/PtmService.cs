@@ -121,6 +121,8 @@ public sealed class PtmService(
             return ApiResult<PtmMeetingResponse>.Fail(new Error("validation_failed", "student_id is required"), 422);
         if (!DateOnly.TryParseExact(req.Date, "yyyy-MM-dd", out var date))
             return ApiResult<PtmMeetingResponse>.Fail(new Error("validation_failed", "date must be yyyy-MM-dd"), 422);
+        if (date < DateOnly.FromDateTime(DateTime.UtcNow))
+            return ApiResult<PtmMeetingResponse>.Fail(new Error("validation_failed", "date cannot be in the past"), 422);
         if (!TimeOnly.TryParseExact(req.Time, "HH:mm", out var time))
             return ApiResult<PtmMeetingResponse>.Fail(new Error("validation_failed", "time must be HH:mm"), 422);
         if (string.IsNullOrWhiteSpace(req.Mode) || req.Mode.Length > 120)
@@ -206,6 +208,8 @@ public sealed class PtmService(
             {
                 if (!DateOnly.TryParseExact(req.Date, "yyyy-MM-dd", out var parsedDate))
                     return ApiResult<PtmMeetingResponse>.Fail(new Error("validation_failed", "date must be yyyy-MM-dd"), 422);
+                if (parsedDate < DateOnly.FromDateTime(DateTime.UtcNow))
+                    return ApiResult<PtmMeetingResponse>.Fail(new Error("validation_failed", "date cannot be in the past"), 422);
                 date = parsedDate;
             }
             TimeOnly? time = null;

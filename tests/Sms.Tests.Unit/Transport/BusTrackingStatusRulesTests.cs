@@ -26,20 +26,16 @@ public class BusTrackingStatusRulesTests
     }
 
     [Fact]
-    public void Ping_older_than_a_minute_but_under_five_is_delayed()
+    public void A_quiet_ping_stays_live_until_the_trip_ends()
     {
-        var r = BusTrackingStatusRules.Derive(Now, Now.AddSeconds(-90), 20, hasLiveTrip: true, gpsAllowed: true);
-        r.Tracking.Should().Be("DELAYED");
-        r.Motion.Should().Be("moving");
-        r.Legacy.Should().Be("delayed");
-    }
+        var minute = BusTrackingStatusRules.Derive(Now, Now.AddSeconds(-90), 20, hasLiveTrip: true, gpsAllowed: true);
+        minute.Tracking.Should().Be("LIVE");
+        minute.Motion.Should().Be("moving");
+        minute.Legacy.Should().Be("on_route");
 
-    [Fact]
-    public void Ping_older_than_five_minutes_is_offline_with_last_known_motion()
-    {
-        var r = BusTrackingStatusRules.Derive(Now, Now.AddMinutes(-8), 18, hasLiveTrip: true, gpsAllowed: true);
-        r.Tracking.Should().Be("OFFLINE");
-        r.Legacy.Should().Be("delayed");
+        var older = BusTrackingStatusRules.Derive(Now, Now.AddMinutes(-8), 18, hasLiveTrip: true, gpsAllowed: true);
+        older.Tracking.Should().Be("LIVE");
+        older.Legacy.Should().Be("on_route");
     }
 
     [Fact]
@@ -48,7 +44,7 @@ public class BusTrackingStatusRulesTests
         BusTrackingStatusRules.Derive(Now, Now, 30, hasLiveTrip: false, gpsAllowed: true)
             .Legacy.Should().Be("idle");
         var started = BusTrackingStatusRules.Derive(Now, null, null, hasLiveTrip: true, gpsAllowed: true);
-        started.Tracking.Should().Be("OFFLINE");
+        started.Tracking.Should().Be("LIVE");
         started.Legacy.Should().Be("running");
         BusTrackingStatusRules.Derive(Now, Now, 30, hasLiveTrip: true, gpsAllowed: false)
             .Legacy.Should().Be("running");

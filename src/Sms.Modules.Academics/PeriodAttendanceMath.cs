@@ -30,6 +30,19 @@ public static class PeriodAttendanceMath
         return pct >= 50m;
     }
 
+    /// <summary>
+    /// One status for a student on one day. Present when (present + late) is at least half of
+    /// that day's marks. Late only when they have no present mark. Absent otherwise.
+    /// </summary>
+    public static string? ClassifyStudentDay(int present, int late, int absent, int leave)
+    {
+        var marked = present + late + absent + leave;
+        if (PresentTodayBadge(present, late, marked) is not true)
+            return marked <= 0 ? null : Absent;
+        if (present == 0 && late > 0) return Late;
+        return Present;
+    }
+
     public static PeriodAttendanceCounts FromStatusBuckets(
         int present, int late, int absent, int leave)
     {

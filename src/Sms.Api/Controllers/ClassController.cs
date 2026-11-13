@@ -111,6 +111,15 @@ public sealed class ClassController(IAcademicsService academics) : ApiController
         CancellationToken ct) =>
         FromResult(await academics.ListPeriodAttendanceAsync(classId, date, period, subject ?? "", ct));
 
+    [HttpGet("classes/{classId:guid}/attendance/periods/backup")]
+    public async Task<IActionResult> GetPeriodAttendanceBackup(
+        Guid classId,
+        [FromQuery] DateTime date,
+        [FromQuery] int period,
+        [FromQuery] string subject,
+        CancellationToken ct) =>
+        FromResult(await academics.GetPeriodAttendanceBackupAsync(classId, date, period, subject ?? "", User, ct));
+
     [HttpPost("classes/{classId:guid}/attendance/periods")]
     public async Task<IActionResult> BulkUpsertPeriodAttendance(
         Guid classId, [FromBody] BulkPeriodAttendanceRequest req, CancellationToken ct)

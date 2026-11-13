@@ -32,6 +32,7 @@ public sealed class AcademicsService(
     LibraryRepository library,
     AssignmentRepository assignments,
     AcademicsCommsNotifier academicsNotifier,
+    AttendanceCorrectionService attendanceCorrections,
     ISisService sis,
     ITenantContext tenant,
     ITenantFeatureSet features,
@@ -430,6 +431,20 @@ public sealed class AcademicsService(
             await periodAttendance.ListAsync(classId, date, period, subj, ct));
     }
 
+    public Task<ApiResult<AttendancePeriodBackupResponse>> GetPeriodAttendanceBackupAsync(
+        Guid classId, DateTime date, int period, string subject, ClaimsPrincipal caller, CancellationToken ct = default)
+    {
+        if (tenant.TenantId is null)
+            return Task.FromResult(ApiResult<AttendancePeriodBackupResponse>.Fail(
+                new Error("forbidden", "no tenant context"), 403));
+        var subj = (subject ?? "").Trim();
+        if (period < 1 || subj.Length == 0)
+            return Task.FromResult(ApiResult<AttendancePeriodBackupResponse>.Fail(
+                new Error("invalid_request", "period and subject are required"), 400));
+        return attendanceCorrections.LatestPeriodBackupAsync(
+            classId, date, period, subj, IsLeadership(caller), ct);
+    }
+
     private sealed record AttendanceQueryScope(
         Guid? AuthorizedTeacherId,
         Guid? TeacherUserId,
@@ -666,6 +681,10 @@ public sealed class AcademicsService(
                 403);
 
         var role = caller.FindAll("role").Select(c => c.Value).FirstOrDefault();
+        var existing = await periodAttendance.ListAsync(classId, req.Date, req.Period, subj, ct);
+        var blocked = await attendanceCorrections.GuardPeriodOverwriteAsync(
+            tid, classId, classRow.Name, req, leadership, tenant.UserId, role, existing, ct);
+        if (blocked is not null) return blocked;
         var subjectId = req.SubjectId ?? slot.SubjectId;
         var periodId = req.PeriodId ?? slot.Id;
         await periodAttendance.BulkUpsertAsync(

@@ -34,6 +34,47 @@ public sealed class UserProvisioningDao(IDbConnectionFactory factory) : BaseRepo
     public async Task<IReadOnlyList<SchoolUserListRow>> ListByTenantAsync(Guid tenantId, CancellationToken ct = default) =>
         await QueryProcAsync<SchoolUserListRow>("dbo.Users_ListByTenant", new { TenantId = tenantId }, ct);
 
+    public async Task<SchoolUserListRow?> GetInTenantAsync(Guid userId, Guid tenantId, CancellationToken ct = default)
+    {
+        var rows = await QueryInlineAsync<SchoolUserListRow>(
+            """
+            SELECT u."Id", u."Email", u."Phone", u."Status", u."CreatedAt",
+                   COALESCE((
+                       SELECT string_agg(ur."Role", ',' ORDER BY ur."Role")
+                       FROM "dbo"."UserRoles" ur
+                       WHERE ur."UserId" = u."Id"
+                   ), '') AS "Roles"
+            FROM "dbo"."Users" u
+            WHERE u."Id" = @UserId
+              AND u."TenantId" = @TenantId
+              AND COALESCE(u."IsPlatform", false) = false
+              AND u."Status" <> 'removed'
+            """,
+            new { UserId = userId, TenantId = tenantId }, ct);
+        return rows.FirstOrDefault();
+    }
+
+    public async Task<IReadOnlyList<SchoolUserListRow>> ListByRoleAsync(Guid tenantId, string role, CancellationToken ct = default) =>
+        await QueryInlineAsync<SchoolUserListRow>(
+            """
+            SELECT u."Id", u."Email", u."Phone", u."Status", u."CreatedAt",
+                   COALESCE((
+                       SELECT string_agg(ur."Role", ',' ORDER BY ur."Role")
+                       FROM "dbo"."UserRoles" ur
+                       WHERE ur."UserId" = u."Id"
+                   ), '') AS "Roles"
+            FROM "dbo"."Users" u
+            WHERE u."TenantId" = @TenantId
+              AND COALESCE(u."IsPlatform", false) = false
+              AND u."Status" <> 'removed'
+              AND EXISTS (
+                  SELECT 1 FROM "dbo"."UserRoles" ur
+                  WHERE ur."UserId" = u."Id" AND lower(ur."Role") = lower(@Role)
+              )
+            ORDER BY u."Email"
+            """,
+            new { TenantId = tenantId, Role = role }, ct);
+
     public async Task<bool> UserInTenantAsync(Guid userId, Guid tenantId, CancellationToken ct = default)
     {
         var rows = await QueryInlineAsync<int>(

@@ -14,6 +14,10 @@ public sealed class UserController(IUserService users) : ApiControllerBase
     public async Task<IActionResult> List(CancellationToken ct) =>
         FromResult(await users.ListAsync(IsSchoolAdmin(), IsPrincipal(), ct));
 
+    [HttpGet("users/parents")]
+    public async Task<IActionResult> ListParents(CancellationToken ct) =>
+        FromResult(await users.ListParentLoginsAsync(IsSchoolAdmin(), ct));
+
     [HttpPost("users")]
     public async Task<IActionResult> Invite([FromBody] InviteUserRequest req, CancellationToken ct) =>
         FromResult(await users.InviteAsync(req, IsSchoolAdmin(), IsSchoolOwner(), ct));

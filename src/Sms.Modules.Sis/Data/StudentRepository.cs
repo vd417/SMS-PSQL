@@ -21,7 +21,13 @@ s."GuardianName", s."GuardianPhone", s."GuardianEmail",
 CAST(CASE WHEN att."Marked" > 0
           THEN ROUND(100.0 * att."Positive" / att."Marked", 2)
           ELSE NULL END AS numeric(5,2)) AS "AttendancePct",
-s."FeeStatus", s."FeeDue", s."Status", s."House", s."AvatarHue", s."Dob", s."Email", s."Address", s."PhotoUrl"
+s."FeeStatus",
+COALESCE((
+    SELECT SUM(GREATEST(i."Amount" - COALESCE(i."PaidAmount", 0), 0))
+    FROM "dbo"."FeeInvoices" i
+    WHERE i."StudentId" = s."Id"
+), 0) AS "FeeDue",
+s."Status", s."House", s."AvatarHue", s."Dob", s."Email", s."Address", s."PhotoUrl"
 """;
 
     private const string LivePctFromList = """

@@ -1,19 +1,14 @@
-using System.Collections.Concurrent;
 using Sms.Application.Services.Realtime;
 using Sms.Application.Services.Transport;
-using Sms.Modules.Transport;
 using Sms.Shared.Kernel.Tenancy;
 
 namespace Sms.Api.Workers;
 
-/// Periodically finds live trips with no recent ping and broadcasts a
-/// status_changed(offline) event to that bus's group — the one state
-/// transition no ping will ever announce on its own. Mirrors
-/// AbsenceAlertWorker's scope-per-sweep + platform-context pattern.
+/// Closes finished or abandoned trips. A running pickup or drop keeps sharing
+/// its last location: this worker does not broadcast offline until the trip ends.
 ///
-/// It also auto-ends trips on two signals, so a finished or abandoned trip can't
-/// keep its bus blocked (Trip_Start's duplicate-active-trip guard rejects a new
-/// trip, surfaced as a 409 on trip/start, while any trip for that bus is still
+/// Auto-end uses two signals, so a finished trip can't keep its bus blocked
+/// (Trip_Start rejects a new trip while any trip for that bus is still
 /// 'live'/'arrived'):
 ///   - Completed (CompletedGrace, short): a pickup that reached school, or a drop
 ///     whose every stop is covered, that has then sat idle — the normal "driver
@@ -21,18 +16,15 @@ namespace Sms.Api.Workers;
 ///   - Abandoned (AutoEndAfter, long): a trip silent far longer than any real
 ///     one would be — the driver closed the app mid-route, confirming nothing.
 ///     Route-completion can't catch this (the route was never finished), so the
-///     long silence timer is the only backstop; the threshold stays long so a
-///     merely-offline trip the driver will resume is never ended under them.
+///     long silence timer is the only backstop.
 public sealed class TransportOfflineSweepWorker(
     IServiceScopeFactory scopeFactory, IConfiguration config, ILogger<TransportOfflineSweepWorker> logger) : BackgroundService
 {
-    private static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(60);
-    // Clamp floor (5 min) stays well above StaleAfter so the two thresholds can't cross; default 30 min.
+    // Default 30 min. A running trip is not marked offline before this end.
     private readonly TimeSpan _autoEndAfter = TimeSpan.FromMinutes(Math.Clamp(config.GetValue<int?>("TransportOfflineSweep:AutoEndMinutes") ?? 30, 5, 720));
     // Idle grace after a trip finishes its route before we close it — short, lets the driver End or start the next leg first.
     private readonly TimeSpan _completedGrace = TimeSpan.FromMinutes(Math.Clamp(config.GetValue<int?>("TransportOfflineSweep:CompletedGraceMinutes") ?? 5, 1, 120));
     private readonly TimeSpan _poll = TimeSpan.FromSeconds(Math.Clamp(config.GetValue<int?>("TransportOfflineSweep:PollSeconds") ?? 20, 5, 300));
-    private readonly ConcurrentDictionary<Guid, byte> _offline = new();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -60,23 +52,8 @@ public sealed class TransportOfflineSweepWorker(
         var broadcaster = scope.ServiceProvider.GetRequiredService<ITransportFleetBroadcaster>();
         var live = scope.ServiceProvider.GetRequiredService<ILiveBroadcaster>();
 
-        // Auto-end completed-then-idle and long-abandoned trips first, so they drop out of the
-        // stale/offline set below (and free their bus) in the same sweep rather than lingering a cycle.
+        // Only end the trip. Offline is broadcast after that end, never while it is still running.
         await AutoEndTripsAsync(repo, broadcaster, live, ct);
-
-        var stale = await repo.GetStaleActiveTripsAsync(StaleAfter, ct);
-        var staleIds = stale.Select(s => s.TripId).ToHashSet();
-        var (toNotify, toClear) = TransportOfflineSweepRules.ComputeTransitions(
-            new HashSet<Guid>(_offline.Keys), staleIds);
-
-        foreach (var tripId in toNotify)
-        {
-            var trip = stale.First(s => s.TripId == tripId);
-            _offline[tripId] = 0;
-            await broadcaster.BroadcastStatusChangedAsync(trip.BusId, tripId, "offline", ct);
-        }
-        foreach (var tripId in toClear)
-            _offline.TryRemove(tripId, out _);
     }
 
     private async Task AutoEndTripsAsync(
@@ -98,7 +75,7 @@ public sealed class TransportOfflineSweepWorker(
             await broadcaster.BroadcastFleetAsync(trip.TenantId, ct);
             await live.PublishAsync(trip.TenantId, LiveEventTypes.Transport, ct: ct);
             await broadcaster.BroadcastTripEndedAsync(trip.BusId, trip.TripId, DateTime.UtcNow, ct);
-            _offline.TryRemove(trip.TripId, out _);
+            await broadcaster.BroadcastStatusChangedAsync(trip.BusId, trip.TripId, "offline", ct);
             logger.LogInformation(
                 "Auto-ended {Reason} trip {TripId} on bus {BusId} (tenant {TenantId}); last activity {LastActivity:o}",
                 reason, trip.TripId, trip.BusId, trip.TenantId, trip.LastPingAt);

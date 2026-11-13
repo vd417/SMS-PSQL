@@ -177,7 +177,9 @@ public sealed record PeriodAttendanceTeacherRow(
             AdminMarked);
 }
 
-public sealed record PeriodAttendanceRangeRow(int Present, int Absent, int Late, int Leave)
+public sealed record PeriodAttendanceRangeRow(
+    int Present, int Absent, int Late, int Leave,
+    int PresentStudents, int AbsentStudents, int LateStudents)
 {
     public AdvRangeRollup ToContract()
     {
@@ -188,7 +190,10 @@ public sealed record PeriodAttendanceRangeRow(int Present, int Absent, int Late,
             Absent,
             Late,
             Leave,
-            counts.AttendancePercentage);
+            counts.AttendancePercentage,
+            PresentStudents,
+            AbsentStudents,
+            LateStudents);
     }
 }
 
@@ -403,27 +408,58 @@ public static class PeriodAttendanceAggregateSql
     {
         ValidateRange(from, to);
         const string sql = """
+            WITH "Marks" AS (
+                SELECT DISTINCT par."StudentId", par."Date", par."Period", par."Subject", par."Status"
+                FROM "dbo"."PeriodAttendanceRecords" par
+                INNER JOIN "dbo"."Classes" c ON c."Id" = par."ClassId"
+                LEFT JOIN "dbo"."TimetableSlots" ts
+                  ON ts."ClassId" = par."ClassId"
+                 AND ts."Period" = par."Period"
+                 AND upper(left(trim(ts."Day"), 3))
+                     = upper(left(to_char(par."Date", 'DY'), 3))
+                 AND lower(trim(ts."Subject")) = lower(trim(par."Subject"))
+                WHERE par."Date" >= @From AND par."Date" <= @To
+                  AND (@ClassId::uuid IS NULL OR par."ClassId" = @ClassId::uuid)
+                  AND (@Grade::text IS NULL OR c."Grade" = @Grade::text)
+                  AND (@Section::text IS NULL OR c."Section" = @Section::text)
+                  AND (@StudentId::uuid IS NULL OR par."StudentId" = @StudentId::uuid)
+                  AND (@Subject::text IS NULL
+                       OR lower(trim(par."Subject")) = lower(trim(@Subject::text)))
+                  AND (@TeacherId::uuid IS NULL OR ts."TeacherId" = @TeacherId::uuid)
+            ),
+            "StudentDays" AS (
+                SELECT
+                    "StudentId",
+                    "Date",
+                    COUNT(*) FILTER (WHERE "Status" IN ('present', 'half_day')) AS "Present",
+                    COUNT(*) FILTER (WHERE "Status" = 'absent') AS "Absent",
+                    COUNT(*) FILTER (WHERE "Status" = 'late') AS "Late",
+                    COUNT(*) FILTER (WHERE "Status" = 'leave') AS "Leave"
+                FROM "Marks"
+                GROUP BY "StudentId", "Date"
+            )
             SELECT
-                CAST(COALESCE(SUM(CASE WHEN par."Status" = 'present' THEN 1 ELSE 0 END), 0) AS int) AS "Present",
-                CAST(COALESCE(SUM(CASE WHEN par."Status" = 'absent' THEN 1 ELSE 0 END), 0) AS int) AS "Absent",
-                CAST(COALESCE(SUM(CASE WHEN par."Status" = 'late' THEN 1 ELSE 0 END), 0) AS int) AS "Late",
-                CAST(COALESCE(SUM(CASE WHEN par."Status" = 'leave' THEN 1 ELSE 0 END), 0) AS int) AS "Leave"
-            FROM "dbo"."PeriodAttendanceRecords" par
-            INNER JOIN "dbo"."Classes" c ON c."Id" = par."ClassId"
-            LEFT JOIN "dbo"."TimetableSlots" ts
-              ON ts."ClassId" = par."ClassId"
-             AND ts."Period" = par."Period"
-             AND upper(left(trim(ts."Day"), 3))
-                 = upper(left(to_char(par."Date", 'DY'), 3))
-             AND lower(trim(ts."Subject")) = lower(trim(par."Subject"))
-            WHERE par."Date" >= @From AND par."Date" <= @To
-              AND (@ClassId::uuid IS NULL OR par."ClassId" = @ClassId::uuid)
-              AND (@Grade::text IS NULL OR c."Grade" = @Grade::text)
-              AND (@Section::text IS NULL OR c."Section" = @Section::text)
-              AND (@StudentId::uuid IS NULL OR par."StudentId" = @StudentId::uuid)
-              AND (@Subject::text IS NULL
-                   OR lower(trim(par."Subject")) = lower(trim(@Subject::text)))
-              AND (@TeacherId::uuid IS NULL OR ts."TeacherId" = @TeacherId::uuid);
+                CAST(COALESCE(SUM(CASE WHEN m."Status" = 'present' THEN 1 ELSE 0 END), 0) AS int) AS "Present",
+                CAST(COALESCE(SUM(CASE WHEN m."Status" = 'absent' THEN 1 ELSE 0 END), 0) AS int) AS "Absent",
+                CAST(COALESCE(SUM(CASE WHEN m."Status" = 'late' THEN 1 ELSE 0 END), 0) AS int) AS "Late",
+                CAST(COALESCE(SUM(CASE WHEN m."Status" = 'leave' THEN 1 ELSE 0 END), 0) AS int) AS "Leave",
+                CAST((
+                    SELECT COUNT(*) FROM "StudentDays" s
+                    WHERE (s."Present" + s."Late") * 2 >= (s."Present" + s."Late" + s."Absent" + s."Leave")
+                      AND (s."Present" + s."Late" + s."Absent" + s."Leave") > 0
+                      AND NOT (s."Present" = 0 AND s."Late" > 0)
+                ) AS int) AS "PresentStudents",
+                CAST((
+                    SELECT COUNT(*) FROM "StudentDays" s
+                    WHERE (s."Present" + s."Late" + s."Absent" + s."Leave") > 0
+                      AND (s."Present" + s."Late") * 2 < (s."Present" + s."Late" + s."Absent" + s."Leave")
+                ) AS int) AS "AbsentStudents",
+                CAST((
+                    SELECT COUNT(*) FROM "StudentDays" s
+                    WHERE s."Present" = 0 AND s."Late" > 0
+                      AND (s."Present" + s."Late") * 2 >= (s."Present" + s."Late" + s."Absent" + s."Leave")
+                ) AS int) AS "LateStudents"
+            FROM "Marks" m;
             """;
 
         var parameters = DateRangeParameters(from, to);

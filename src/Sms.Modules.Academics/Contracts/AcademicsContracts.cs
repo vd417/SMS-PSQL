@@ -227,4 +227,5 @@ public sealed record AdvTeacherSummaryRow(
 
 public sealed record AdvRangeRollup(
     int TotalMarkedPeriods, int Present, int Absent, int Late, int Leave,
-    decimal? AttendancePercentage);
+    decimal? AttendancePercentage,
+    int PresentStudents, int AbsentStudents, int LateStudents);

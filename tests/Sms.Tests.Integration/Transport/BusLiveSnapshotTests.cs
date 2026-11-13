@@ -75,7 +75,7 @@ public class BusLiveSnapshotTests(PostgresFixture fx)
     }
 
     [Fact]
-    public async Task Status_is_offline_when_the_last_ping_is_older_than_60_seconds()
+    public async Task Status_stays_moving_when_the_last_ping_is_older_than_60_seconds_and_the_trip_is_still_live()
     {
         var (tenantId, busId, _) = await SeedBusWithLastPing(DateTime.UtcNow.AddSeconds(-90), speedKmh: 25);
         await using var app = App();
@@ -83,7 +83,7 @@ public class BusLiveSnapshotTests(PostgresFixture fx)
         scope.ServiceProvider.GetRequiredService<ITenantContext>().Set(tenantId, null, isPlatform: false);
         var repo = scope.ServiceProvider.GetRequiredService<BusRepository>();
 
-        (await repo.GetLiveSnapshotAsync(busId, default)).Status.Should().Be("offline");
+        (await repo.GetLiveSnapshotAsync(busId, default)).Status.Should().Be("moving");
     }
 
     [Fact]
@@ -100,21 +100,17 @@ public class BusLiveSnapshotTests(PostgresFixture fx)
     }
 
     [Fact]
-    public async Task Status_is_offline_when_the_last_ping_is_exactly_at_the_staleness_cutoff()
+    public async Task Status_stays_moving_when_the_last_ping_is_at_the_old_staleness_cutoff_and_the_trip_is_still_live()
     {
-        // Cutoff is `ageSeconds > 60` -> "offline". We seed a ping exactly 60.0s old;
-        // by the time GetLiveSnapshotAsync computes DateTime.UtcNow a few milliseconds
-        // will have elapsed, so the observed age is at-or-just-past 60s, not exactly
-        // 60.000s. This still exercises the real boundary: an off-by-one flip to
-        // `>= 60` would report "offline" here too, but a bug that used `> 60` on a
-        // wrongly-scaled unit (e.g. minutes) or inverted the comparison would fail it.
+        // A live pickup or drop no longer flips to offline on ping age. A 60s-old
+        // moving fix stays "moving" until the trip itself ends.
         var (tenantId, busId, _) = await SeedBusWithLastPing(DateTime.UtcNow.AddSeconds(-60), speedKmh: 25);
         await using var app = App();
         using var scope = app.Services.CreateScope();
         scope.ServiceProvider.GetRequiredService<ITenantContext>().Set(tenantId, null, isPlatform: false);
         var repo = scope.ServiceProvider.GetRequiredService<BusRepository>();
 
-        (await repo.GetLiveSnapshotAsync(busId, default)).Status.Should().Be("offline");
+        (await repo.GetLiveSnapshotAsync(busId, default)).Status.Should().Be("moving");
     }
 
     [Fact]

@@ -216,6 +216,8 @@ public sealed class TripService(
         if (busId is { } bid)
         {
             await fleetBroadcaster.BroadcastTripEndedAsync(bid, tripId, clock.UtcNow, ct);
+            // Offline only after the trip has ended. A running trip keeps sharing location.
+            await fleetBroadcaster.BroadcastStatusChangedAsync(bid, tripId, "offline", ct);
             await teacherAlerts.NotifyTripEndedAsync(tid, bid, tripId, ct);
         }
         return ApiResult<TripSummaryResponse>.Ok(summary);

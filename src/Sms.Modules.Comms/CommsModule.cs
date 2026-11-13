@@ -24,6 +24,8 @@ public sealed record ChatThreadResponse(
     /// Profile photo for this thread: the student's photo on a student thread, otherwise the
     /// linked user's photo (parent, teacher, driver, or other staff).
     public string? PhotoUrl { get; init; }
+    /// <summary>Parent account name, or the guardian name on the student when the account has none.</summary>
+    public string? ParentName { get; init; }
     // The Inbox list's read-receipt tick: whether the OWNER sent the last message (only then
     // does a tick make sense — an incoming last message never shows one), and its delivery
     // state. Null status means the thread has no messages yet.
@@ -74,6 +76,16 @@ public sealed record ChatThreadResponse(
         : this(Id, TenantId, Name, Role, LastMessage, LastAt, Unread, Group, ChildId, Online, ChildName, ChildClassLabel,
             ChildRoll, LastMessageMine, LastMessageStatus, Relationship) =>
         this.PhotoUrl = PhotoUrl;
+
+    // ListThreadsAsync shape (+ ParentName = 18 columns).
+    public ChatThreadResponse(
+        Guid Id, Guid TenantId, string Name, string? Role, string? LastMessage, DateTime? LastAt,
+        int Unread, bool Group, Guid? ChildId, bool Online, string? ChildName, string? ChildClassLabel,
+        int? ChildRoll, bool LastMessageMine, string? LastMessageStatus, string? Relationship, string? PhotoUrl,
+        string? ParentName)
+        : this(Id, TenantId, Name, Role, LastMessage, LastAt, Unread, Group, ChildId, Online, ChildName, ChildClassLabel,
+            ChildRoll, LastMessageMine, LastMessageStatus, Relationship, PhotoUrl) =>
+        this.ParentName = ParentName;
 }
 /// <param name="ContactKind">"teacher" | "staff" | "student" (student ⇒ message that student's
 /// parent) | "user" (another CRM login account, addressed by its own Users id) — when set with
@@ -258,7 +270,11 @@ SELECT th.""Id"", th.""TenantId"", th.""Name"", th.""Role"", th.""LastMessage"",
            WHEN lower(coalesce(th.""Role"", '')) LIKE '%student%'
                THEN COALESCE(NULLIF(btrim(c.""PhotoUrl""), ''), NULLIF(btrim(u.""PhotoUrl""), ''))
            ELSE NULLIF(btrim(u.""PhotoUrl""), '')
-       END AS ""PhotoUrl""
+       END AS ""PhotoUrl"",
+       CASE
+           WHEN th.""ChildId"" IS NULL THEN NULL
+           ELSE COALESCE(NULLIF(btrim(u.""Name""), ''), NULLIF(btrim(c.""GuardianName""), ''))
+       END AS ""ParentName""
 FROM ""dbo"".""ChatThreads"" th
 LEFT JOIN ""dbo"".""Users"" u
     ON (th.""ContactUserId"" IS NOT NULL AND u.""Id"" = th.""ContactUserId"")

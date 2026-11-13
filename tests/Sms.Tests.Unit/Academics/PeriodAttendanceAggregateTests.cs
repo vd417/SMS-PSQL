@@ -93,12 +93,15 @@ public class PeriodAttendanceAggregateTests
     {
         var subject = new PeriodAttendanceSubjectRow(
             "Science", "Ada", 4, 3, 6, 2, 2, 2).ToContract();
-        var range = new PeriodAttendanceRangeRow(6, 2, 2, 1).ToContract();
+        var range = new PeriodAttendanceRangeRow(6, 2, 2, 1, 4, 1, 0).ToContract();
 
         subject.AttendancePercentage.Should().Be(66.67m);
         subject.Pending.Should().Be(1);
         range.TotalMarkedPeriods.Should().Be(11);
         range.AttendancePercentage.Should().Be(72.73m);
+        range.PresentStudents.Should().Be(4);
+        range.AbsentStudents.Should().Be(1);
+        range.LateStudents.Should().Be(0);
     }
 
     [Fact]
@@ -144,6 +147,9 @@ public class PeriodAttendanceAggregateTests
         command.Sql.Should().Contain("c.\"Section\" = @Section");
         command.Sql.Should().Contain("par.\"StudentId\" = @StudentId");
         command.Sql.Should().Contain("ts.\"TeacherId\" = @TeacherId");
+        command.Sql.Should().Contain("AS \"PresentStudents\"");
+        command.Sql.Should().Contain("AS \"AbsentStudents\"");
+        command.Sql.Should().Contain("AS \"LateStudents\"");
         command.Parameters.Get<Guid?>("ClassId").Should().Be(classId);
         command.Parameters.Get<Guid?>("StudentId").Should().Be(studentId);
         command.Parameters.Get<Guid?>("TeacherId").Should().Be(teacherId);

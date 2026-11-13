@@ -606,16 +606,15 @@ WHERE NOT EXISTS (
 
         var position = await GetPositionAsync(busId, ct);
 
+        // A pickup or drop that has not ended stays moving or stopped. Offline is only
+        // for a bus with no live trip, so the driver app does not drop out mid-route.
         string status;
-        if (ping is null)
-        {
+        if (tripId is null)
             status = "offline";
-        }
+        else if (ping is null)
+            status = "stopped";
         else
-        {
-            var ageSeconds = (DateTime.UtcNow - ping.At).TotalSeconds;
-            status = ageSeconds > 60 ? "offline" : ping.SpeedKmh > 3 ? "moving" : "stopped";
-        }
+            status = ping.SpeedKmh > 3 ? "moving" : "stopped";
 
         var derived = BusTrackingStatusRules.Derive(
             DateTime.UtcNow, ping?.At, ping?.SpeedKmh, tripId is not null, gpsAllowed: true);

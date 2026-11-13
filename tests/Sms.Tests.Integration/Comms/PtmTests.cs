@@ -58,7 +58,7 @@ public class PtmTests(PostgresFixture fx)
         var create = await adminClient.PostAsJsonAsync("/v1/ptm", new
         {
             student_id = seed.LinkedStudentId, teacher_id = seed.TeacherId,
-            subject = "Mathematics", date = "2026-11-05", time = "16:00", mode = "Video call",
+            subject = "Mathematics", date = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(7).ToString("yyyy-MM-dd"), time = "16:00", mode = "Video call",
         });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
 

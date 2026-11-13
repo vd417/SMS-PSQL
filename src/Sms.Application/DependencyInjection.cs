@@ -47,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IAttendanceViewPermissionService, AttendanceViewPermissionService>();
         services.AddScoped<IAcademicsService, AcademicsService>();
+        services.AddScoped<AttendanceCorrectionService>();
         services.AddScoped<AcademicsCommsNotifier>();
         services.AddScoped<IExamMarksNotifyService, ExamMarksNotifyService>();
         services.AddScoped<IFeeService, FeeService>();

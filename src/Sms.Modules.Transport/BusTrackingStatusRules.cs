@@ -31,23 +31,15 @@ public static class BusTrackingStatusRules
     public static Result Derive(
         DateTime utcNow, DateTime? lastPingAt, double? speedKmh, bool hasLiveTrip, bool gpsAllowed)
     {
-        // No trip: idle. A live trip with no fresh fix is RUNNING (legacy) and OFFLINE
-        // for GPS. LIVE is reserved for a ping inside LiveSeconds. Coordinates are never invented.
+        // No trip: idle and offline. While pickup or drop is still running, location
+        // share stays live — a quiet or missing fix must not flip the app to offline.
         if (!hasLiveTrip)
             return new Result(Offline, null, LegacyIdle);
         if (!gpsAllowed || lastPingAt is null)
-            return new Result(Offline, null, LegacyRunning);
+            return new Result(Live, null, LegacyRunning);
 
-        var ageSeconds = (utcNow - lastPingAt.Value).TotalSeconds;
         var motion = speedKmh is <= StoppedSpeedKmh ? Stopped : Moving;
-
-        if (ageSeconds <= LiveSeconds)
-            return new Result(Live, motion, motion == Stopped ? LegacyAtStop : LegacyOnRoute);
-
-        if (ageSeconds <= DelayedSeconds)
-            return new Result(Delayed, motion, LegacyDelayed);
-
-        return new Result(Offline, motion, LegacyDelayed);
+        return new Result(Live, motion, motion == Stopped ? LegacyAtStop : LegacyOnRoute);
     }
 
     public static string Assignment(bool optedOut, Guid? assignmentId, Guid? busId) =>

@@ -43,6 +43,19 @@ public class PeriodAttendanceMathTests
     }
 
     [Theory]
+    [InlineData(7, 0, 1, 0, "present")]
+    [InlineData(8, 0, 0, 0, "present")]
+    [InlineData(0, 0, 5, 0, "absent")]
+    [InlineData(0, 1, 0, 0, "late")]
+    [InlineData(1, 1, 0, 0, "present")]
+    [InlineData(0, 0, 0, 0, null)]
+    public void ClassifyStudentDay_counts_one_student_not_each_period(
+        int present, int late, int absent, int leave, string? expected)
+    {
+        PeriodAttendanceMath.ClassifyStudentDay(present, late, absent, leave).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(1, 0, 1, true)]
     [InlineData(1, 0, 2, true)]  // 50%
     [InlineData(0, 1, 2, true)]  // late counts

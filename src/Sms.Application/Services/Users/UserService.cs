@@ -16,6 +16,8 @@ public interface IUserService
     Task<ApiResult<object>> InviteAsync(InviteUserRequest req, bool isSchoolAdmin, bool canAssignOwner, CancellationToken ct = default);
     Task<ApiResult<ImportResponse>> ImportAsync(ImportUsersRequest req, bool isSchoolAdmin, bool canAssignOwner, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<SchoolUserResponse>>> ListAsync(bool isSchoolAdmin, bool isPrincipal, CancellationToken ct = default);
+    /// Parent app logins for this school. Kept off the CRM team list so they are not shown as teachers.
+    Task<ApiResult<IReadOnlyList<SchoolUserResponse>>> ListParentLoginsAsync(bool isSchoolAdmin, CancellationToken ct = default);
     /// <summary>Removes a person's access to the CURRENT school only — other tenants they
     /// belong to (separate Users rows) are unaffected.</summary>
     Task<ApiResult> DeactivateAsync(Guid userId, bool isSchoolAdmin, CancellationToken ct = default);
@@ -186,6 +188,16 @@ public sealed class UserService(
         return ApiResult<IReadOnlyList<SchoolUserResponse>>.Ok(list);
     }
 
+    public async Task<ApiResult<IReadOnlyList<SchoolUserResponse>>> ListParentLoginsAsync(bool isSchoolAdmin, CancellationToken ct = default)
+    {
+        if (!isSchoolAdmin)
+            return ApiResult<IReadOnlyList<SchoolUserResponse>>.Fail(new Error("forbidden", "school admin only"), 403);
+        if (tenant.TenantId is not { } tid)
+            return ApiResult<IReadOnlyList<SchoolUserResponse>>.Fail(new Error("forbidden", "no tenant context"), 403);
+        var rows = await dao.ListByRoleAsync(tid, "student.parent", ct);
+        return ApiResult<IReadOnlyList<SchoolUserResponse>>.Ok(rows.Select(MapUser).ToList());
+    }
+
     /// Removes a person's access to THIS school only — their Users row for any other
     /// tenant they belong to is untouched (each school membership is its own row).
     public async Task<ApiResult> DeactivateAsync(Guid userId, bool isSchoolAdmin, CancellationToken ct = default)
@@ -234,8 +246,7 @@ public sealed class UserService(
             return ApiResult<SchoolUserResponse>.Fail(new Error("forbidden", "school admin or principal only"), 403);
         if (tenant.TenantId is not { } tid)
             return ApiResult<SchoolUserResponse>.Fail(new Error("forbidden", "no tenant context"), 403);
-        var rows = await dao.ListByTenantAsync(tid, ct);
-        var row = rows.FirstOrDefault(u => u.Id == userId);
+        var row = await dao.GetInTenantAsync(userId, tid, ct);
         if (row is null)
             return ApiResult<SchoolUserResponse>.Fail(new Error("not_found", "user not found in this school"), 404);
         if (row.Status is not ("active" or "inactive"))
@@ -255,7 +266,7 @@ public sealed class UserService(
         if (!active)
             await tokens.RevokeAllForUserAsync(userId, ct);
         await audit.InsertAsync(tenant.UserId, null, null, "user.status_changed", $"{userId}: {status}", "identity", tid, ct);
-        var updated = (await dao.ListByTenantAsync(tid, ct)).FirstOrDefault(u => u.Id == userId);
+        var updated = await dao.GetInTenantAsync(userId, tid, ct);
         return updated is null
             ? ApiResult<SchoolUserResponse>.Fail(new Error("not_found", "user not found"), 404)
             : ApiResult<SchoolUserResponse>.Ok(MapUser(updated));

@@ -4,13 +4,13 @@ namespace Sms.Modules.Staffing.Contracts;
 public sealed record TeacherResponse(
     Guid Id, Guid TenantId, string Name, string? Gender, string? Department, string? Designation,
     IReadOnlyList<string> Subjects, string? ClassTeacher, string? Phone, string? Email, int Exp, decimal Rating,
-    decimal AttendancePct, decimal Result, int Load, string Status, int AvatarHue, bool Top,
+    decimal? AttendancePct, decimal Result, int Load, string Status, int AvatarHue, bool Top,
     string? EmployeeCode = null, string? PhotoUrl = null, Guid? UserId = null);
 
 public sealed record TeacherRow(
     Guid Id, Guid TenantId, string Name, string? Gender, string? Department, string? Designation,
     string? SubjectsCsv, string? ClassTeacher, string? Phone, string? Email, int Exp, decimal Rating,
-    decimal AttendancePct, decimal Result, int Load, string Status, int AvatarHue, bool Top,
+    decimal? AttendancePct, decimal Result, int Load, string Status, int AvatarHue, bool Top,
     string? EmployeeCode = null, string? PhotoUrl = null, Guid? UserId = null);
 
 public sealed record CreateTeacherRequest(
@@ -33,14 +33,14 @@ public sealed record UpdateTeacherRequest(
 // ---- Staff ----
 public sealed record StaffResponse(
     Guid Id, Guid TenantId, string Name, string? Gender, string? Role, string? Category, string? Department,
-    string? Phone, string? Shift, string? Route, decimal AttendancePct, string Status, int AvatarHue,
+    string? Phone, string? Shift, string? Route, decimal? AttendancePct, string Status, int AvatarHue,
     string? EmployeeCode = null, string? Email = null, string? PhotoUrl = null, Guid? UserId = null)
 {
     /// Dapper maps `Staff_Create` from a SELECT that stops at PhotoUrl. Optional `UserId` on the
     /// primary constructor still produces a 17-parameter ctor, which Dapper will not match.
     public StaffResponse(
         Guid Id, Guid TenantId, string Name, string? Gender, string? Role, string? Category, string? Department,
-        string? Phone, string? Shift, string? Route, decimal AttendancePct, string Status, int AvatarHue,
+        string? Phone, string? Shift, string? Route, decimal? AttendancePct, string Status, int AvatarHue,
         string? EmployeeCode, string? Email, string? PhotoUrl)
         : this(Id, TenantId, Name, Gender, Role, Category, Department, Phone, Shift, Route, AttendancePct,
             Status, AvatarHue, EmployeeCode, Email, PhotoUrl, null)
