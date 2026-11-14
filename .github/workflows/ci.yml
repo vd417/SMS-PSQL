@@ -21,6 +21,7 @@ jobs:
       - run: dotnet test tests/Sms.Tests.Unit --configuration Release
       - run: dotnet test tests/Sms.Tests.Integration --configuration Release
         env:
+          DOTNET_USE_POLLING_FILE_WATCHER: "1"
           SMS_TEST_PG_HOST: localhost
           SMS_TEST_PG_PASSWORD: "Ci_Dev_Pass123!"
 
