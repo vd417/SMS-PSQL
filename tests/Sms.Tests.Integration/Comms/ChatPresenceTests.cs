@@ -307,4 +307,66 @@ public class ChatPresenceTests(PostgresFixture fx)
         }
         found.Should().BeTrue("the student's message must create a mirrored thread in the teacher's inbox");
     }
+
+    [Fact]
+    public async Task Legacy_parent_thread_with_ambiguous_same_name_does_not_duplicate_or_match_either_parent()
+    {
+        var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b =>
+        {
+            b.UseSetting("environment", "Production");
+            b.UseSetting("ConnectionStrings:Sql", fx.ConnectionString);
+            b.UseSetting("Jwt:SigningKey", Key);
+        });
+
+        var tenantId = Guid.NewGuid();
+        var ownerUserId = Guid.NewGuid();
+        var parentOneId = Guid.NewGuid();
+        var parentTwoId = Guid.NewGuid();
+        var threadId = Guid.NewGuid();
+
+        await using (var conn = new Npgsql.NpgsqlConnection(fx.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync(
+                "SELECT set_config('app.tenant_id', @tenantId::text, false)", new { tenantId });
+
+            await conn.ExecuteAsync(
+                """INSERT INTO "dbo"."Users" ("Id", "TenantId", "Name") VALUES (@ownerUserId, @tenantId, 'School Staff')""",
+                new { ownerUserId, tenantId });
+
+            await conn.ExecuteAsync(
+                """INSERT INTO "dbo"."Users" ("Id", "TenantId", "Name", "LastSeenAt") VALUES (@parentOneId, @tenantId, 'Ramesh Sharma', now() AT TIME ZONE 'UTC')""",
+                new { parentOneId, tenantId });
+
+            await conn.ExecuteAsync(
+                """INSERT INTO "dbo"."Users" ("Id", "TenantId", "Name", "LastSeenAt") VALUES (@parentTwoId, @tenantId, 'Ramesh Sharma', now() AT TIME ZONE 'UTC')""",
+                new { parentTwoId, tenantId });
+
+            await conn.ExecuteAsync(
+                """INSERT INTO "dbo"."ChatThreads" ("Id", "TenantId", "OwnerUserId", "Name", "Role", "ContactUserId") VALUES (@threadId, @tenantId, @ownerUserId, 'Ramesh Sharma', 'Parent', NULL)""",
+                new { threadId, tenantId, ownerUserId });
+        }
+
+        var jwt = new JwtTokenService(
+            new JwtOptions { Issuer = "sms", Audience = "sms-apps", SigningKey = Key, AccessTokenMinutes = 15 },
+            new SystemClock());
+
+        var client = app.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new(
+            "Bearer", jwt.IssueAccess(ownerUserId, tenantId, new[] { Policies.Teacher }, isPlatform: false));
+
+        var response = await client.GetAsync("/v1/threads");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var matchingRows = doc.RootElement.GetProperty("data")
+            .EnumerateArray()
+            .Where(row => row.GetProperty("id").GetGuid() == threadId)
+            .ToArray();
+
+        matchingRows.Should().HaveCount(1, "a legacy thread must not fan out when multiple parents share its name");
+        matchingRows[0].GetProperty("online").GetBoolean()
+            .Should().BeFalse("an ambiguous name must not resolve to either parent's presence");
+    }
+
 }

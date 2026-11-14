@@ -251,8 +251,8 @@ public sealed class CommsRepository(IDbConnectionFactory factory, IPushNotificat
         return created;
     }
 
-    // ContactUserId is the real link where present (set explicitly on create, or backfilled);
-    // older threads without one fall back to matching Name against Users, same as delivery.
+    // ContactUserId is the authoritative link where present. Legacy threads without it
+    // use Name fallback only when exactly one User in the tenant has that name.
     public Task<IReadOnlyList<ChatThreadResponse>> ListThreadsAsync(Guid ownerUserId, CancellationToken ct = default) =>
         QueryInlineAsync<ChatThreadResponse>(@"
 SELECT th.""Id"", th.""TenantId"", th.""Name"", th.""Role"", th.""LastMessage"", th.""LastAt"", th.""Unread"", th.""IsGroup"" AS ""Group"", th.""ChildId"",
@@ -278,7 +278,18 @@ SELECT th.""Id"", th.""TenantId"", th.""Name"", th.""Role"", th.""LastMessage"",
 FROM ""dbo"".""ChatThreads"" th
 LEFT JOIN ""dbo"".""Users"" u
     ON (th.""ContactUserId"" IS NOT NULL AND u.""Id"" = th.""ContactUserId"")
-    OR (th.""ContactUserId"" IS NULL AND u.""TenantId"" = th.""TenantId"" AND u.""Name"" = th.""Name"")
+    OR (
+        th.""ContactUserId"" IS NULL
+        AND u.""TenantId"" = th.""TenantId""
+        AND u.""Name"" = th.""Name""
+        AND NOT EXISTS (
+            SELECT 1
+            FROM ""dbo"".""Users"" u2
+            WHERE u2.""TenantId"" = th.""TenantId""
+              AND u2.""Name"" = th.""Name""
+              AND u2.""Id"" <> u.""Id""
+        )
+    )
 LEFT JOIN ""dbo"".""Students"" c ON c.""Id"" = th.""ChildId""
 -- Guardian relationship for a parent thread: the contact (parent) linked to this thread's child.
 LEFT JOIN ""dbo"".""ParentStudentLinks"" psl
