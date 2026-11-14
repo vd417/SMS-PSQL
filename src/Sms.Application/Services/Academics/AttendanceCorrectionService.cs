@@ -1,3 +1,4 @@
+using Sms.Application.Common;
 using Sms.Modules.Academics.Contracts;
 using Sms.Modules.Academics.Data;
 using Sms.Shared.Kernel.Auth;
