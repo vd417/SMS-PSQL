@@ -30,7 +30,8 @@ public static class TestPostgresServer
     public static string AppConnectionString(string db)
     {
         EnsureDisposable(db);
-        return Build(db, "sms_app", "sms_app_dev_pw");
+        return Build(db, "sms_app",
+            Environment.GetEnvironmentVariable("SMS_TEST_PG_APP_PASSWORD") ?? "sms_app_dev_pw");
     }
 
     public static async Task CreateDatabaseAsync(string db)

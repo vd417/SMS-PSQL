@@ -64,22 +64,41 @@ public sealed class TenantPaymentCredentialService(
         return await GetStatusAsync(tenantId, ct);
     }
 
-    public async Task<TenantRazorpayCredentialStatus> GetStatusAsync(Guid tenantId, CancellationToken ct = default)
+    public async Task<TenantRazorpayCredentialStatus> GetStatusAsync(
+        Guid tenantId, CancellationToken ct = default)
     {
         var row = await repo.GetAsync(tenantId, ct);
+
         if (row is null)
-            return new TenantRazorpayCredentialStatus(false, null, "test", "not_configured", false, false);
-        // "configured" requires a webhook secret too, not just key id + key secret: without one every
-        // webhook delivery fails closed (400) forever with no other signal to the school. This only
-        // checks presence of the encrypted column, not that it's still decryptable under the current
-        // DataProtection key ring — doing a real decrypt-and-catch here as well would mean every GET
-        // /school/integrations pays a decrypt cost and duplicates the fail-closed handling that already
-        // lives in GetActiveAsync (the actually load-bearing path); the status surfaced here is a
-        // best-effort health signal, not a guarantee, and key_secret_set/webhook_secret_set already
-        // let the UI show something was saved even if it can no longer be decrypted.
-        var configured = row.KeyId is not null && row.KeySecretEncrypted is not null && row.WebhookSecretEncrypted is not null;
+            return new TenantRazorpayCredentialStatus(
+                false, null, "test", "not_configured", false, false);
+
+        var keySecretSet = !string.IsNullOrWhiteSpace(row.KeySecretEncrypted);
+        var webhookSecretSet = !string.IsNullOrWhiteSpace(row.WebhookSecretEncrypted);
+        var configured = false;
+
+        if (row.IsEnabled &&
+            !string.IsNullOrWhiteSpace(row.KeyId) &&
+            keySecretSet && webhookSecretSet)
+        {
+            try
+            {
+                var protector = Protector;
+                var keySecret = protector.Unprotect(row.KeySecretEncrypted!);
+                var webhookSecret = protector.Unprotect(row.WebhookSecretEncrypted!);
+
+                configured = !string.IsNullOrWhiteSpace(keySecret) &&
+                             !string.IsNullOrWhiteSpace(webhookSecret);
+            }
+            catch (CryptographicException)
+            {
+                configured = false;
+            }
+        }
+
         return new TenantRazorpayCredentialStatus(
-            row.IsEnabled, row.KeyId, row.Mode, configured ? "configured" : "not_configured",
-            row.KeySecretEncrypted is not null, row.WebhookSecretEncrypted is not null);
+            row.IsEnabled, row.KeyId, row.Mode,
+            configured ? "configured" : "not_configured",
+            keySecretSet, webhookSecretSet);
     }
 }

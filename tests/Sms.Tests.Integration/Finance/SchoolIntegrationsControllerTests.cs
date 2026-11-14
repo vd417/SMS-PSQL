@@ -3,6 +3,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Sms.Shared.Kernel.Payments;
 using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Time;
 using Xunit;
@@ -13,6 +16,19 @@ namespace Sms.Tests.Integration.Finance;
 public class SchoolIntegrationsControllerTests(PostgresFixture fx)
 {
     private const string Key = "integration-test-signing-key-32-bytes-min!!";
+
+    private sealed class FakeRazorpayClient : IRazorpayClient
+    {
+        public Task<RazorpayOrderCreated> CreateOrderAsync(
+            string keyId, string keySecret, long amountPaise, string currency, string receipt, CancellationToken ct = default) =>
+            Task.FromResult(new RazorpayOrderCreated("order_fake", amountPaise, currency));
+
+        public Task<(bool Ok, string? Error)> ProbeAsync(string keyId, string keySecret, CancellationToken ct = default) =>
+            Task.FromResult((true, (string?)null));
+
+        public bool VerifyPaymentSignature(string keySecret, string orderId, string paymentId, string signature) => true;
+        public bool VerifyWebhookSignature(string webhookSecret, string body, string signatureHeader) => true;
+    }
 
     private static HttpClient AuthedClient(WebApplicationFactory<Program> app, Guid tenantId, Guid userId, string role)
     {
@@ -31,6 +47,8 @@ public class SchoolIntegrationsControllerTests(PostgresFixture fx)
             b.UseSetting("environment", "Production");
             b.UseSetting("ConnectionStrings:Sql", fx.ConnectionString);
             b.UseSetting("Jwt:SigningKey", Key);
+            b.ConfigureTestServices(services =>
+                services.AddSingleton<IRazorpayClient, FakeRazorpayClient>());
         });
 
     [Fact]

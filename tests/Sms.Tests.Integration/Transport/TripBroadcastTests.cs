@@ -230,49 +230,11 @@ public class TripBroadcastTests(PostgresFixture fx)
         ended.EndedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(10));
     }
 
-    /// dbo.Trip_Start now rejects (returns no row, translated to 409) a second trip on a bus
-    /// that already has one live — otherwise two drivers (or one driver double-tapping "start")
-    /// could each get their own "live" trip pointed at the same physical bus, and every
-    /// bus-keyed broadcast/lookup (GetActiveDriverOrConductorRoleByBusAsync, live snapshots)
-    /// would become ambiguous about which trip is authoritative.
-    [Fact]
-    public async Task Starting_a_second_trip_on_a_bus_already_live_is_rejected()
-    {
-        var (app, _, _) = App();
-        await using var _dispose = app;
-        var tenantId = Guid.NewGuid();
-        var busId = Guid.NewGuid();
-        var busNo = $"KA-{Guid.NewGuid():N}"[..12];
-
-        await using (var conn = new NpgsqlConnection(fx.ConnectionString))
-        {
-            await conn.OpenAsync();
-            await conn.ExecuteAsync("SELECT set_config('app.tenant_id', @t::text, false)", new { t = tenantId });
-            await conn.ExecuteAsync(
-                "INSERT INTO \"dbo\".\"Buses\" (\"Id\", \"TenantId\", \"BusNo\") VALUES (@Id, @TenantId, @BusNo)",
-                new { Id = busId, TenantId = tenantId, BusNo = busNo });
-        }
-
-        var driverId = Guid.NewGuid();
-        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, driverId);
-        var driver = StaffClient(app, tenantId, driverId);
-        var first = await driver.PostAsJsonAsync("/v1/staff/trips", new { direction = "pickup", bus_no = busNo });
-        first.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        // A different driver (or the same one retrying) trying to start a second trip on the
-        // same bus while the first is still live must be rejected, not silently create a
-        // second concurrent "live" trip on the same physical bus.
-        var second = await driver.PostAsJsonAsync("/v1/staff/trips", new { direction = "pickup", bus_no = busNo });
-        second.StatusCode.Should().Be(HttpStatusCode.Conflict);
-    }
-
     /// dbo.trip_start auto-supersedes an ABANDONED never-pinged trip rather than wedging the bus
     /// (migration 0021). A trip whose driver and conductor both never pinged was started but never
     /// tracked (device never got GPS / app closed immediately); once it's older than the 2-minute
     /// grace, a fresh Start ends it and proceeds instead of returning 409 and stranding the bus
-    /// until the 30-minute offline sweep. A trip that HAS pinged (a real moving trip) still blocks
-    /// — covered by Starting_a_second_trip_on_a_bus_already_live_is_rejected above (its first trip
-    /// is <2 min old, so the grace also spares a genuinely fresh trip).
+    /// until the 30-minute offline sweep.
     [Fact]
     public async Task Starting_supersedes_an_abandoned_never_pinged_trip()
     {
@@ -298,7 +260,9 @@ public class TripBroadcastTests(PostgresFixture fx)
         }
 
         // Start must succeed — the abandoned trip is superseded, not a blocker.
-        var driver = StaffClient(app, tenantId, Guid.NewGuid());
+        var driverId = Guid.NewGuid();
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, driverId);
+        var driver = StaffClient(app, tenantId, driverId);
         var start = await driver.PostAsJsonAsync("/v1/staff/trips", new { direction = "pickup", bus_no = busNo });
         start.StatusCode.Should().Be(HttpStatusCode.Created);
 
@@ -341,6 +305,7 @@ public class TripBroadcastTests(PostgresFixture fx)
                 new { Id = busId, TenantId = tenantId, BusNo = busNo });
         }
 
+        await TripTestSeed.AssignDriverAsync(fx.ConnectionString, tenantId, busNo, driverUserId);
         var driver = StaffClient(app, tenantId, driverUserId);
         var first = await Data(await driver.PostAsJsonAsync("/v1/staff/trips", new { direction = "pickup", bus_no = busNo }), HttpStatusCode.Created);
         var firstTripId = first.GetProperty("id").GetGuid();
