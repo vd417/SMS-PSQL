@@ -52,6 +52,7 @@ public sealed class Fast2SmsWhatsAppOtpSender : IPhoneOtpSender
             throw new InvalidOperationException(DeliveryFailed);
         }
 
+        _log?.LogInformation("WhatsApp OTP accepted for message {MessageId}", _options.MessageId);
         return code;
     }
 

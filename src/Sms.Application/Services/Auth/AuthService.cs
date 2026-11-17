@@ -296,10 +296,16 @@ public sealed class AuthService(
 
     public async Task<ApiResult<object>> ForgotPasswordAsync(ForgotPasswordRequest req, CancellationToken ct = default)
     {
-        /* First-time / invite users (no password yet): welcome email with school name + OTP.
-           Existing users: keep the generic verification-code mail. */
+        /* A phone reset always uses the WhatsApp code. The no-password invite path
+           only logs an SMS and never calls Fast2SMS, so the CRM saw HTTP 200 with
+           nothing on WhatsApp. Email first-time users still get the welcome mail. */
         tenant.Set(null, null, isPlatform: true);
-        var user = await FindUserByIdentifierAsync(req.Identifier, ct);
+        var identifier = (req.Identifier ?? "").Trim();
+        // Phone: forgot-password and first-time "set a password" both send the WhatsApp code.
+        if (IdentifierClassifier.Classify(identifier) == IdentifierKind.Phone)
+            return await SendOtpToRegisteredAsync(identifier, req.Role, "forgot_otp", ct);
+
+        var user = await FindUserByIdentifierAsync(identifier, ct);
         if (user is not null && string.IsNullOrEmpty(user.PasswordHash))
         {
             var schoolName = "your school";
@@ -311,9 +317,9 @@ public sealed class AuthService(
                 var roles = await users.GetRolesAsync(user.Id, ct);
                 roleLabel = RoleLabel(roles.FirstOrDefault());
             }
-            return await SendInviteSetupAsync(req.Identifier, schoolName, roleLabel, TimeSpan.FromHours(24), ct: ct, requestedRole: req.Role);
+            return await SendInviteSetupAsync(identifier, schoolName, roleLabel, TimeSpan.FromHours(24), ct: ct, requestedRole: req.Role);
         }
-        return await SendOtpToRegisteredAsync(req.Identifier, req.Role, "forgot_otp", ct);
+        return await SendOtpToRegisteredAsync(identifier, req.Role, "forgot_otp", ct);
     }
 
     public async Task<ApiResult<object>> SendInviteSetupAsync(
@@ -339,6 +345,31 @@ public sealed class AuthService(
                     "No email or phone on file for this student or linked parent."), 404);
         var (target, channel, recipient) = delivery.Value;
 
+        if (channel != "email")
+        {
+            // LoggingSmsSender only writes "SMS queued". Phone codes go through the
+            // same WhatsApp sender as login, and only the code it returns is stored.
+            string sentCode;
+            try
+            {
+                sentCode = await otp.SendAsync(target, "sms", ct);
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<object>.Fail(
+                    new Error("delivery_failed", ex.Message), 502);
+            }
+
+            await users.OtpInsertAsync(id, "sms", Sha256(sentCode), DateTime.UtcNow.Add(LoginOtp.Lifetime), ct);
+            return ApiResult<object>.Ok(new
+            {
+                sent = true,
+                channel = "sms",
+                sent_to = MaskDestination(target, "sms"),
+                recipient,
+            });
+        }
+
         // "link" method: a long opaque token flows through the exact same OTP
         // storage/consume path as a 6-digit code (Otp_Insert/Otp_Consume compare a
         // SHA256 hash either way) — only the value shape and delivery text differ.
@@ -353,18 +384,10 @@ public sealed class AuthService(
             ? $"{frontend.BaseUrl.TrimEnd('/')}/?identifier={Uri.EscapeDataString(id)}&code={Uri.EscapeDataString(code)}"
             : null;
 
-        if (channel == "email")
-        {
-            var from = await schoolMail.RouteAsync(user.TenantId, "invite", ct);
-            emailQueue.Enqueue(InviteWelcomeEmail.Build(target, schoolName, code, roleLabel, link, customMessage).WithRoute(from));
-            if (diagnostics.LogOtpCodes)
-                logger.LogInformation("Queued invite email to {Identifier}", target);
-        }
-        else
-        {
-            using var schoolSmsFrom = OutboundSms.Use(await schoolSms.SenderForAsync(user.TenantId, ct));
-            await sms.SendAsync(target, InviteWelcomeEmail.SmsBody(schoolName, code, roleLabel, link, customMessage), ct);
-        }
+        var from = await schoolMail.RouteAsync(user.TenantId, "invite", ct);
+        emailQueue.Enqueue(InviteWelcomeEmail.Build(target, schoolName, code, roleLabel, link, customMessage).WithRoute(from));
+        if (diagnostics.LogOtpCodes)
+            logger.LogInformation("Queued invite email to {Identifier}", target);
 
         return ApiResult<object>.Ok(new
         {
@@ -758,6 +781,16 @@ public sealed class AuthService(
     private async Task<(string Target, string Channel, string Recipient)?> ResolveOtpDeliveryAsync(
         UserRecord user, string identifier, string? role, CancellationToken ct)
     {
+        // A phone the person typed is the WhatsApp destination. Do this before the
+        // student-email path, which would otherwise mail a linked admission and
+        // leave the WhatsApp number with no message.
+        if (IdentifierClassifier.Classify(identifier.Trim()) == IdentifierKind.Phone)
+        {
+            var typed = IndianMobile.ToTenDigits(identifier) ?? IndianMobile.ToTenDigits(user.Phone);
+            if (typed is not null)
+                return (typed, "sms", "self");
+        }
+
         var admissionId = !string.IsNullOrWhiteSpace(user.StudentId)
             ? user.StudentId!
             : IdentifierClassifier.Classify(identifier) == IdentifierKind.AdmissionId
