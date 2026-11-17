@@ -4,6 +4,7 @@ using Sms.Application.Interfaces.DAO;
 using Sms.Modules.Staffing.Contracts;
 using Sms.Modules.Staffing.Data;
 using Sms.Modules.Staffing.Profile;
+using Sms.Shared.Kernel.Auth;
 using Sms.Shared.Kernel.Authz;
 using Sms.Shared.Kernel.Data;
 using Sms.Shared.Kernel.Http;
@@ -78,6 +79,7 @@ public sealed class StaffingService(
         try
         {
             var created = (await teachers.CreateAsync(tid, req, ct))!;
+            await SyncLoginFieldsAsync(created.Id, created.Name, created.Email, created.Phone, teacher: true, ct);
             return ApiResult<TeacherResponse>.Ok(created, 201);
         }
         catch (ContactConflictException ex)
@@ -127,7 +129,9 @@ public sealed class StaffingService(
                 await users.SetEmailAsync(uid, existing.Email, ct);
             return ApiResult<TeacherResponse>.Fail(ContactConflict(ex), 409);
         }
-        return ApiResult<TeacherResponse>.Ok((await teachers.GetAsync(id, ct))!);
+        var savedTeacher = (await teachers.GetAsync(id, ct))!;
+        await SyncLoginFieldsAsync(savedTeacher.Id, savedTeacher.Name, savedTeacher.Email, savedTeacher.Phone, teacher: true, ct);
+        return ApiResult<TeacherResponse>.Ok(savedTeacher);
     }
 
     public async Task<ApiResult<CursorPage<StaffResponse>>> ListStaffAsync(
@@ -158,6 +162,7 @@ public sealed class StaffingService(
         try
         {
             var created = (await staff.CreateAsync(tid, req, ct))!;
+            await SyncLoginFieldsAsync(created.Id, created.Name, created.Email, created.Phone, teacher: false, ct);
             return ApiResult<StaffResponse>.Ok(created, 201);
         }
         catch (ContactConflictException ex)
@@ -208,7 +213,9 @@ public sealed class StaffingService(
                 await users.SetEmailAsync(uid, existing.Email, ct);
             return ApiResult<StaffResponse>.Fail(ContactConflict(ex), 409);
         }
-        return ApiResult<StaffResponse>.Ok((await staff.GetAsync(id, ct))!);
+        var savedStaff = (await staff.GetAsync(id, ct))!;
+        await SyncLoginFieldsAsync(savedStaff.Id, savedStaff.Name, savedStaff.Email, savedStaff.Phone, teacher: false, ct);
+        return ApiResult<StaffResponse>.Ok(savedStaff);
     }
 
     /// <summary>Writes an Email edit through to the linked Users row (the single source
@@ -228,6 +235,53 @@ public sealed class StaffingService(
         }
         await users.SetEmailAsync(userId.Value, newEmail, ct);
         return null;
+    }
+
+    /// Name, email, and phone from the saved profile are copied onto the login row.
+    private async Task SyncLoginFieldsAsync(
+        Guid profileId, string? name, string? email, string? phone, bool teacher, CancellationToken ct)
+    {
+        try
+        {
+            UserRecord? login = null;
+            if (!string.IsNullOrWhiteSpace(email))
+                login = teacher
+                    ? await users.EnsureTeacherLoginAsync(email.Trim(), ct)
+                    : await users.EnsureStaffLoginAsync(email.Trim(), ct);
+            if (login is null)
+            {
+                var userId = teacher
+                    ? await teachers.GetUserIdAsync(profileId, ct)
+                    : await staff.GetUserIdAsync(profileId, ct);
+                if (userId is null) return;
+                login = await users.GetByIdAsync(userId.Value, ct);
+            }
+            if (login is null) return;
+            await TryWriteLoginNameAsync(login, name, ct);
+            await TryWriteLoginPhoneAsync(login, phone, ct);
+        }
+        catch (Exception)
+        {
+            // A duplicate email or phone must not undo the profile row that already saved.
+        }
+    }
+
+    private async Task TryWriteLoginNameAsync(UserRecord login, string? name, CancellationToken ct)
+    {
+        var trimmed = name?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return;
+        if (string.Equals(login.Name?.Trim(), trimmed, StringComparison.Ordinal)) return;
+        try { await users.SetNameAsync(login.Id, trimmed, ct); }
+        catch (Exception) { /* profile row is already saved */ }
+    }
+
+    private async Task TryWriteLoginPhoneAsync(UserRecord login, string? phone, CancellationToken ct)
+    {
+        var ten = IndianMobile.ToTenDigits(phone);
+        if (ten is null) return;
+        if (string.Equals(IndianMobile.ToTenDigits(login.Phone), ten, StringComparison.Ordinal)) return;
+        try { await users.SetPhoneAsync(login.Id, ten, ct); }
+        catch (Exception) { /* another login already owns this mobile */ }
     }
 
     /// Maps a ContactClaims uniqueness rejection raised by teacher_create/update or staff_create/update

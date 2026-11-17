@@ -30,6 +30,12 @@ public interface IAuthDao
     Task<RosterStudentRecord?> GetRosterByEmailAsync(string email, CancellationToken ct = default);
     /// <summary>SIS roster row by Students.GuardianEmail (trim + case-insensitive).</summary>
     Task<RosterStudentRecord?> GetRosterByGuardianEmailAsync(string email, CancellationToken ct = default);
+    /// <summary>SIS roster row whose guardian mobile matches these 10 digits.</summary>
+    Task<RosterStudentRecord?> GetRosterByGuardianPhoneAsync(string tenDigits, CancellationToken ct = default);
+    /// <summary>Teacher login email whose profile mobile matches these 10 digits.</summary>
+    Task<string?> FindTeacherEmailByPhoneAsync(string tenDigits, CancellationToken ct = default);
+    /// <summary>Staff login email whose profile mobile matches these 10 digits.</summary>
+    Task<string?> FindStaffEmailByPhoneAsync(string tenDigits, CancellationToken ct = default);
     /// <summary>Every active ward whose guardian email matches, across schools.</summary>
     Task<IReadOnlyList<RosterStudentRecord>> ListRosterByGuardianEmailAsync(string email, CancellationToken ct = default);
     /// <summary>Fetch the student login for an admission ID, creating it from the SIS roster when missing.</summary>
@@ -45,6 +51,7 @@ public interface IAuthDao
     Task SetPasswordAsync(Guid userId, string passwordHash, CancellationToken ct = default);
     Task SetPhotoAsync(Guid userId, string? photoUrl, CancellationToken ct = default);
     Task SetPhoneAsync(Guid userId, string? phone, CancellationToken ct = default);
+    Task SetNameAsync(Guid userId, string name, CancellationToken ct = default);
     Task SetEmailAsync(Guid userId, string? email, CancellationToken ct = default);
     Task OtpInsertAsync(string identifier, string channel, string codeHash, DateTime expiresAt, CancellationToken ct = default);
     /// Newest unconsumed code for this login, if one is still valid.

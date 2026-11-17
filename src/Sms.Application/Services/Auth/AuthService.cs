@@ -1043,6 +1043,8 @@ public sealed class AuthService(
                     var ten = IndianMobile.ToTenDigits(trimmed);
                     if (ten is not null && !string.Equals(ten, trimmed, StringComparison.Ordinal))
                         byPhone = await users.ListByPhoneAsync(ten, ct);
+                    if (byPhone.Count == 0 && ten is not null)
+                        byPhone = await TrySavePhoneFromProfileAsync(ten, ct);
                 }
                 if (byPhone.Count > 0) return byPhone;
                 return await users.ListByAdmissionIdAsync(trimmed, ct);
@@ -1084,6 +1086,66 @@ public sealed class AuthService(
         var roster = await users.GetRosterByGuardianEmailAsync(email, ct);
         if (roster is null || string.IsNullOrWhiteSpace(roster.AdmissionNo)) return null;
         return await users.EnsureParentLoginAsync(roster.AdmissionNo, ct);
+    }
+
+    /// Teacher, staff, and guardian phones live on the profile row. Copy a matching
+    /// mobile onto the login so the next OTP request finds Users.Phone.
+    private async Task<IReadOnlyList<UserRecord>> TrySavePhoneFromProfileAsync(string ten, CancellationToken ct)
+    {
+        var teacherEmail = await users.FindTeacherEmailByPhoneAsync(ten, ct);
+        var teacher = await SaveStaffOrTeacherPhoneAsync(teacherEmail, ten, teacher: true, ct);
+        if (teacher is not null) return [teacher];
+
+        var staffEmail = await users.FindStaffEmailByPhoneAsync(ten, ct);
+        var staff = await SaveStaffOrTeacherPhoneAsync(staffEmail, ten, teacher: false, ct);
+        if (staff is not null) return [staff];
+
+        var roster = await users.GetRosterByGuardianPhoneAsync(ten, ct);
+        if (roster is null || string.IsNullOrWhiteSpace(roster.AdmissionNo))
+            return [];
+        var guardian = await SaveGuardianPhoneAsync(roster.AdmissionNo, ten, ct);
+        return guardian is null ? [] : [guardian];
+    }
+
+    private async Task<UserRecord?> SaveStaffOrTeacherPhoneAsync(
+        string? email, string ten, bool teacher, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return null;
+        var login = teacher
+            ? await users.EnsureTeacherLoginAsync(email, ct)
+            : await users.EnsureStaffLoginAsync(email, ct);
+        if (login is null) return null;
+        if (await TryWriteLoginPhoneAsync(login, ten, ct))
+            return await users.GetByIdAsync(login.Id, ct) ?? login;
+        return login;
+    }
+
+    private async Task<UserRecord?> SaveGuardianPhoneAsync(string admissionNo, string ten, CancellationToken ct)
+    {
+        var parent = await users.EnsureParentLoginAsync(admissionNo, ct);
+        if (await TryWriteLoginPhoneAsync(parent, ten, ct) && parent is not null)
+            return await users.GetByIdAsync(parent.Id, ct) ?? parent;
+
+        var student = await users.EnsureStudentLoginAsync(admissionNo, ct);
+        if (await TryWriteLoginPhoneAsync(student, ten, ct) && student is not null)
+            return await users.GetByIdAsync(student.Id, ct) ?? student;
+        return parent ?? student;
+    }
+
+    private async Task<bool> TryWriteLoginPhoneAsync(UserRecord? login, string ten, CancellationToken ct)
+    {
+        if (login is null) return false;
+        if (string.Equals(IndianMobile.ToTenDigits(login.Phone), ten, StringComparison.Ordinal))
+            return true;
+        try
+        {
+            await users.SetPhoneAsync(login.Id, ten, ct);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     private async Task<int?> LoginOtpWaitSecondsAsync(string identifier, string channel, CancellationToken ct)

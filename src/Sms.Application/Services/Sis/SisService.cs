@@ -226,11 +226,58 @@ public sealed class SisService(
         try
         {
             await SyncParentLoginAsync(student, ct);
+            await SaveFamilyLoginAsync(student, ct);
         }
         catch (Exception)
         {
             /* Parent Users row is best-effort. Duplicate phone/email vs the student
              * login must not fail SIS create/PATCH with 500 after the roster row saved. */
+        }
+    }
+
+    /// Edited student and guardian name, email, and phone are written onto the login rows.
+    private async Task SaveFamilyLoginAsync(StudentResponse student, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(student.AdmissionNo)) return;
+        var ten = IndianMobile.ToTenDigits(student.GuardianPhone);
+        UserRecord? parent = null;
+        if (!string.IsNullOrWhiteSpace(student.GuardianEmail) || ten is not null)
+            parent = await auth.EnsureParentLoginAsync(student.AdmissionNo, ct);
+        if (parent is not null)
+        {
+            await TryWriteLoginNameAsync(parent, student.GuardianName, ct);
+            if (ten is not null && await TryWriteLoginPhoneAsync(parent, ten, ct))
+                ten = null;
+        }
+        var studentLogin = await auth.EnsureStudentLoginAsync(student.AdmissionNo, ct);
+        if (studentLogin is null) return;
+        await TryWriteLoginNameAsync(studentLogin, student.Name, ct);
+        if (ten is not null)
+            await TryWriteLoginPhoneAsync(studentLogin, ten, ct);
+    }
+
+    private async Task TryWriteLoginNameAsync(UserRecord login, string? name, CancellationToken ct)
+    {
+        var trimmed = name?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return;
+        if (string.Equals(login.Name?.Trim(), trimmed, StringComparison.Ordinal)) return;
+        try { await auth.SetNameAsync(login.Id, trimmed, ct); }
+        catch (Exception) { /* roster row is already saved */ }
+    }
+
+    private async Task<bool> TryWriteLoginPhoneAsync(UserRecord? login, string ten, CancellationToken ct)
+    {
+        if (login is null) return false;
+        if (string.Equals(IndianMobile.ToTenDigits(login.Phone), ten, StringComparison.Ordinal))
+            return true;
+        try
+        {
+            await auth.SetPhoneAsync(login.Id, ten, ct);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
 

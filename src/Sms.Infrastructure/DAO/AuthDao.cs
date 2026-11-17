@@ -87,6 +87,54 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
         return rows.FirstOrDefault();
     }
 
+    public async Task<RosterStudentRecord?> GetRosterByGuardianPhoneAsync(string tenDigits, CancellationToken ct = default)
+    {
+        var rows = await QueryInlineAsync<RosterStudentRecord>(
+            """
+            SELECT s."Id", s."TenantId", s."AdmissionNo", s."Name", s."Email", s."GuardianPhone", s."Status", s."GuardianEmail"
+            FROM "dbo"."Students" s
+            WHERE right(regexp_replace(COALESCE(s."GuardianPhone", ''), '\D', '', 'g'), 10) = @Ten
+            AND lower(COALESCE(s."Status", 'active')) NOT IN ('removed', 'inactive', 'left', 'withdrawn')
+            ORDER BY s."CreatedAt"
+            LIMIT 1
+            """,
+            new { Ten = tenDigits }, ct);
+        return rows.FirstOrDefault();
+    }
+
+    public Task<string?> FindTeacherEmailByPhoneAsync(string tenDigits, CancellationToken ct = default) =>
+        FindProfileEmailByPhoneAsync(
+            """
+            SELECT t."Email"
+            FROM "dbo"."Teachers" t
+            WHERE t."Email" IS NOT NULL
+              AND right(regexp_replace(COALESCE(t."Phone", ''), '\D', '', 'g'), 10) = @Ten
+              AND lower(COALESCE(t."Status", 'active')) NOT IN ('inactive', 'removed', 'left')
+            ORDER BY t."CreatedAt"
+            LIMIT 1
+            """,
+            tenDigits, ct);
+
+    public Task<string?> FindStaffEmailByPhoneAsync(string tenDigits, CancellationToken ct = default) =>
+        FindProfileEmailByPhoneAsync(
+            """
+            SELECT s."Email"
+            FROM "dbo"."Staff" s
+            WHERE s."Email" IS NOT NULL
+              AND right(regexp_replace(COALESCE(s."Phone", ''), '\D', '', 'g'), 10) = @Ten
+              AND lower(COALESCE(s."Status", 'active')) NOT IN ('inactive', 'removed', 'left')
+            ORDER BY s."CreatedAt"
+            LIMIT 1
+            """,
+            tenDigits, ct);
+
+    private async Task<string?> FindProfileEmailByPhoneAsync(string sql, string tenDigits, CancellationToken ct)
+    {
+        var rows = await QueryInlineAsync<EmailHit>(sql, new { Ten = tenDigits }, ct);
+        var email = rows.FirstOrDefault()?.Email;
+        return string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+    }
+
     public Task<IReadOnlyList<RosterStudentRecord>> ListRosterByGuardianEmailAsync(string email, CancellationToken ct = default) =>
         QueryInlineAsync<RosterStudentRecord>(
             """
@@ -145,6 +193,11 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
         ExecuteInlineUpdateAsync(
             """UPDATE "dbo"."Users" SET "Phone" = @Phone WHERE "Id" = @UserId""",
             new { UserId = userId, Phone = phone }, ct);
+
+    public Task SetNameAsync(Guid userId, string name, CancellationToken ct = default) =>
+        ExecuteInlineUpdateAsync(
+            """UPDATE "dbo"."Users" SET "Name" = @Name WHERE "Id" = @UserId""",
+            new { UserId = userId, Name = name }, ct);
 
     /// Multi-school identities share an email — RLS requires platform context to see all peers.
     private async Task SyncToEmailPeersAsync(
@@ -212,4 +265,5 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
         ExecuteProcAsync(AuthQueries.OtpConsumeAll, new { Identifier = identifier }, ct);
 
     private sealed record OtpRow(Guid Id, string CodeHash);
+    private sealed record EmailHit(string? Email);
 }
