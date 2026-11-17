@@ -355,7 +355,7 @@ public sealed class AuthService(
 
         if (channel == "email")
         {
-            var from = await schoolMail.ForTenantAsync(user.TenantId, ct);
+            var from = await schoolMail.RouteAsync(user.TenantId, "invite", ct);
             emailQueue.Enqueue(InviteWelcomeEmail.Build(target, schoolName, code, roleLabel, link, customMessage).WithRoute(from));
             if (diagnostics.LogOtpCodes)
                 logger.LogInformation("Queued invite email to {Identifier}", target);
@@ -389,7 +389,7 @@ public sealed class AuthService(
         {
             tenant.Set(null, null, isPlatform: true);
             var user = await FindUserByIdentifierAsync(target, ct);
-            var from = await schoolMail.ForTenantAsync(user?.TenantId, ct);
+            var from = await schoolMail.RouteAsync(user?.TenantId, "invite", ct);
             emailQueue.Enqueue(WelcomeOnboardEmail.Build(target, schoolName, loginUrl, roleLabel).WithRoute(from));
         }
         else
@@ -691,6 +691,10 @@ public sealed class AuthService(
                     "No email or phone on file for this student or linked parent."), 404);
 
         var (target, channel, recipient) = delivery.Value;
+        var waitSeconds = await LoginOtpWaitSecondsAsync(identifier, channel, ct);
+        if (waitSeconds is not null)
+            return ApiResult<object>.Fail(new Error("otp_cooldown", LoginOtpWaitMessage(channel, waitSeconds.Value)), 429);
+
         string? code = null;
         Exception? lastSendError = null;
 
@@ -734,7 +738,7 @@ public sealed class AuthService(
                 new Error("delivery_failed",
                     lastSendError?.Message ?? "Could not deliver verification code."), 502);
 
-        await users.OtpInsertAsync(identifier, channel, Sha256(code), DateTime.UtcNow.AddMinutes(10), ct);
+        await users.OtpInsertAsync(identifier, channel, Sha256(code), DateTime.UtcNow.Add(LoginOtp.Lifetime), ct);
         return ApiResult<object>.Ok(new
         {
             sent = true,
@@ -833,6 +837,15 @@ public sealed class AuthService(
             }
 
             return null;
+        }
+
+        // A phone request is the WhatsApp check. An email request stays on mail,
+        // even when the same account also has a mobile number.
+        if (IdentifierClassifier.Classify(identifier.Trim()) == IdentifierKind.Phone)
+        {
+            var phone = IndianMobile.ToTenDigits(user.Phone) ?? IndianMobile.ToTenDigits(identifier);
+            if (phone is not null)
+                return (phone, "sms", "self");
         }
 
         if (IsUsableEmail(user.Email))
@@ -1025,6 +1038,12 @@ public sealed class AuthService(
             case IdentifierKind.Phone:
             {
                 var byPhone = await users.ListByPhoneAsync(trimmed, ct);
+                if (byPhone.Count == 0)
+                {
+                    var ten = IndianMobile.ToTenDigits(trimmed);
+                    if (ten is not null && !string.Equals(ten, trimmed, StringComparison.Ordinal))
+                        byPhone = await users.ListByPhoneAsync(ten, ct);
+                }
                 if (byPhone.Count > 0) return byPhone;
                 return await users.ListByAdmissionIdAsync(trimmed, ct);
             }
@@ -1065,6 +1084,35 @@ public sealed class AuthService(
         var roster = await users.GetRosterByGuardianEmailAsync(email, ct);
         if (roster is null || string.IsNullOrWhiteSpace(roster.AdmissionNo)) return null;
         return await users.EnsureParentLoginAsync(roster.AdmissionNo, ct);
+    }
+
+    private async Task<int?> LoginOtpWaitSecondsAsync(string identifier, string channel, CancellationToken ct)
+    {
+        var latest = await users.OtpLatestCreatedAtAsync(identifier, ct);
+        if (latest is null) return null;
+        if (!string.IsNullOrEmpty(latest.Channel)
+            && !string.Equals(latest.Channel, channel, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var created = latest.CreatedAt.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(latest.CreatedAt, DateTimeKind.Utc)
+            : latest.CreatedAt.ToUniversalTime();
+        var remaining = LoginOtp.ResendWaitFor(channel) - (DateTime.UtcNow - created);
+        if (remaining <= TimeSpan.Zero) return null;
+        return Math.Max(1, (int)Math.Ceiling(remaining.TotalSeconds));
+    }
+
+    private static string LoginOtpWaitMessage(string channel, int seconds)
+    {
+        var kind = string.Equals(channel, "sms", StringComparison.OrdinalIgnoreCase) ? "WhatsApp" : "email";
+        if (seconds >= 60 && seconds % 60 == 0)
+        {
+            var minutes = seconds / 60;
+            return $"Wait {minutes} {(minutes == 1 ? "minute" : "minutes")} before requesting another {kind} code.";
+        }
+        if (seconds > 60)
+            return $"Wait {seconds / 60} minutes {seconds % 60} seconds before requesting another {kind} code.";
+        return $"Wait {seconds} seconds before requesting another {kind} code.";
     }
 
     private static Error NotRegisteredError(string identifier)

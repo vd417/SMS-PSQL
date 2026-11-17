@@ -2,6 +2,8 @@ using Sms.Shared.Kernel.Auth;
 
 namespace Sms.Application.Interfaces.DAO;
 
+public sealed record OpenOtp(DateTime CreatedAt, string? Channel);
+
 public sealed record RosterStudentRecord(
     Guid Id,
     Guid TenantId,
@@ -45,6 +47,8 @@ public interface IAuthDao
     Task SetPhoneAsync(Guid userId, string? phone, CancellationToken ct = default);
     Task SetEmailAsync(Guid userId, string? email, CancellationToken ct = default);
     Task OtpInsertAsync(string identifier, string channel, string codeHash, DateTime expiresAt, CancellationToken ct = default);
+    /// Newest unconsumed code for this login, if one is still valid.
+    Task<OpenOtp?> OtpLatestCreatedAtAsync(string identifier, CancellationToken ct = default);
     Task<string?> OtpActiveHashAsync(string identifier, CancellationToken ct = default);
     /// True if this call actually consumed the OTP row (false = already consumed/expired by a
     /// concurrent request, which the caller must treat as a failed verification, not a success).

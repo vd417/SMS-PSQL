@@ -11,7 +11,7 @@ public sealed class EmailOtpSender(IEmailQueue queue, ILogger<EmailOtpSender>? l
     public Task<string> SendAsync(string identifier, string channel, CancellationToken ct = default)
     {
         var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
-        var body = $"Your verification code is {code}. It expires in 10 minutes. " +
+        var body = $"Your verification code is {code}. It expires in {LoginOtp.ExpiryMinutes} minutes. " +
                    "If you didn't request this, you can ignore this email.";
         queue.Enqueue(new EmailMessage(identifier, "Your verification code", body).WithRoute(OutboundMail.Current));
         if (logCode)

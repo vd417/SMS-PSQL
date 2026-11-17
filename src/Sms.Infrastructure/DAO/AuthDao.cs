@@ -28,14 +28,20 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
             """,
             new { Email = email }, ct);
 
-    public Task<IReadOnlyList<UserRecord>> ListByPhoneAsync(string phone, CancellationToken ct = default) =>
-        QueryInlineAsync<UserRecord>(
+    public Task<IReadOnlyList<UserRecord>> ListByPhoneAsync(string phone, CancellationToken ct = default)
+    {
+        // Apps send the number as typed. Stored values may be 10 digits or +91….
+        var ten = IndianMobile.ToTenDigits(phone) ?? "";
+        return QueryInlineAsync<UserRecord>(
             """
             SELECT "Id", "TenantId", "Email", "StudentId", "Phone", "PasswordHash", "IsPlatform", "Status", "Name", "MustSetPassword", "CreatedAt", "PhotoUrl"
-            FROM "dbo"."Users" WHERE "Phone" = @Phone
+            FROM "dbo"."Users"
+            WHERE "Phone" = @Phone
+               OR (@Ten <> '' AND right(regexp_replace(COALESCE("Phone", ''), '\D', '', 'g'), 10) = @Ten)
             ORDER BY CASE WHEN "IsPlatform" THEN 0 ELSE 1 END, "CreatedAt", "Id"
             """,
-            new { Phone = phone }, ct);
+            new { Phone = phone.Trim(), Ten = ten }, ct);
+    }
 
     public Task<IReadOnlyList<UserRecord>> ListByAdmissionIdAsync(string admissionId, CancellationToken ct = default) =>
         QueryProcAsync<UserRecord>(AuthQueries.ListByAdmissionId, new { AdmissionId = admissionId }, ct);
@@ -176,6 +182,22 @@ public sealed class AuthDao(IDbConnectionFactory factory, ITenantContext tenant)
         DateTime expiresAt, CancellationToken ct = default) =>
         ExecuteProcAsync(AuthQueries.OtpInsert,
             new { Identifier = identifier, Channel = channel, CodeHash = codeHash, ExpiresAt = expiresAt }, ct);
+
+    public async Task<OpenOtp?> OtpLatestCreatedAtAsync(string identifier, CancellationToken ct = default)
+    {
+        var rows = await QueryInlineAsync<OpenOtp>(
+            """
+            SELECT "CreatedAt", "Channel"
+            FROM "dbo"."OtpCodes"
+            WHERE "Identifier" = @Identifier
+              AND "ConsumedAt" IS NULL
+              AND "ExpiresAt" > now()
+            ORDER BY "CreatedAt" DESC
+            LIMIT 1
+            """,
+            new { Identifier = identifier.Trim() }, ct);
+        return rows.Count == 0 ? null : rows[0];
+    }
 
     public async Task<string?> OtpActiveHashAsync(string identifier, CancellationToken ct = default)
     {

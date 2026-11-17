@@ -130,7 +130,23 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IEmailQueue>(),
             sp.GetRequiredService<ILogger<EmailOtpSender>>(),
             builder.Environment.IsDevelopment()));
-        builder.Services.AddSingleton(new ConsoleOtpSender(builder.Environment.IsDevelopment()));
+        builder.Services.AddHttpClient("fast2sms", client =>
+        {
+            client.BaseAddress = new Uri("https://www.fast2sms.com/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        builder.Services.AddSingleton<IPhoneOtpSender>(sp =>
+        {
+            var whatsApp = sp.GetRequiredService<SmsOptions>().WhatsApp;
+            if (whatsApp.IsConfigured)
+                return new Fast2SmsWhatsAppOtpSender(
+                    sp.GetRequiredService<IHttpClientFactory>().CreateClient("fast2sms"),
+                    whatsApp,
+                    sp.GetRequiredService<ILogger<Fast2SmsWhatsAppOtpSender>>());
+            if (builder.Environment.IsDevelopment())
+                return new ConsoleOtpSender(true);
+            return new UnavailablePhoneOtpSender();
+        });
         builder.Services.AddSingleton<IOtpSender, ChannelOtpSender>();
         // Dev-only: also log invite / first-password setup codes so local sign-in works without
         // live SMTP (the regular OTP path already does this via EmailOtpSender's logCode flag).

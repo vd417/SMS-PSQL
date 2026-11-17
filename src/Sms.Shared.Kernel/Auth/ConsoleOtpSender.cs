@@ -7,7 +7,7 @@ namespace Sms.Shared.Kernel.Auth;
 /// always generates and returns the code (callers persist its hash and complete the flow
 /// regardless of environment) but only PRINTS the plaintext code to stdout when isDevelopment —
 /// printing it outside Development would leak a live credential into production logs.
-public sealed class ConsoleOtpSender(bool isDevelopment) : IOtpSender
+public sealed class ConsoleOtpSender(bool isDevelopment) : IPhoneOtpSender
 {
     public Task<string> SendAsync(string identifier, string channel, CancellationToken ct = default)
     {
